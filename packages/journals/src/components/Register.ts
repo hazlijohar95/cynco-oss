@@ -10,12 +10,29 @@ import {
   renderRegisterHeaderHTML,
   renderRegisterRowsHTML,
 } from '../renderers/RegisterRenderer';
-import type { RegisterRowData, RowRange, VirtualWindowSpecs } from '../types';
+import type {
+  ColorScheme,
+  RegisterRowData,
+  RowRange,
+  VirtualWindowSpecs,
+} from '../types';
+import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import { computeRowWindow } from '../utils/computeRowWindow';
 import { type VirtualizedInstance, Virtualizer } from './Virtualizer';
 import { JournalsContainerLoaded } from './web-components';
 
 export interface RegisterOptions extends RegisterRenderOptions {
+  /**
+   * Pins how `light-dark()` colors resolve. The stylesheet declares
+   * `:host { color-scheme: light dark }`, which resolves from the USER's OS
+   * preference — not the page's chosen theme — so sites with their own
+   * light/dark toggle render the wrong mode unless they pin this. `light` /
+   * `dark` apply an inline `color-scheme` on the host element (outer tree,
+   * so it wins over `:host`); `system` (default) removes the pin and defers
+   * to page CSS (e.g. `.dark journals-container { color-scheme: dark }`) or
+   * the OS preference.
+   */
+  colorScheme?: ColorScheme;
   /**
    * Pixel height of one text line. Must match the effective
    * `--journals-line-height` custom property (default 20px) or virtualized
@@ -97,6 +114,9 @@ export class Register implements VirtualizedInstance {
   setOptions(options: RegisterOptions | undefined): void {
     if (options == null) return;
     this.options = options;
+    if (this.container != null) {
+      applyHostColorScheme(this.container, options.colorScheme);
+    }
   }
 
   // Standalone entry point: builds scroller + section inside the container's
@@ -108,6 +128,7 @@ export class Register implements VirtualizedInstance {
       parentNode.appendChild(container);
     }
     this.container = container;
+    applyHostColorScheme(container, this.options.colorScheme);
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     if (this.scroller == null || this.scroller.parentNode !== shadowRoot) {
@@ -131,6 +152,7 @@ export class Register implements VirtualizedInstance {
   // first virtualized pass windows them.
   hydrate({ rows, container }: RegisterHydrateProps): void {
     this.container = container;
+    applyHostColorScheme(container, this.options.colorScheme);
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const scroller = shadowRoot.querySelector('[data-scroller]');

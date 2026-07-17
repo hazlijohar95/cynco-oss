@@ -18,9 +18,11 @@ import type {
   AccountStatusEntry,
   AccountTreeChange,
   AccountTreeControllerOptions,
+  ColorScheme,
   LedgerEntry,
   RowRange,
 } from '../types';
+import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import {
   type AccountTreeRenderOptions,
   renderAccountRowsHTML,
@@ -43,6 +45,17 @@ export interface AccountTreeOptions extends AccountTreeControllerOptions {
   id?: string;
   /** Accessible name for the tree. Default `Accounts`. */
   ariaLabel?: string;
+  /**
+   * Pins how `light-dark()` colors resolve. The stylesheet declares
+   * `:host { color-scheme: light dark }`, which resolves from the USER's OS
+   * preference — not the page's chosen theme — so sites with their own
+   * light/dark toggle render the wrong mode unless they pin this. `light` /
+   * `dark` apply an inline `color-scheme` on the host element (outer tree,
+   * so it wins over `:host`); `system` (default) removes the pin and defers
+   * to page CSS (e.g. `.dark accounts-container { color-scheme: dark }`) or
+   * the OS preference.
+   */
+  colorScheme?: ColorScheme;
   /** Extra rows rendered above and below the pixel window. Default 10. */
   overscanRows?: number;
   /**
@@ -98,6 +111,9 @@ export class AccountTree {
   setOptions(options: AccountTreeOptions | undefined): void {
     if (options == null) return;
     this.options = options;
+    if (this.container != null) {
+      applyHostColorScheme(this.container, options.colorScheme);
+    }
   }
 
   // --- Mounting -----------------------------------------------------------------
@@ -126,6 +142,7 @@ export class AccountTree {
       parentNode.appendChild(container);
     }
     this.container = container;
+    applyHostColorScheme(container, this.options.colorScheme);
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
 
@@ -161,6 +178,7 @@ export class AccountTree {
    * different range.
    */
   hydrate(container: HTMLElement): void {
+    applyHostColorScheme(container, this.options.colorScheme);
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const scroller = shadowRoot.querySelector('[data-scroller]');

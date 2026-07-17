@@ -5,13 +5,21 @@ import {
   type JournalEntryOptions,
 } from '../components/JournalEntry';
 import { JOURNALS_TAG_NAME } from '../constants';
-import type { LedgerEntry } from '../types';
+import type { ColorScheme, LedgerEntry } from '../types';
+import { mergeColorSchemeStyle } from './utils/mergeColorSchemeStyle';
 import { templateRender } from './utils/templateRender';
 import { useJournalsInstance } from './utils/useJournalsInstance';
 
 export interface JournalEntryProps {
   entry: LedgerEntry;
   options?: JournalEntryOptions;
+  /**
+   * Shorthand for `options.colorScheme` (see that field for the
+   * light-dark()/user-preference pitfall). Also painted as an inline
+   * `color-scheme` style on the custom element so SSR markup resolves to the
+   * requested mode before hydration runs.
+   */
+  colorScheme?: ColorScheme;
   className?: string;
   style?: React.CSSProperties;
   /**
@@ -25,18 +33,21 @@ export interface JournalEntryProps {
 export function JournalEntry({
   entry,
   options,
+  colorScheme,
   className,
   style,
   ssrHTML,
 }: JournalEntryProps): React.JSX.Element {
+  const mergedOptions: JournalEntryOptions | undefined =
+    colorScheme != null ? { ...options, colorScheme } : options;
   const { ref } = useJournalsInstance<JournalEntryComponent>({
     create(container) {
-      const instance = new JournalEntryComponent(options ?? {}, true);
+      const instance = new JournalEntryComponent(mergedOptions ?? {}, true);
       instance.hydrate({ entry, container });
       return instance;
     },
     update(instance) {
-      instance.setOptions(options);
+      instance.setOptions(mergedOptions);
       instance.render({ entry });
     },
     destroy(instance) {
@@ -44,7 +55,11 @@ export function JournalEntry({
     },
   });
   return (
-    <JOURNALS_TAG_NAME ref={ref} className={className} style={style}>
+    <JOURNALS_TAG_NAME
+      ref={ref}
+      className={className}
+      style={mergeColorSchemeStyle(colorScheme ?? options?.colorScheme, style)}
+    >
       {templateRender(null, ssrHTML)}
     </JOURNALS_TAG_NAME>
   );

@@ -4,6 +4,7 @@
 export * from '../types';
 export * from './AccountTree';
 export * from './useAccountTree';
+export * from './utils/mergeColorSchemeStyle';
 export * from './utils/templateRender';
 export * from './utils/useAccountsInstance';
 export * from './utils/useStableCallback';

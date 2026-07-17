@@ -3,7 +3,8 @@ import {
   DEFAULT_LINE_HEIGHT,
   JOURNALS_TAG_NAME,
 } from '../constants';
-import type { RegisterDensity, RegisterRowData } from '../types';
+import type { ColorScheme, RegisterDensity, RegisterRowData } from '../types';
+import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import { Register } from './Register';
 import { Virtualizer } from './Virtualizer';
 import { JournalsContainerLoaded } from './web-components';
@@ -15,6 +16,17 @@ export interface LedgerSection {
 }
 
 export interface LedgerViewOptions {
+  /**
+   * Pins how `light-dark()` colors resolve. The stylesheet declares
+   * `:host { color-scheme: light dark }`, which resolves from the USER's OS
+   * preference — not the page's chosen theme — so sites with their own
+   * light/dark toggle render the wrong mode unless they pin this. `light` /
+   * `dark` apply an inline `color-scheme` on the host element (outer tree,
+   * so it wins over `:host`); `system` (default) removes the pin and defers
+   * to page CSS (e.g. `.dark journals-container { color-scheme: dark }`) or
+   * the OS preference.
+   */
+  colorScheme?: ColorScheme;
   /** Row density shared by every section. Default `comfortable`. */
   density?: RegisterDensity;
   /** See {@link Register} — must match `--journals-line-height`. Default 20. */
@@ -65,6 +77,9 @@ export class LedgerView {
   setOptions(options: LedgerViewOptions | undefined): void {
     if (options == null) return;
     this.options = options;
+    if (this.container != null) {
+      applyHostColorScheme(this.container, options.colorScheme);
+    }
   }
 
   render({ sections, container, parentNode }: LedgerViewRenderProps): void {
@@ -74,6 +89,7 @@ export class LedgerView {
       parentNode.appendChild(container);
     }
     this.container = container;
+    applyHostColorScheme(container, this.options.colorScheme);
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     if (this.scroller == null || this.scroller.parentNode !== shadowRoot) {

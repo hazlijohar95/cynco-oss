@@ -3,11 +3,23 @@ import {
   type EntryRenderOptions,
   renderEntryHTML,
 } from '../renderers/EntryRenderer';
-import type { LedgerEntry, Posting } from '../types';
+import type { ColorScheme, LedgerEntry, Posting } from '../types';
+import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import { areEntriesEqual } from '../utils/areEntriesEqual';
 import { JournalsContainerLoaded } from './web-components';
 
 export interface JournalEntryOptions extends EntryRenderOptions {
+  /**
+   * Pins how `light-dark()` colors resolve. The stylesheet declares
+   * `:host { color-scheme: light dark }`, which resolves from the USER's OS
+   * preference — not the page's chosen theme — so sites with their own
+   * light/dark toggle render the wrong mode unless they pin this. `light` /
+   * `dark` apply an inline `color-scheme` on the host element (outer tree,
+   * so it wins over `:host`); `system` (default) removes the pin and defers
+   * to page CSS (e.g. `.dark journals-container { color-scheme: dark }`) or
+   * the OS preference.
+   */
+  colorScheme?: ColorScheme;
   /**
    * Annotation slot hook, mirroring diff line-annotation slots: called once
    * per posting after every render. Return an element to have it appended in
@@ -55,6 +67,9 @@ export class JournalEntry {
   setOptions(options: JournalEntryOptions | undefined): void {
     if (options == null) return;
     this.options = options;
+    if (this.container != null) {
+      applyHostColorScheme(this.container, options.colorScheme);
+    }
   }
 
   // Adopts SSR output: when the shadow root already contains a rendered
@@ -63,6 +78,7 @@ export class JournalEntry {
   // shadow root is empty or stale.
   hydrate({ entry, container }: JournalEntryHydrateProps): void {
     this.container = container;
+    applyHostColorScheme(container, this.options.colorScheme);
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const existing = shadowRoot.querySelector('[data-entry]');
@@ -83,6 +99,7 @@ export class JournalEntry {
     forceRender = false,
   }: JournalEntryRenderProps): void {
     container = this.getOrCreateContainer(container, parentNode);
+    applyHostColorScheme(container, this.options.colorScheme);
     const showLineNumbers = this.options.showLineNumbers ?? false;
     const canSkip =
       !forceRender &&

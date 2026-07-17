@@ -1,6 +1,13 @@
 /** Integer minor units (sen, cents). Never floats. */
 export type MinorUnits = number;
 
+/**
+ * How the component's `light-dark()` color defaults resolve. `system`
+ * (default) leaves resolution to the page/OS; `light`/`dark` pin the scheme
+ * via an inline `color-scheme` on the host element.
+ */
+export type ColorScheme = 'light' | 'dark' | 'system';
+
 export type EntryFlag = 'cleared' | 'pending' | 'flagged' | 'void';
 
 export interface Posting {

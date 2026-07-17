@@ -1,0 +1,231 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant light (&:is(.light *));
+@custom-variant dark (&:is(.dark *, .dark));
+
+@theme {
+  --font-geist: var(--font-geist-sans);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-border-opaque: var(--border-opaque);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root,
+.light {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --border-opaque: var(--border);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+
+  color-scheme: light;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --border-opaque: color-mix(in oklch, #101010 90%, oklch(1 0 0));
+  --color-border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --border-opaque: color-mix(in oklch, #101010 90%, oklch(1 0 0));
+    --color-border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    color-scheme: dark;
+  }
+}
+
+:root {
+  /* Ledger components render in the same mono the rest of the site uses so
+   * inline code and rendered entries read as one type system. Both packages
+   * resolve their font through this single hook. */
+  --journals-font-family: var(--font-geist-mono);
+  --accounts-font-family: var(--font-geist-mono);
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-geist;
+  }
+  code {
+    font-family: var(--font-geist-mono);
+    font-size: 95%;
+    font-weight: 500;
+    color: var(--color-primary);
+    letter-spacing: -0.025em;
+  }
+
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply scroll-mt-5;
+  }
+
+  .docs-prose code {
+    color: color-mix(in lab, var(--color-primary), currentcolor) !important;
+  }
+
+  .inline-link {
+    @apply text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-[text-decoration-color,text-underline-offset];
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Component demo containers: hairline framing for the shadow-rooted ledger
+ * components, transparent in light mode (the components draw their own
+ * borders) and neutral-800 in dark. */
+.demo-container {
+  @apply overflow-hidden rounded-lg border border-transparent dark:border-neutral-800;
+}
+
+[data-slot='header'] {
+  @apply border-b border-transparent transition-[border-color] duration-200;
+}
+[data-slot='header'].is-stuck {
+  @apply border-foreground/10;
+}
+
+/* Shared mobile popover surface (docs sidebar, header menu) */
+.mobile-popover {
+  @apply bg-background fixed top-16 right-4 left-4 z-[60];
+  @apply max-h-[80dvh] overflow-y-auto;
+  @apply -translate-y-2;
+  @apply rounded-xl border border-[rgb(0_0_0_/_0.15)] bg-clip-padding p-4 dark:border-[rgb(255_255_255_/_0.1)];
+  @apply opacity-0 shadow-2xl;
+  @apply pointer-events-none transition-all duration-200 ease-out;
+  @apply [scrollbar-color:transparent_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin];
+  @apply hover:[scrollbar-color:auto];
+
+  &.is-open {
+    @apply pointer-events-auto translate-y-0 opacity-100;
+  }
+}
+
+/* Docs sidebar: shares mobile popover styles, adds desktop sticky overrides */
+.docs-sidebar {
+  /* Desktop sticky sidebar */
+  @apply md:pointer-events-auto md:relative md:z-auto;
+  @apply md:top-auto md:right-auto md:left-auto;
+  @apply md:translate-y-0 md:transform-none;
+  @apply md:rounded-none md:border-none md:bg-transparent;
+  @apply md:p-0 md:opacity-100 md:shadow-none md:transition-none;
+  @apply md:sticky md:top-22 md:max-h-[calc(100vh-112px)] md:overflow-y-auto;
+}
+
+/* Fixed-height hosts turn the components' internal [data-scroller]
+ * (height: 100%) into a scroll window. */
+journals-container,
+accounts-container {
+  display: block;
+}
+
+/* The ledger components declare `:host { color-scheme: light dark }` inside
+ * their shadow roots, which resolves their light-dark() colors from the
+ * USER's OS preference — not the site toggle. Pinning color-scheme on the
+ * host elements (outer tree) wins over `:host`, so default (system)
+ * components follow the page's chosen theme. Mirrors the token blocks
+ * above: explicit .light/.dark classes first, then the prefers-color-scheme
+ * fallback for class-less loads. */
+.light journals-container,
+.light accounts-container {
+  color-scheme: light;
+}
+
+.dark journals-container,
+.dark accounts-container {
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) journals-container,
+  :root:not(.light) accounts-container {
+    color-scheme: dark;
+  }
+}

@@ -1,0 +1,49 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# Marketing/docs site for the Cynco ledger suite (journals + accounts).
+# Local-only tasks avoid presets and set options explicitly; graph-connected
+# dev/serve tasks stay `runInCI: 'skip'` (run them with a `CI=` prefix or
+# --ignore-ci-checks in CI-marked shells like agent harnesses).
+language: 'typescript'
+layer: 'application'
+
+workspace:
+  inheritedTasks:
+    # No test suite in this app.
+    exclude: ['test']
+
+tasks:
+  build:
+    command: 'next build'
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    deps:
+      - '^:build'
+    inputs:
+      - 'app/**'
+      - 'components/**'
+      - 'examples/**'
+      - 'lib/**'
+      - 'next.config.ts'
+      - 'postcss.config.mjs'
+      - 'tsconfig.json'
+    outputs:
+      - '.next'
+
+  # Build deps run to completion first so next resolves @cynco/* through
+  # complete dists.
+  dev:
+    command: 'next dev --port 4700'
+    deps:
+      - '^:build'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+
+  serve:
+    command: 'next start --port 4700'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'

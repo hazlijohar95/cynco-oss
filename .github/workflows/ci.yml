@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  # Byte-clean logs for humans and agents; moon already detects CI.
+  NO_COLOR: 1
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 so moon can diff against the merge base for
+      # affected-task filtering.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # proto installs the exact toolchain pinned in .prototools; moon then
+      # installs workspace dependencies with a frozen lockfile on demand.
+      - uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Format check
+        run: moon run root:format-check
+
+      # Explicit entry-point targets: bare `:task` shapes only bind to
+      # projects affected by changed files, so every cross-project consumer
+      # build is named to catch integration regressions. Affected-filtering
+      # still skips untouched projects.
+      - name: Build, test, lint
+        run: >-
+          moon ci --include-relations --summary detailed :build demo:build
+          docs:build :test :typecheck root:lint root:lint-css

@@ -8,6 +8,7 @@ export * from './managers/InteractionManager';
 export * from './managers/UniversalRenderingManager';
 export * from './renderers/EntryRenderer';
 export * from './renderers/RegisterRenderer';
+export * from './utils/applyHostColorScheme';
 export * from './utils/areEntriesEqual';
 export * from './utils/areVirtualWindowSpecsEqual';
 export * from './utils/computeRowWindow';
