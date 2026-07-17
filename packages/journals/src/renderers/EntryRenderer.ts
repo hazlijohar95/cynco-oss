@@ -1,0 +1,119 @@
+import type { LedgerEntry, Posting } from '../types';
+import { escapeHtml } from '../utils/escapeHtml';
+import { formatMinorUnits } from '../utils/formatMinorUnits';
+import { getEntryImbalances } from '../utils/getEntryImbalances';
+import { renderAccountPathHTML } from '../utils/renderAccountPathHTML';
+
+export interface EntryRenderOptions {
+  /**
+   * Renders a 1-based posting number gutter column before the account path.
+   * Defaults to false. The number column is part of the postings grid, so
+   * toggling it changes the grid template (see `[data-line-numbers]` CSS).
+   */
+  showLineNumbers?: boolean;
+}
+
+// Renders a LedgerEntry card as an HTML string. This is the single renderer
+// shared by the client (JournalEntry sets innerHTML from it) and the server
+// (preloadJournalEntryHTML returns it inside a declarative shadow root), so
+// SSR output and client output can never drift apart. It must therefore stay
+// a pure string builder — no DOM APIs.
+export function renderEntryHTML(
+  entry: LedgerEntry,
+  options: EntryRenderOptions = {}
+): string {
+  const { showLineNumbers = false } = options;
+  const lineNumbersAttribute = showLineNumbers ? ' data-line-numbers' : '';
+  let html =
+    `<article data-entry data-entry-id="${escapeHtml(entry.id)}"` +
+    ` data-flag="${entry.flag}"${lineNumbersAttribute}>`;
+  html += renderEntryHeaderHTML(entry);
+  html += '<div data-postings>';
+  for (const [index, posting] of entry.postings.entries()) {
+    html += renderPostingHTML(posting, index, showLineNumbers);
+  }
+  html += '</div>';
+  html += renderEntryFooterHTML(entry);
+  html += '</article>';
+  return html;
+}
+
+// Header row: date, flag dot, payee, narration, then #tag pills and ^links.
+// Absent payee and empty narration are omitted entirely (no empty spans) so
+// CSS gap spacing stays even.
+function renderEntryHeaderHTML(entry: LedgerEntry): string {
+  let html = '<header data-entry-header>';
+  html += `<span data-date>${escapeHtml(entry.date)}</span>`;
+  html += renderFlagDotHTML(entry.flag);
+  if (entry.payee != null && entry.payee !== '') {
+    html += `<span data-payee>${escapeHtml(entry.payee)}</span>`;
+  }
+  if (entry.narration !== '') {
+    html += `<span data-narration>${escapeHtml(entry.narration)}</span>`;
+  }
+  for (const tag of entry.tags) {
+    html += `<span data-tag>#${escapeHtml(tag)}</span>`;
+  }
+  for (const link of entry.links) {
+    html += `<span data-link>^${escapeHtml(link)}</span>`;
+  }
+  html += '</header>';
+  return html;
+}
+
+// The flag is a colored dot (not an emoji glyph): a single ● whose color is
+// driven purely by the [data-flag] attribute in CSS, keeping the markup
+// identical across flags.
+export function renderFlagDotHTML(flag: LedgerEntry['flag']): string {
+  return `<span data-flag-dot data-flag="${flag}" title="${flag}" aria-label="${flag}">\u25cf</span>`;
+}
+
+// One posting row in the entry grid: optional number gutter, account path,
+// +/− sign gutter, right-aligned amount, currency code. The amount value is
+// rendered unsigned — the sign gutter and debit/credit color carry the
+// semantics, mirroring how diff gutters carry +/-.
+function renderPostingHTML(
+  posting: Posting,
+  index: number,
+  showLineNumbers: boolean
+): string {
+  const direction = posting.amount < 0 ? 'credit' : 'debit';
+  let html =
+    `<div data-posting data-posting-index="${index}"` +
+    ` data-amount="${direction}">`;
+  if (showLineNumbers) {
+    html += `<span data-cell="number">${index + 1}</span>`;
+  }
+  html += `<span data-cell="account">${renderAccountPathHTML(posting.account)}</span>`;
+  html += `<span data-cell="sign" data-amount-sign="${direction}" aria-hidden="true"></span>`;
+  html +=
+    '<span data-cell="amount"><span data-amount-value>' +
+    `${formatMinorUnits(posting.amount, posting.currency, { sign: 'never' })}` +
+    '</span></span>';
+  html += `<span data-cell="currency">${escapeHtml(posting.currency)}</span>`;
+  html += '</div>';
+  return html;
+}
+
+// Balanced entries get no footer at all. Unbalanced entries get one row per
+// offending currency: the checker-gradient bar plus the signed imbalance in
+// danger color. Rendering (not repairing) bad data is deliberate — the data
+// layer owns correctness, the renderer owns visibility.
+function renderEntryFooterHTML(entry: LedgerEntry): string {
+  const imbalances = getEntryImbalances(entry);
+  if (imbalances.size === 0) {
+    return '';
+  }
+  let html = '<footer data-entry-footer>';
+  for (const [currency, amount] of imbalances) {
+    html += `<div data-imbalance data-currency="${escapeHtml(currency)}">`;
+    html += '<span data-imbalance-bar aria-hidden="true"></span>';
+    html +=
+      '<span data-imbalance-amount>' +
+      `${formatMinorUnits(amount, currency, { sign: 'always' })} ${escapeHtml(currency)}` +
+      '</span>';
+    html += '</div>';
+  }
+  html += '</footer>';
+  return html;
+}

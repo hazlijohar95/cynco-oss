@@ -4,9 +4,8 @@ Cynco theme: color palettes and semantic roles for ledger UIs. Consumed by
 `@cynco/journals` and `@cynco/accounts` as their default theme layer.
 
 Palette ramps are derived from the MIT-licensed
-[@pierre/theme](https://github.com/pierrecomputer/pierre) palettes by the
-Pierre Computer Company; the `ledger` role group is Cynco's financial-domain
-extension.
+[@pierre/theme](https://github.com/pierrecomputer/pierre) palettes by the Pierre
+Computer Company; the `ledger` role group is Cynco's financial-domain extension.
 
 ```ts
 import { dark, themeToCSSVariables } from '@cynco/theme';

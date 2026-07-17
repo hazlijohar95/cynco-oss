@@ -2,11 +2,21 @@
   "name": "@cynco/theme",
   "version": "0.1.0",
   "description": "Cynco theme: palettes and semantic roles for ledger UIs",
-  "keywords": ["dark", "light", "cynco", "theme", "ledger"],
+  "keywords": [
+    "cynco",
+    "dark",
+    "ledger",
+    "light",
+    "theme"
+  ],
   "license": "MIT",
   "author": "Cynco Computing <hello@cynco.dev>",
+  "files": [
+    "dist",
+    "LICENSE.md",
+    "README.md"
+  ],
   "type": "module",
-  "files": ["dist", "LICENSE.md", "README.md"],
   "sideEffects": false,
   "exports": {
     ".": {

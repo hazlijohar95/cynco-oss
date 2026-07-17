@@ -1,5 +1,4 @@
 import { palettes } from '../palettes';
-
 import type { Roles } from './Roles';
 
 const { neutral, red, yellow, green, jade, cyan, blue, indigo, pink } =

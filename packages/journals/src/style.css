@@ -1,0 +1,656 @@
+@layer base, theme, rendered, unsafe;
+
+@layer base {
+  :host {
+    --journals-font-fallback:
+      'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
+      'Courier New', monospace;
+
+    --journals-mixer: light-dark(black, white);
+
+    /*
+    // Available CSS Color Overrides
+    --journals-bg-override
+    --journals-bg-elevated-override
+    --journals-fg-override
+    --journals-fg2-override
+    --journals-fg3-override
+    --journals-border-override
+    --journals-accent-override
+    --journals-accent-subtle-override
+    --journals-danger-override
+
+    --journals-debit-override
+    --journals-credit-override
+    --journals-balance-override
+    --journals-balance-negative-override
+    --journals-date-override
+    --journals-payee-override
+    --journals-narration-override
+    --journals-account-override
+    --journals-punctuation-override
+    --journals-currency-override
+    --journals-tag-override
+    --journals-link-override
+    --journals-reconciled-override
+    --journals-pending-override
+    --journals-flagged-override
+    --journals-void-override
+
+    // Available CSS Layout Overrides
+    --journals-font-family
+    --journals-font-size
+    --journals-line-height
+    */
+
+    /* Every color resolves override → theme (@cynco/theme roles, injected as
+     * --journals-theme-* variables) → built-in light-dark() default, so one
+     * DOM serves both modes. Defaults are the exact cynco theme role values. */
+    --journals-bg: var(
+      --journals-bg-override,
+      var(--journals-theme-bg-editor, light-dark(#ffffff, #0a0a0a))
+    );
+    --journals-bg-elevated: var(
+      --journals-bg-elevated-override,
+      var(--journals-theme-bg-elevated, light-dark(#f7f7f7, #101010))
+    );
+    --journals-fg: var(
+      --journals-fg-override,
+      var(--journals-theme-fg-base, light-dark(#0a0a0a, #fafafa))
+    );
+    --journals-fg2: var(
+      --journals-fg2-override,
+      var(--journals-theme-fg-fg2, light-dark(#525252, #a3a3a3))
+    );
+    --journals-fg3: var(
+      --journals-fg3-override,
+      var(--journals-theme-fg-fg3, light-dark(#737373, #737373))
+    );
+    --journals-border: var(
+      --journals-border-override,
+      var(--journals-theme-border-editor, light-dark(#d4d4d4, #1d1d1d))
+    );
+    --journals-accent: var(
+      --journals-accent-override,
+      var(--journals-theme-accent-primary, #009fff)
+    );
+    --journals-accent-subtle: var(
+      --journals-accent-subtle-override,
+      var(--journals-theme-accent-subtle, light-dark(#dfebff, #19283c))
+    );
+    --journals-danger: var(
+      --journals-danger-override,
+      var(--journals-theme-states-danger, light-dark(#d52c36, #ff2e3f))
+    );
+
+    --journals-debit: var(
+      --journals-debit-override,
+      var(--journals-theme-ledger-debit, light-dark(#199f43, #5ecc71))
+    );
+    --journals-credit: var(
+      --journals-credit-override,
+      var(--journals-theme-ledger-credit, light-dark(#d52c36, #ff6762))
+    );
+    --journals-balance: var(
+      --journals-balance-override,
+      var(--journals-theme-ledger-balance, light-dark(#404040, #d4d4d4))
+    );
+    --journals-balance-negative: var(
+      --journals-balance-negative-override,
+      var(
+        --journals-theme-ledger-balance-negative,
+        light-dark(#d52c36, #ff6762)
+      )
+    );
+    --journals-date: var(
+      --journals-date-override,
+      var(--journals-theme-ledger-date, light-dark(#737373, #a3a3a3))
+    );
+    --journals-payee: var(
+      --journals-payee-override,
+      var(--journals-theme-ledger-payee, light-dark(#0a0a0a, #fafafa))
+    );
+    --journals-narration: var(
+      --journals-narration-override,
+      var(--journals-theme-ledger-narration, light-dark(#737373, #a3a3a3))
+    );
+    --journals-account: var(
+      --journals-account-override,
+      var(--journals-theme-ledger-account, light-dark(#1a85d4, #69b1ff))
+    );
+    --journals-punctuation: var(
+      --journals-punctuation-override,
+      var(--journals-theme-fg-fg4, light-dark(#8a8a8a, #636363))
+    );
+    --journals-currency: var(
+      --journals-currency-override,
+      var(--journals-theme-ledger-currency, light-dark(#8a8a8a, #737373))
+    );
+    --journals-tag: var(
+      --journals-tag-override,
+      var(--journals-theme-ledger-tag, light-dark(#1ca1c7, #68cdf2))
+    );
+    --journals-link: var(
+      --journals-link-override,
+      var(--journals-theme-ledger-link, light-dark(#693acf, #9d6afb))
+    );
+    --journals-reconciled: var(
+      --journals-reconciled-override,
+      var(--journals-theme-ledger-reconciled, light-dark(#18a46c, #60d199))
+    );
+    --journals-pending: var(
+      --journals-pending-override,
+      var(--journals-theme-ledger-pending, light-dark(#d5a910, #ffd452))
+    );
+    --journals-flagged: var(
+      --journals-flagged-override,
+      var(--journals-theme-ledger-flagged, light-dark(#d32a61, #ff678d))
+    );
+    --journals-void: var(
+      --journals-void-override,
+      var(--journals-theme-ledger-void, light-dark(#a3a3a3, #636363))
+    );
+
+    /* NOTE: we cannot use 'in oklch' because current versions of cursor and
+     * vscode use an older build of chrome that appears to have a bug with
+     * color-mix and 'in oklch', so use 'in lab' instead */
+    --journals-hairline: color-mix(
+      in lab,
+      var(--journals-border) 60%,
+      transparent
+    );
+    --journals-bg-buffer: color-mix(
+      in lab,
+      var(--journals-bg) 92%,
+      var(--journals-mixer)
+    );
+    --journals-bg-hover: light-dark(
+      color-mix(in lab, var(--journals-bg) 96%, var(--journals-mixer)),
+      color-mix(in lab, var(--journals-bg) 92%, var(--journals-mixer))
+    );
+    --journals-bg-selected: light-dark(
+      color-mix(in lab, var(--journals-bg) 88%, var(--journals-accent)),
+      color-mix(in lab, var(--journals-bg) 82%, var(--journals-accent))
+    );
+    --journals-bg-danger: light-dark(
+      color-mix(in lab, var(--journals-bg) 88%, var(--journals-danger)),
+      color-mix(in lab, var(--journals-bg) 80%, var(--journals-danger))
+    );
+    --journals-scrollbar-thumb: light-dark(
+      color-mix(in lab, var(--journals-bg) 85%, black),
+      color-mix(in lab, var(--journals-bg) 80%, white)
+    );
+
+    color-scheme: light dark;
+    display: block;
+    font-family: var(--journals-font-family, var(--journals-font-fallback));
+    font-size: var(--journals-font-size, 13px);
+    line-height: var(--journals-line-height, 20px);
+    background-color: var(--journals-bg);
+    color: var(--journals-fg);
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  [data-journals-content] {
+    min-width: 0;
+  }
+
+  /* Scroll containers */
+  /* ----------------- */
+  [data-scroller] {
+    height: 100%;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Hover-revealed scrollbars: fully transparent at rest, thumb painted only
+   * while the scroller is hovered. background-clip keeps the transparent
+   * border as a visual inset. */
+  [data-scroller]::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  [data-scroller]::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  [data-scroller]::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 5px;
+  }
+
+  [data-scroller]:hover::-webkit-scrollbar-thumb {
+    background-color: var(--journals-scrollbar-thumb);
+  }
+
+  [data-scroller]::-webkit-scrollbar-corner {
+    background-color: transparent;
+  }
+
+  /*
+   * If we apply these rules globally it will mean that webkit will opt into
+   * the standards compliant version of custom css scrollbars, which we do not
+   * want because the custom stuff will look better
+   */
+  @supports (-moz-appearance: none) {
+    [data-scroller] {
+      scrollbar-width: thin;
+      scrollbar-color: var(--journals-scrollbar-thumb) transparent;
+    }
+  }
+
+  /* Shared amount / flag primitives */
+  /* ------------------------------- */
+  [data-amount-value],
+  [data-balance-value],
+  [data-imbalance-amount],
+  [data-balance-amount],
+  [data-cell='amount'],
+  [data-cell='balance'] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Diff-gutter style sign column: the +/− glyph carries debit/credit
+   * semantics at half opacity so the amount itself stays quiet. */
+  [data-amount-sign] {
+    display: inline-block;
+    width: 1ch;
+    user-select: none;
+  }
+
+  [data-amount-sign='debit']::before {
+    content: '+';
+    color: var(--journals-debit);
+    opacity: 0.5;
+  }
+
+  [data-amount-sign='credit']::before {
+    content: '\2212';
+    color: var(--journals-credit);
+    opacity: 0.5;
+  }
+
+  [data-amount='debit'] [data-amount-value] {
+    color: var(--journals-debit);
+  }
+
+  [data-amount='credit'] [data-amount-value] {
+    color: var(--journals-credit);
+  }
+
+  /* Flag dot: one ● glyph, colored purely by [data-flag]. */
+  [data-flag-dot] {
+    user-select: none;
+    font-size: 0.65em;
+    vertical-align: 0.15em;
+  }
+
+  [data-flag-dot][data-flag='cleared'] {
+    color: var(--journals-reconciled);
+  }
+
+  [data-flag-dot][data-flag='pending'] {
+    color: var(--journals-pending);
+  }
+
+  [data-flag-dot][data-flag='flagged'] {
+    color: var(--journals-flagged);
+  }
+
+  [data-flag-dot][data-flag='void'] {
+    color: var(--journals-void);
+  }
+
+  [data-account-segment] {
+    color: var(--journals-account);
+  }
+
+  [data-account-separator] {
+    color: var(--journals-punctuation);
+  }
+
+  [data-currency] {
+    color: var(--journals-currency);
+  }
+
+  /* Journal entry card */
+  /* ------------------ */
+  [data-entry] {
+    border: 1px solid var(--journals-hairline);
+    border-radius: 6px;
+    background-color: var(--journals-bg);
+    overflow: hidden;
+  }
+
+  [data-entry][data-flag='void'] {
+    color: var(--journals-void);
+    opacity: 0.75;
+  }
+
+  [data-entry-header] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 1ch;
+    padding: 6px 2ch;
+    border-bottom: 1px solid var(--journals-hairline);
+  }
+
+  [data-entry-header] [data-date] {
+    color: var(--journals-date);
+  }
+
+  [data-entry-header] [data-payee] {
+    color: var(--journals-payee);
+    font-weight: 600;
+  }
+
+  [data-entry-header] [data-narration] {
+    color: var(--journals-fg2);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-tag],
+  [data-link] {
+    border-radius: 6px;
+    padding: 0 0.75ch;
+    background-color: color-mix(
+      in lab,
+      var(--journals-bg) 90%,
+      var(--journals-tag)
+    );
+    color: var(--journals-tag);
+    transition: background-color 150ms ease;
+  }
+
+  [data-link] {
+    background-color: color-mix(
+      in lab,
+      var(--journals-bg) 90%,
+      var(--journals-link)
+    );
+    color: var(--journals-link);
+  }
+
+  /* Postings grid: [number?] account | sign | amount | currency. Rows span
+   * the full grid via subgrid so columns stay aligned across postings. */
+  [data-postings] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content max-content max-content;
+    padding: 4px 0;
+  }
+
+  [data-entry][data-line-numbers] [data-postings] {
+    grid-template-columns:
+      max-content minmax(0, 1fr) max-content max-content
+      max-content;
+  }
+
+  [data-posting] {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: baseline;
+    min-height: 1lh;
+    transition: background-color 150ms ease;
+  }
+
+  @media (pointer: fine) {
+    [data-posting]:hover {
+      background-color: var(--journals-bg-hover);
+    }
+  }
+
+  [data-posting] [data-cell] {
+    padding-inline: 1ch;
+  }
+
+  [data-posting] [data-cell='number'] {
+    color: var(--journals-fg3);
+    text-align: right;
+    min-width: 3ch;
+    user-select: none;
+    padding-left: 2ch;
+  }
+
+  [data-posting] [data-cell='account'] {
+    padding-left: 2ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-posting] [data-cell='amount'] {
+    text-align: right;
+    padding-inline: 0 1ch;
+  }
+
+  [data-posting] [data-cell='sign'] {
+    padding-inline: 1ch 0;
+  }
+
+  [data-posting] [data-cell='currency'] {
+    padding-right: 2ch;
+  }
+
+  [data-posting-annotation] {
+    grid-column: 1 / -1;
+    background-color: var(--journals-bg-elevated);
+    border-block: 1px solid var(--journals-hairline);
+    padding: 4px 2ch;
+  }
+
+  /* Unbalanced entry footer */
+  /* ----------------------- */
+  [data-entry-footer] {
+    border-top: 1px solid var(--journals-hairline);
+    padding: 4px 2ch;
+  }
+
+  [data-imbalance] {
+    display: flex;
+    align-items: center;
+    gap: 1ch;
+    min-height: 1lh;
+  }
+
+  /* Dashed 2px checker bar (the diffs deleted-line indicator technique):
+   * a two-stop gradient tiled at 2px, with the tile size snapped to an even
+   * divisor of the line height so the pattern never shears across rows. */
+  [data-imbalance-bar] {
+    display: block;
+    width: 4px;
+    height: 1lh;
+    flex-shrink: 0;
+    background-image: linear-gradient(
+      0deg,
+      var(--journals-bg-danger) 50%,
+      var(--journals-danger) 50%
+    );
+    background-repeat: repeat;
+    background-size: 2px 2px;
+    background-size: calc(1lh / round(1lh / 2px)) calc(1lh / round(1lh / 2px));
+  }
+
+  [data-imbalance-amount] {
+    color: var(--journals-danger);
+  }
+
+  /* Register */
+  /* -------- */
+  [data-register-header] {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1ch;
+    min-height: calc(1lh + 24px);
+    padding-inline: 2ch;
+    background-color: var(--journals-bg);
+    border-bottom: 1px solid var(--journals-hairline);
+  }
+
+  [data-register-header] [data-account] {
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-register-balance] {
+    display: flex;
+    gap: 2ch;
+    white-space: nowrap;
+  }
+
+  [data-balance-amount] {
+    color: var(--journals-balance);
+  }
+
+  [data-balance-amount][data-balance-negative='true'] {
+    color: var(--journals-balance-negative);
+  }
+
+  /* Register rows grid: date | flag | description | amount | balance. */
+  [data-register-rows] {
+    display: grid;
+    grid-template-columns:
+      max-content max-content minmax(0, 1fr) max-content
+      max-content;
+  }
+
+  [data-row] {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: center;
+    height: calc(var(--journals-line-height, 20px) * 2);
+    overflow: hidden;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+
+  [data-density='compact'] [data-row] {
+    height: var(--journals-line-height, 20px);
+  }
+
+  @media (pointer: fine) {
+    [data-row]:hover,
+    [data-row][data-hovered] {
+      background-color: var(--journals-bg-hover);
+    }
+  }
+
+  [data-row][data-row-selected='true'] {
+    background-color: var(--journals-bg-selected);
+  }
+
+  [data-row][data-flag='void'] {
+    color: var(--journals-void);
+    opacity: 0.75;
+  }
+
+  [data-row] [data-cell] {
+    padding-inline: 1ch;
+  }
+
+  [data-row] [data-cell='date'] {
+    color: var(--journals-date);
+    padding-left: 2ch;
+    white-space: nowrap;
+  }
+
+  [data-row] [data-cell='flag'] {
+    padding-inline: 0;
+    text-align: center;
+    min-width: 2ch;
+  }
+
+  [data-row] [data-cell='description'] {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  [data-density='compact'] [data-row] [data-cell='description'] {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 1ch;
+  }
+
+  [data-row] [data-payee] {
+    color: var(--journals-payee);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-row] [data-narration] {
+    color: var(--journals-narration);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-density='compact'] [data-row] [data-narration] {
+    display: none;
+  }
+
+  [data-row] [data-cell='amount'] {
+    text-align: right;
+    white-space: nowrap;
+    padding-right: 2ch;
+  }
+
+  [data-row] [data-cell='balance'] {
+    text-align: right;
+    white-space: nowrap;
+    padding-right: 2ch;
+    color: var(--journals-balance);
+  }
+
+  [data-row] [data-cell='balance'] [data-balance-value] {
+    color: var(--journals-balance);
+  }
+
+  [data-row] [data-cell='balance'][data-balance-negative='true'] {
+    color: var(--journals-balance-negative);
+  }
+
+  [data-row]
+    [data-cell='balance'][data-balance-negative='true']
+    [data-balance-value] {
+    color: var(--journals-balance-negative);
+  }
+
+  /* Virtualization buffers: 45° pinstripes on an 8px tile mark space where
+   * rows exist but are not currently rendered. The √2 factor approximates
+   * the diagonal repeat distance. */
+  [data-register-spacer] {
+    background-size: 8px 8px;
+    background-position: 5px 0;
+    background-origin: border-box;
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent calc(3px * 1.414),
+      var(--journals-bg-buffer) calc(3px * 1.414),
+      var(--journals-bg-buffer) calc(4px * 1.414)
+    );
+  }
+}

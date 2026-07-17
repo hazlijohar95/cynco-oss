@@ -312,7 +312,73 @@ const brown = {
   '950': '#2d221b',
 };
 
-export const palettes = {
+// Chromatic ramps use steps 050-950; the neutrals use a denser 20-step scale
+// 020-1040. Explicit annotations keep declaration emit compatible with
+// --isolatedDeclarations.
+export type NeutralScale = Record<
+  | '020'
+  | '040'
+  | '060'
+  | '080'
+  | '100'
+  | '200'
+  | '300'
+  | '400'
+  | '500'
+  | '600'
+  | '700'
+  | '800'
+  | '900'
+  | '920'
+  | '940'
+  | '960'
+  | '980'
+  | '1000'
+  | '1020'
+  | '1040',
+  string
+>;
+
+export type ChromaticScale = Record<
+  | '050'
+  | '100'
+  | '200'
+  | '300'
+  | '400'
+  | '500'
+  | '600'
+  | '700'
+  | '800'
+  | '900'
+  | '950',
+  string
+>;
+
+export type Palettes = {
+  gray: NeutralScale;
+  neutral: NeutralScale;
+  red: ChromaticScale;
+  vermillion: ChromaticScale;
+  orange: ChromaticScale;
+  amber: ChromaticScale;
+  yellow: ChromaticScale;
+  lime: ChromaticScale;
+  green: ChromaticScale;
+  jade: ChromaticScale;
+  mint: ChromaticScale;
+  teal: ChromaticScale;
+  cyan: ChromaticScale;
+  blue: ChromaticScale;
+  indigo: ChromaticScale;
+  violet: ChromaticScale;
+  purple: ChromaticScale;
+  magenta: ChromaticScale;
+  pink: ChromaticScale;
+  rose: ChromaticScale;
+  brown: ChromaticScale;
+};
+
+export const palettes: Palettes = {
   gray,
   neutral,
   red,

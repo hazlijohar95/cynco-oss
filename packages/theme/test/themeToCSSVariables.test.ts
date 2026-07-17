@@ -16,9 +16,7 @@ describe('themeToCSSVariables', () => {
 
   test('kebab-cases multi-word token names', () => {
     const variables = themeToCSSVariables('journals', dark);
-    expect(
-      variables['--journals-theme-ledger-balance-negative']
-    ).toBeDefined();
+    expect(variables['--journals-theme-ledger-balance-negative']).toBeDefined();
     expect(
       variables['--journals-theme-border-indent-guide-active']
     ).toBeDefined();
@@ -35,9 +33,7 @@ describe('themeToCSSVariables', () => {
   test('all built-in themes expose an identical variable set', () => {
     const keys = Object.keys(themeToCSSVariables('t', dark)).sort();
     for (const roles of [darkSoft, light, lightSoft]) {
-      expect(Object.keys(themeToCSSVariables('t', roles)).sort()).toEqual(
-        keys
-      );
+      expect(Object.keys(themeToCSSVariables('t', roles)).sort()).toEqual(keys);
     }
   });
 });

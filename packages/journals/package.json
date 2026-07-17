@@ -1,0 +1,88 @@
+{
+  "name": "@cynco/journals",
+  "version": "0.1.0-beta.1",
+  "description": "Cynco journals: framework-agnostic journal entry and account register rendering",
+  "keywords": [
+    "accounting",
+    "cynco",
+    "journal",
+    "ledger",
+    "register"
+  ],
+  "license": "MIT",
+  "author": "Cynco Computing <hello@cynco.dev>",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "dist/components/web-components.js"
+  ],
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/*"
+      ],
+      "react": [
+        "dist/react/index.d.ts"
+      ],
+      "ssr": [
+        "dist/ssr/index.d.ts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    },
+    "./ssr": {
+      "types": "./dist/ssr/index.d.ts",
+      "import": "./dist/ssr/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run journals:prepublish"
+  },
+  "dependencies": {
+    "@cynco/theme": "workspace:*"
+  },
+  "devDependencies": {
+    "@tsdown/css": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/jsdom": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "autoprefixer": "catalog:",
+    "jsdom": "catalog:",
+    "lightningcss": "catalog:",
+    "mitata": "catalog:",
+    "postcss": "catalog:",
+    "postcss-calc": "catalog:",
+    "postcss-nesting": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1 || ^19.0.0",
+    "react-dom": "^18.3.1 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  }
+}

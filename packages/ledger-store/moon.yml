@@ -1,0 +1,13 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['tsdown']
+
+tasks:
+  # Not targeted by any CI lane; runnable everywhere for local/agent use.
+  benchmark:
+    command: 'bun scripts/benchmark.ts'
+    options:
+      cache: false
+      runInCI: 'always'

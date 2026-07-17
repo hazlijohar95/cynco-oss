@@ -1,0 +1,34 @@
+{
+  "name": "@cynco/ledger-test-data",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cynco ledger test data: deterministic fixture generator for benchmarks and tests",
+  "keywords": [
+    "cynco",
+    "fixtures",
+    "ledger",
+    "test-data"
+  ],
+  "license": "MIT",
+  "author": "Cynco Computing <hello@cynco.dev>",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@cynco/ledger-store": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}
