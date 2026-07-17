@@ -1,0 +1,10 @@
+bun = "1.3.14"
+node = "24.11.0"
+proto = "0.58.2"
+pnpm = "11.9.0"
+moon = "2.3.3"
+
+[settings]
+auto-clean = false
+auto-install = true
+telemetry = false

@@ -1,0 +1,29 @@
+{
+  "name": "@cynco/theme",
+  "version": "0.1.0",
+  "description": "Cynco theme: palettes and semantic roles for ledger UIs",
+  "keywords": ["dark", "light", "cynco", "theme", "ledger"],
+  "license": "MIT",
+  "author": "Cynco Computing <hello@cynco.dev>",
+  "type": "module",
+  "files": ["dist", "LICENSE.md", "README.md"],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run theme:prepublish"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}

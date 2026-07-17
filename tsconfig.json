@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.options.json",
+  "files": [],
+  "references": [
+    { "path": "./packages/theme" },
+    { "path": "./packages/ledger-store" },
+    { "path": "./packages/ledger-test-data" },
+    { "path": "./packages/journals" },
+    { "path": "./packages/accounts" },
+    { "path": "./apps/demo" },
+    { "path": "./apps/docs" }
+  ]
+}
