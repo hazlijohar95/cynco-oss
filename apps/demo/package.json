@@ -1,0 +1,17 @@
+{
+  "name": "demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cynco/journals": "workspace:*",
+    "@cynco/ledger-store": "workspace:*",
+    "@cynco/ledger-test-data": "workspace:*",
+    "@cynco/theme": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

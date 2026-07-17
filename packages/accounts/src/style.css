@@ -1,0 +1,408 @@
+@layer base, theme, rendered, unsafe;
+
+@layer base {
+  :host {
+    --accounts-font-fallback: system-ui;
+    --accounts-mono-fallback:
+      'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
+      'Courier New', monospace;
+
+    --accounts-mixer: light-dark(black, white);
+
+    /*
+    // Available CSS Color Overrides
+    --accounts-bg-override
+    --accounts-fg-override
+    --accounts-fg2-override
+    --accounts-fg3-override
+    --accounts-border-override
+    --accounts-accent-override
+    --accounts-accent-subtle-override
+    --accounts-indent-guide-override
+    --accounts-balance-override
+    --accounts-balance-negative-override
+
+    // Status dot colors (git-status analog)
+    --accounts-status-unreconciled-override
+    --accounts-status-flagged-override
+    --accounts-status-pending-override
+
+    // Available CSS Layout Overrides
+    --accounts-font-family
+    --accounts-font-size
+    --accounts-density-scale-override
+    --accounts-row-height-override
+    --accounts-border-radius-override
+    --accounts-item-padding-x-override
+    --accounts-item-margin-x-override
+    --accounts-item-row-gap-override
+    --accounts-level-gap-override
+    --accounts-padding-inline-override
+    --accounts-focus-ring-width-override
+    --accounts-focus-ring-offset-override
+    */
+
+    /* Every color resolves override → theme (@cynco/theme roles, injected as
+     * --accounts-theme-* variables) → built-in light-dark() default, so one
+     * DOM serves both modes. Defaults are the exact cynco theme role values. */
+    --accounts-bg: var(
+      --accounts-bg-override,
+      var(--accounts-theme-bg-editor, light-dark(#ffffff, #0a0a0a))
+    );
+    --accounts-fg: var(
+      --accounts-fg-override,
+      var(--accounts-theme-fg-base, light-dark(#0a0a0a, #fafafa))
+    );
+    --accounts-fg2: var(
+      --accounts-fg2-override,
+      var(--accounts-theme-fg-fg2, light-dark(#525252, #a3a3a3))
+    );
+    --accounts-fg3: var(
+      --accounts-fg3-override,
+      var(--accounts-theme-fg-fg3, light-dark(#737373, #737373))
+    );
+    --accounts-border: var(
+      --accounts-border-override,
+      var(--accounts-theme-border-editor, light-dark(#d4d4d4, #1d1d1d))
+    );
+    --accounts-accent: var(
+      --accounts-accent-override,
+      var(--accounts-theme-accent-primary, #009fff)
+    );
+    --accounts-accent-subtle: var(
+      --accounts-accent-subtle-override,
+      var(--accounts-theme-accent-subtle, light-dark(#dfebff, #19283c))
+    );
+    --accounts-indent-guide: var(
+      --accounts-indent-guide-override,
+      var(--accounts-theme-border-indent-guide, light-dark(#e5e5e5, #1d1d1d))
+    );
+    --accounts-balance: var(
+      --accounts-balance-override,
+      var(--accounts-theme-ledger-balance, light-dark(#404040, #d4d4d4))
+    );
+    --accounts-balance-negative: var(
+      --accounts-balance-negative-override,
+      var(
+        --accounts-theme-ledger-balance-negative,
+        light-dark(#d52c36, #ff6762)
+      )
+    );
+
+    /* Status dots: unreconciled = warn, flagged = danger, pending = info. */
+    --accounts-status-unreconciled: var(
+      --accounts-status-unreconciled-override,
+      var(--accounts-theme-states-warn, light-dark(#d5a910, #ffca00))
+    );
+    --accounts-status-flagged: var(
+      --accounts-status-flagged-override,
+      var(--accounts-theme-states-danger, light-dark(#d52c36, #ff2e3f))
+    );
+    --accounts-status-pending: var(
+      --accounts-status-pending-override,
+      var(--accounts-theme-states-info, light-dark(#1ca1c7, #08c0ef))
+    );
+
+    /* NOTE: we cannot use 'in oklch' because current versions of cursor and
+     * vscode use an older build of chrome that appears to have a bug with
+     * color-mix and 'in oklch', so use 'in lab' instead */
+    --accounts-hairline: color-mix(
+      in lab,
+      var(--accounts-border) 60%,
+      transparent
+    );
+    --accounts-bg-hover: light-dark(
+      color-mix(in lab, var(--accounts-bg) 96%, var(--accounts-mixer)),
+      color-mix(in lab, var(--accounts-bg) 92%, var(--accounts-mixer))
+    );
+    --accounts-scrollbar-thumb: light-dark(
+      color-mix(in lab, var(--accounts-bg) 85%, black),
+      color-mix(in lab, var(--accounts-bg) 80%, white)
+    );
+
+    --accounts-padding-inline: var(--accounts-padding-inline-override, 16px);
+
+    --accounts-focus-ring-width: var(--accounts-focus-ring-width-override, 1px);
+    --accounts-focus-ring-offset: var(
+      --accounts-focus-ring-offset-override,
+      -1px
+    );
+
+    color-scheme: light dark;
+    display: block;
+    font-family: var(--accounts-font-family, var(--accounts-font-fallback));
+    font-size: var(--accounts-font-size, 13px);
+    background-color: var(--accounts-bg);
+    color: var(--accounts-fg);
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  /* Density: a unitless scale factor multiplying paddings, gaps, and radii.
+   * Set via the `density` option (compact 0.8 / default 1 / relaxed 1.2); an
+   * explicit override always wins. The scale and every metric derived from
+   * it live on the scroller — the element carrying [data-density] — because
+   * custom properties resolve at computed-value time per element: deriving
+   * them on :host would bake in the default scale before the attribute
+   * selector could override it. Row heights must stay in lockstep with the
+   * JS constants in constants.ts. */
+  [data-scroller] {
+    --accounts-density-scale: var(--accounts-density-scale-override, 1);
+    --accounts-row-height: var(
+      --accounts-row-height-override,
+      calc(30px * var(--accounts-density-scale))
+    );
+    --accounts-border-radius: var(
+      --accounts-border-radius-override,
+      calc(6px * var(--accounts-density-scale))
+    );
+    --accounts-item-padding-x: var(
+      --accounts-item-padding-x-override,
+      calc(8px * var(--accounts-density-scale))
+    );
+    --accounts-item-margin-x: var(
+      --accounts-item-margin-x-override,
+      calc(2px * var(--accounts-density-scale))
+    );
+    --accounts-item-row-gap: var(
+      --accounts-item-row-gap-override,
+      calc(6px * var(--accounts-density-scale))
+    );
+    --accounts-level-gap: var(
+      --accounts-level-gap-override,
+      calc(8px * var(--accounts-density-scale))
+    );
+
+    height: 100%;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    padding-inline: var(--accounts-padding-inline);
+    outline: none;
+  }
+
+  [data-scroller][data-density='compact'] {
+    --accounts-density-scale: var(--accounts-density-scale-override, 0.8);
+  }
+
+  [data-scroller][data-density='relaxed'] {
+    --accounts-density-scale: var(--accounts-density-scale-override, 1.2);
+  }
+
+  [data-scroller]:focus-visible {
+    outline: var(--accounts-focus-ring-width) solid var(--accounts-accent);
+    outline-offset: var(--accounts-focus-ring-offset);
+  }
+
+  [data-accounts-content] {
+    min-width: 0;
+    position: relative;
+  }
+
+  /* Hover-revealed scrollbars: fully transparent at rest, thumb painted only
+   * while the scroller is hovered. background-clip keeps the transparent
+   * border as a visual inset. */
+  [data-scroller]::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  [data-scroller]::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  [data-scroller]::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 5px;
+  }
+
+  [data-scroller]:hover::-webkit-scrollbar-thumb {
+    background-color: var(--accounts-scrollbar-thumb);
+  }
+
+  [data-scroller]::-webkit-scrollbar-corner {
+    background-color: transparent;
+  }
+
+  /*
+   * If we apply these rules globally it will mean that webkit will opt into
+   * the standards compliant version of custom css scrollbars, which we do not
+   * want because the custom stuff will look better
+   */
+  @supports (-moz-appearance: none) {
+    [data-scroller] {
+      scrollbar-width: thin;
+      scrollbar-color: var(--accounts-scrollbar-thumb) transparent;
+    }
+  }
+
+  /* Sticky ancestor header: the nearest off-screen ancestor group of the top
+   * visible row, mirrored above the tree. Hairline bottom border + editor bg
+   * so scrolled rows visibly slide beneath it. */
+  [data-sticky-header] {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background-color: var(--accounts-bg);
+    border-bottom: 1px solid var(--accounts-hairline);
+    pointer-events: none;
+  }
+
+  /* Rows */
+  /* ---- */
+  [data-row] {
+    display: flex;
+    align-items: center;
+    height: var(--accounts-row-height);
+    line-height: var(--accounts-row-height);
+    gap: var(--accounts-item-row-gap);
+    padding: 0 var(--accounts-item-padding-x);
+    margin: 0 var(--accounts-item-margin-x);
+    border-radius: var(--accounts-border-radius);
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+    white-space: nowrap;
+    transition: background-color 150ms ease;
+  }
+
+  [data-row][data-sticky-row='true'] {
+    cursor: default;
+    margin: 0;
+  }
+
+  @media (pointer: fine) {
+    [data-row]:hover:not([data-sticky-row='true']) {
+      background-color: var(--accounts-bg-hover);
+    }
+  }
+
+  /* Selected rows use the accent.subtle surface; the focus ring sits on top
+   * of whichever background applies. */
+  [data-row][data-selected='true'] {
+    background-color: var(--accounts-accent-subtle);
+  }
+
+  [data-row][data-focused='true']::before {
+    position: absolute;
+    inset: 0;
+    content: '';
+    display: block;
+    border-radius: var(--accounts-border-radius);
+    outline: var(--accounts-focus-ring-width) solid var(--accounts-accent);
+    outline-offset: var(--accounts-focus-ring-offset);
+    pointer-events: none;
+  }
+
+  /* Indent guides: the spacing container provides the indentation width and
+   * hosts one 1px line per ancestor level. Guides are invisible at rest and
+   * fade in while the host is hovered. */
+  [data-row-spacing] {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    align-self: stretch;
+    flex-shrink: 0;
+  }
+
+  [data-indent-guide] {
+    display: inline-block;
+    width: var(--accounts-level-gap);
+    border-left: 1px solid var(--accounts-indent-guide);
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  :host(:hover) [data-indent-guide] {
+    opacity: 0.75;
+  }
+
+  /* Chevron: rendered pointing down, rotated -90° while collapsed. Leaves
+   * keep an empty chevron cell so names align across kinds. */
+  [data-chevron] {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    color: var(--accounts-fg3);
+  }
+
+  [data-chevron] svg {
+    display: block;
+    transition: transform 150ms ease;
+  }
+
+  [data-row][data-expanded='false'] [data-chevron] svg {
+    transform: rotate(-90deg);
+  }
+
+  [data-name] {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--accounts-fg);
+  }
+
+  [data-row][data-kind='group'] [data-name] {
+    font-weight: 600;
+  }
+
+  [data-row][data-search-match='true'] [data-name] {
+    font-weight: 600;
+    color: var(--accounts-accent);
+  }
+
+  /* Status dot + count: colored purely by [data-status]. */
+  [data-status-dot] {
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+  }
+
+  [data-status-count] {
+    flex-shrink: 0;
+    font-size: 0.85em;
+    color: currentColor;
+    opacity: 0.85;
+  }
+
+  [data-status-dot][data-status='unreconciled'],
+  [data-status-count][data-status='unreconciled'] {
+    color: var(--accounts-status-unreconciled);
+  }
+
+  [data-status-dot][data-status='flagged'],
+  [data-status-count][data-status='flagged'] {
+    color: var(--accounts-status-flagged);
+  }
+
+  [data-status-dot][data-status='pending'],
+  [data-status-count][data-status='pending'] {
+    color: var(--accounts-status-pending);
+  }
+
+  /* Balance column: right-aligned, mono + tabular-nums so amounts line up
+   * digit-for-digit down the tree. */
+  [data-balance] {
+    margin-left: auto;
+    flex-shrink: 0;
+    text-align: right;
+    font-family: var(--accounts-mono-fallback);
+    font-variant-numeric: tabular-nums;
+    color: var(--accounts-balance);
+  }
+
+  [data-balance][data-negative='true'] {
+    color: var(--accounts-balance-negative);
+  }
+}

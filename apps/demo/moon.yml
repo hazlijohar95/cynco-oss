@@ -1,0 +1,43 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# Private kitchen-sink harness for @cynco/journals. Local-only tasks avoid
+# presets and set options explicitly; graph-connected dev/serve tasks stay
+# `runInCI: 'skip'` (run them with a `CI=` prefix or --ignore-ci-checks in
+# CI-marked shells like agent harnesses).
+language: 'typescript'
+layer: 'application'
+
+workspace:
+  inheritedTasks:
+    # No test suite in this app.
+    exclude: ['test']
+
+tasks:
+  build:
+    command: 'vite build'
+    deps:
+      - '^:build'
+    inputs:
+      - 'src/**'
+      - 'index.html'
+      - 'vite.config.ts'
+    outputs:
+      - 'dist'
+
+  # Build deps run to completion first so vite resolves @cynco/* through
+  # complete dists.
+  dev:
+    command: 'vite --port 4600'
+    deps:
+      - '^:build'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+
+  serve:
+    command: 'vite preview'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'

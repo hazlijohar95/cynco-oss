@@ -63,6 +63,9 @@ catalogs:
     tsdown:
       specifier: 0.22.3
       version: 0.22.3
+    vite:
+      specifier: 8.1.0
+      version: 8.1.0
 
 overrides:
   '@types/react': 19.2.7
@@ -105,6 +108,92 @@ importers:
       stylelint-config-standard:
         specifier: 'catalog:'
         version: 40.0.0(stylelint@17.13.0(typescript@6.0.3))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  apps/demo:
+    dependencies:
+      '@cynco/journals':
+        specifier: workspace:*
+        version: link:../../packages/journals
+      '@cynco/ledger-store':
+        specifier: workspace:*
+        version: link:../../packages/ledger-store
+      '@cynco/ledger-test-data':
+        specifier: workspace:*
+        version: link:../../packages/ledger-test-data
+      '@cynco/theme':
+        specifier: workspace:*
+        version: link:../../packages/theme
+    devDependencies:
+      '@types/bun':
+        specifier: 'catalog:'
+        version: 1.3.14
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.1.0(@types/node@26.1.1)(yaml@2.9.0)
+
+  packages/accounts:
+    dependencies:
+      '@cynco/ledger-store':
+        specifier: workspace:*
+        version: link:../ledger-store
+      '@cynco/theme':
+        specifier: workspace:*
+        version: link:../theme
+    devDependencies:
+      '@cynco/ledger-test-data':
+        specifier: workspace:*
+        version: link:../ledger-test-data
+      '@tsdown/css':
+        specifier: 'catalog:'
+        version: 0.22.3(postcss@8.5.6)(tsdown@0.22.3)(yaml@2.9.0)
+      '@types/bun':
+        specifier: 'catalog:'
+        version: 1.3.14
+      '@types/jsdom':
+        specifier: 'catalog:'
+        version: 28.0.1
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.7)
+      autoprefixer:
+        specifier: 'catalog:'
+        version: 10.4.22(postcss@8.5.6)
+      jsdom:
+        specifier: 'catalog:'
+        version: 26.1.0
+      lightningcss:
+        specifier: 'catalog:'
+        version: 1.32.0
+      mitata:
+        specifier: 'catalog:'
+        version: 1.0.34
+      postcss:
+        specifier: 'catalog:'
+        version: 8.5.6
+      postcss-calc:
+        specifier: 'catalog:'
+        version: 10.1.1(postcss@8.5.6)
+      postcss-nesting:
+        specifier: 'catalog:'
+        version: 14.0.0(postcss@8.5.6)
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.3(@tsdown/css@0.22.3)(@typescript/native-preview@7.0.0-dev.20260622.1)(typescript@6.0.3)
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -1140,6 +1229,11 @@ packages:
   fraction.js@5.3.4:
     resolution: {integrity: sha512-1X1NTtiJphryn/uLQz3whtY6jK3fTqoE3ohKs0tT+Ujr1W59oopxmoEh7Lu5p6vBaPbgoM0bzveAW4Qi5RyWDQ==}
 
+  fsevents@2.3.3:
+    resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
   get-east-asian-width@1.6.0:
     resolution: {integrity: sha512-QRbvDIbx6YklUe6RxeTeleMR0yv3cYH6PsPZHcnVn7xv7zO1BHN8r0XETu8n6Ye3Q+ahtSarc3WgtNWmehIBfA==}
     engines: {node: '>=18'}
@@ -1831,6 +1925,49 @@ packages:
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
+
+  vite@8.1.0:
+    resolution: {integrity: sha512-BuJcQK/56NQTWDGn4ABea3q4SSBdNPWwNZKTkkUpcMPnLoquSYH8llRtSUIgoL1KSCpHt5eghLShn50mH36y7Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    peerDependencies:
+      '@types/node': ^20.19.0 || >=22.12.0
+      '@vitejs/devtools': ^0.3.0
+      esbuild: ^0.27.0 || ^0.28.0
+      jiti: '>=1.21.0'
+      less: ^4.0.0
+      sass: ^1.70.0
+      sass-embedded: ^1.70.0
+      stylus: '>=0.54.8'
+      sugarss: ^5.0.0
+      terser: ^5.16.0
+      tsx: ^4.8.1
+      yaml: ^2.4.2
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      '@vitejs/devtools':
+        optional: true
+      esbuild:
+        optional: true
+      jiti:
+        optional: true
+      less:
+        optional: true
+      sass:
+        optional: true
+      sass-embedded:
+        optional: true
+      stylus:
+        optional: true
+      sugarss:
+        optional: true
+      terser:
+        optional: true
+      tsx:
+        optional: true
+      yaml:
+        optional: true
 
   w3c-xmlserializer@5.0.0:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
@@ -2556,6 +2693,9 @@ snapshots:
 
   fraction.js@5.3.4: {}
 
+  fsevents@2.3.3:
+    optional: true
+
   get-east-asian-width@1.6.0: {}
 
   get-tsconfig@5.0.0-beta.5:
@@ -3230,6 +3370,18 @@ snapshots:
       picocolors: 1.1.1
 
   util-deprecate@1.0.2: {}
+
+  vite@8.1.0(@types/node@26.1.1)(yaml@2.9.0):
+    dependencies:
+      lightningcss: 1.32.0
+      picomatch: 4.0.5
+      postcss: 8.5.16
+      rolldown: 1.1.5
+      tinyglobby: 0.2.17
+    optionalDependencies:
+      '@types/node': 26.1.1
+      fsevents: 2.3.3
+      yaml: 2.9.0
 
   w3c-xmlserializer@5.0.0:
     dependencies:

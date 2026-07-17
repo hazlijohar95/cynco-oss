@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cynco Journals Demo</title>
+  </head>
+  <body>
+    <header class="toolbar">
+      <strong class="toolbar-title">Cynco Journals Demo</strong>
+      <span id="workload-stats" class="toolbar-stats"></span>
+      <span class="toolbar-spacer"></span>
+      <label class="toolbar-control">
+        Theme
+        <select id="theme-select">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="darkSoft">Dark Soft</option>
+          <option value="lightSoft">Light Soft</option>
+        </select>
+      </label>
+      <label class="toolbar-control">
+        Density
+        <select id="density-select">
+          <option value="comfortable">Comfortable</option>
+          <option value="compact">Compact</option>
+        </select>
+      </label>
+      <label class="toolbar-control">
+        Entries
+        <select id="workload-select"></select>
+      </label>
+      <button id="chrome-toggle" type="button">Chrome: dark</button>
+    </header>
+
+    <main id="stage">
+      <section>
+        <h2>Journal entries</h2>
+        <p class="section-note">
+          Handcrafted <code>JournalEntry</code> cards: a simple sale, a payroll
+          run with EPF/SOCSO splits, a multi-currency export, a deliberately
+          unbalanced entry (checker bar), tags &amp; links, and pending /
+          flagged lifecycle states.
+        </p>
+        <div id="entry-gallery" class="entry-gallery"></div>
+      </section>
+
+      <section>
+        <h2>Register</h2>
+        <p class="section-note">
+          One account&rsquo;s virtualized <code>Register</code> built from
+          <code>EntryStore.getRegisterRows</code> over the generated workload.
+          Scroll the fixed 600px window; click a row to select it.
+        </p>
+        <div id="register-host"></div>
+        <p id="register-readout" class="readout">No row selected.</p>
+      </section>
+
+      <section>
+        <h2>Ledger view</h2>
+        <p class="section-note">
+          <code>LedgerView</code> stacking five account registers behind one
+          shared virtualizer with sticky section headers. Selection is a single
+          focused row across all sections.
+        </p>
+        <div id="ledger-host"></div>
+        <p id="ledger-readout" class="readout">No row selected.</p>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
