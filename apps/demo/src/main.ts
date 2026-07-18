@@ -3,6 +3,7 @@ import {
   JournalEntry,
   journalsThemeVariables,
   LedgerView,
+  Reconciliation,
   Register,
   type RegisterDensity,
   type RegisterRowData,
@@ -16,6 +17,12 @@ import {
 import { dark, darkSoft, light, lightSoft, type Roles } from '@cynco/theme';
 
 import { buildRegisterRows } from './buildRegisterRows';
+import {
+  RECONCILIATION_ACCOUNT,
+  RECONCILIATION_PERIOD,
+  RECONCILIATION_POSTINGS,
+  RECONCILIATION_STATEMENT_LINES,
+} from './reconciliationData';
 import { SHOWCASE_ENTRIES } from './showcaseEntries';
 import './styles.css';
 
@@ -85,6 +92,11 @@ const registerHost = mustGetElement('register-host', HTMLElement);
 const registerReadout = mustGetElement('register-readout', HTMLElement);
 const ledgerHost = mustGetElement('ledger-host', HTMLElement);
 const ledgerReadout = mustGetElement('ledger-readout', HTMLElement);
+const reconciliationHost = mustGetElement('reconciliation-host', HTMLElement);
+const reconciliationReadout = mustGetElement(
+  'reconciliation-readout',
+  HTMLElement
+);
 
 // --- Theme / chrome controls -------------------------------------------------
 
@@ -254,6 +266,60 @@ function renderLedgerView(store: EntryStore, density: RegisterDensity): void {
   ledgerView.render({ sections, parentNode: ledgerHost });
 }
 
+// --- Reconciliation ----------------------------------------------------------
+
+// The reconciliation demo is a static handcrafted fixture (statement page vs
+// cash book); it renders once and its readout narrates every accept /
+// reject / undo / create-entry event plus the live difference.
+function renderReconciliation(): void {
+  const reconciliation = new Reconciliation({
+    account: RECONCILIATION_ACCOUNT,
+    periodLabel: RECONCILIATION_PERIOD,
+    statementLines: RECONCILIATION_STATEMENT_LINES,
+    postings: RECONCILIATION_POSTINGS,
+    onAccept(match) {
+      reportReconciliation(`accepted ${match.id}`, reconciliation);
+    },
+    onReject(match) {
+      reportReconciliation(`rejected ${match.id}`, reconciliation);
+    },
+    onUndo(match) {
+      reportReconciliation(`undid ${match.id}`, reconciliation);
+    },
+    onCreateEntry(line) {
+      reportReconciliation(
+        `create entry requested for "${line.description}" (${formatMinorUnits(
+          line.amount,
+          line.currency,
+          { sign: 'always' }
+        )} ${line.currency})`,
+        reconciliation
+      );
+    },
+  });
+  reconciliation.render({ parentNode: reconciliationHost });
+  reportReconciliation('proposals ready', reconciliation);
+}
+
+function reportReconciliation(
+  event: string,
+  reconciliation: Reconciliation
+): void {
+  const { matches, difference } = reconciliation.getState();
+  const accepted = matches.filter(
+    (match) => match.status === 'accepted'
+  ).length;
+  const differenceText = [...difference.entries()]
+    .map(
+      ([currency, amount]) =>
+        `${formatMinorUnits(amount, currency)} ${currency}`
+    )
+    .join(' · ');
+  reconciliationReadout.textContent =
+    `${event} — ${accepted}/${matches.length} accepted · ` +
+    `difference ${differenceText === '' ? '0.00' : differenceText}`;
+}
+
 // Rebuilds every data-driven view for the current workload/density selection
 // and refreshes the toolbar stats line.
 function rebuildDataViews(): void {
@@ -295,5 +361,6 @@ densitySelect.addEventListener('change', rebuildDataViews);
 
 applyTheme(DEFAULT_THEME);
 renderEntryGallery();
+renderReconciliation();
 populateWorkloadSelect();
 rebuildDataViews();

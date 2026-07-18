@@ -109,6 +109,37 @@ view.render({
 });
 `;
 
+const RECONCILIATION_API = `
+import { proposeMatches, Reconciliation } from '@cynco/journals';
+
+// Deterministic proposals: exact (amount + currency + date) first, then
+// nearest-date within ±3 days. Strictly 1:1 — sums stay unmatched.
+const matches = proposeMatches(statementLines, postings, {
+  dateWindowDays: 3,
+});
+
+const reconciliation = new Reconciliation({
+  account: 'Assets:Current:Cash-Maybank',
+  periodLabel: 'Jul 2026',
+  statementLines, // StatementLine[] — parsed bank lines, integer minor units
+  postings, // BookPostingRef[] — { entry, postingIndex }
+  matches, // optional; this is the default
+  onAccept(match) {
+    console.log('cleared', match.id);
+  },
+  onCreateEntry(line) {
+    // The component never writes entries — that is your data layer's job.
+    openEntryForm(line);
+  },
+});
+reconciliation.render({ parentNode: document.querySelector('#host')! });
+
+// Imperative controls mirror the gutter buttons.
+reconciliation.acceptMatch('m-l1-e1-0');
+const { matches: current, difference } = reconciliation.getState();
+// difference: Map<currency, MinorUnits> — statement − accepted, exact.
+`;
+
 const REACT_API = `
 import {
   JournalEntry,
@@ -293,6 +324,38 @@ export default async function JournalsDocsPage() {
             <CodeBlock code={VANILLA_REGISTER} />
             <h3>LedgerView</h3>
             <CodeBlock code={VANILLA_LEDGER_VIEW} />
+
+            <h2 id="reconciliation">Reconciliation</h2>
+            <p>
+              The accounting analog of a merge-conflict resolver: statement
+              lines on the left, book postings on the right, proposed matches as
+              tinted pairs with accept / reject in a center gutter.{' '}
+              <code>proposeMatches</code> is deterministic and strictly 1:1 on
+              identical amounts — it never proposes sum matches; unmatched lines
+              keep a <em>create entry</em> affordance and unmatched postings
+              read as <em>outstanding</em>. The header difference (statement
+              total − accepted book total) is integer minor-unit math and flips
+              to jade only at exactly zero.
+            </p>
+            <CodeBlock code={RECONCILIATION_API} />
+            <ul>
+              <li>
+                <code>acceptMatch / rejectMatch / undoMatch(id)</code> — the
+                same transitions the gutter buttons drive; each fires its
+                callback with the transitioned match.
+              </li>
+              <li>
+                <code>getState()</code> — current matches plus the per-currency
+                difference map.
+              </li>
+              <li>
+                <code>&lt;Reconciliation options ssrHTML /&gt;</code> from{' '}
+                <code>@cynco/journals/react</code> and{' '}
+                <code>preloadReconciliationHTML</code> from{' '}
+                <code>@cynco/journals/ssr</code> follow the same hydration
+                contract as the other components.
+              </li>
+            </ul>
 
             <h2 id="react-api">React API</h2>
             <p>

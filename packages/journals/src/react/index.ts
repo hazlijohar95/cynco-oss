@@ -4,6 +4,7 @@
 export * from '../types';
 export * from './JournalEntry';
 export * from './LedgerView';
+export * from './Reconciliation';
 export * from './Register';
 export * from './utils/mergeColorSchemeStyle';
 export * from './utils/templateRender';

@@ -19,6 +19,8 @@
     --journals-accent-override
     --journals-accent-subtle-override
     --journals-danger-override
+    --journals-warn-override
+    --journals-match-override
 
     --journals-debit-override
     --journals-credit-override
@@ -81,6 +83,14 @@
     --journals-danger: var(
       --journals-danger-override,
       var(--journals-theme-states-danger, light-dark(#d52c36, #ff2e3f))
+    );
+    --journals-warn: var(
+      --journals-warn-override,
+      var(--journals-theme-states-warn, light-dark(#d5a910, #ffca00))
+    );
+    --journals-match: var(
+      --journals-match-override,
+      var(--journals-theme-states-match, light-dark(#693acf, #7b43f8))
     );
 
     --journals-debit: var(
@@ -179,6 +189,16 @@
     --journals-scrollbar-thumb: light-dark(
       color-mix(in lab, var(--journals-bg) 85%, black),
       color-mix(in lab, var(--journals-bg) 80%, white)
+    );
+    /* Reconciliation tints: proposed pairs at the match (indigo) mix — the
+     * conflict-hunk treatment — and accepted pairs at the reconciled jade. */
+    --journals-bg-match: light-dark(
+      color-mix(in lab, var(--journals-bg) 92%, var(--journals-match)),
+      color-mix(in lab, var(--journals-bg) 84%, var(--journals-match))
+    );
+    --journals-bg-accepted: light-dark(
+      color-mix(in lab, var(--journals-bg) 93%, var(--journals-reconciled)),
+      color-mix(in lab, var(--journals-bg) 86%, var(--journals-reconciled))
     );
 
     color-scheme: light dark;
@@ -641,7 +661,8 @@
   /* Virtualization buffers: 45° pinstripes on an 8px tile mark space where
    * rows exist but are not currently rendered. The √2 factor approximates
    * the diagonal repeat distance. */
-  [data-register-spacer] {
+  [data-register-spacer],
+  [data-recon-empty] {
     background-size: 8px 8px;
     background-position: 5px 0;
     background-origin: border-box;
@@ -652,5 +673,222 @@
       var(--journals-bg-buffer) calc(3px * 1.414),
       var(--journals-bg-buffer) calc(4px * 1.414)
     );
+  }
+
+  /* Reconciliation */
+  /* -------------- */
+  [data-reconciliation-header] {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2ch;
+    min-height: calc(1lh + 24px);
+    padding-inline: 2ch;
+    background-color: var(--journals-bg);
+    border-bottom: 1px solid var(--journals-hairline);
+  }
+
+  [data-recon-title] {
+    display: flex;
+    align-items: baseline;
+    gap: 1ch;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+
+  [data-recon-period] {
+    color: var(--journals-fg3);
+    font-weight: 400;
+  }
+
+  [data-recon-figures] {
+    display: flex;
+    gap: 3ch;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-recon-figure] {
+    display: flex;
+    align-items: baseline;
+    gap: 1ch;
+  }
+
+  [data-figure-label] {
+    color: var(--journals-fg3);
+    font-size: 0.85em;
+    user-select: none;
+  }
+
+  [data-figure-value] {
+    display: flex;
+    gap: 1.5ch;
+    color: var(--journals-balance);
+  }
+
+  /* The difference is the reconciliation verdict: danger red while any
+   * currency is off, jade with a reconciled dot at exactly zero. */
+  [data-recon-figure='difference'][data-difference='nonzero']
+    [data-figure-value] {
+    color: var(--journals-danger);
+  }
+
+  [data-recon-figure='difference'][data-difference='zero'] [data-figure-value] {
+    color: var(--journals-reconciled);
+  }
+
+  [data-recon-figure] [data-recon-dot] {
+    color: var(--journals-reconciled);
+    font-size: 0.65em;
+    user-select: none;
+  }
+
+  /* Split body: statement column | action gutter | book column. A single
+   * shared grid keeps matched pairs aligned horizontally, like a split
+   * diff's two panes. */
+  [data-reconciliation-body] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+  }
+
+  [data-recon-row] {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: stretch;
+    min-height: calc(var(--journals-line-height, 20px) + 8px);
+    border-bottom: 1px solid
+      color-mix(in lab, var(--journals-border) 30%, transparent);
+    transition: background-color 150ms ease;
+  }
+
+  [data-recon-cell] {
+    display: flex;
+    align-items: center;
+    gap: 1ch;
+    min-width: 0;
+    padding: 4px 2ch;
+  }
+
+  [data-recon-cell] [data-date] {
+    color: var(--journals-date);
+    white-space: nowrap;
+  }
+
+  [data-recon-cell] [data-description] {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-recon-cell] [data-cell='amount'] {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Pair tinting: proposed pairs take the match (indigo) mix, accepted
+   * pairs the reconciled jade mix — both cells, never the gutter, so the
+   * pairing reads as two aligned panes. */
+  [data-recon-row][data-match-status='proposed'] [data-recon-cell] {
+    background-color: var(--journals-bg-match);
+  }
+
+  [data-recon-row][data-match-status='accepted'] [data-recon-cell] {
+    background-color: var(--journals-bg-accepted);
+  }
+
+  [data-date-delta] {
+    color: var(--journals-fg3);
+    font-size: 0.85em;
+    border: 1px solid var(--journals-hairline);
+    border-radius: 6px;
+    padding: 0 0.75ch;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  [data-recon-empty] {
+    justify-content: center;
+  }
+
+  [data-recon-outstanding] {
+    color: var(--journals-warn);
+    font-size: 0.85em;
+    user-select: none;
+  }
+
+  /* Center action gutter: Pierre gutter-utility style — small 4px-radius
+   * buttons that fade in on row hover. */
+  [data-recon-gutter] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: calc(2lh + 3ch);
+    padding-inline: 1ch;
+  }
+
+  [data-recon-action] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    appearance: none;
+    border: none;
+    width: 1lh;
+    height: 1lh;
+    padding: 0;
+    border-radius: 4px;
+    background-color: transparent;
+    color: var(--journals-fg3);
+    font: inherit;
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity 140ms ease,
+      background-color 140ms ease,
+      color 140ms ease;
+  }
+
+  [data-recon-row]:hover [data-recon-action],
+  [data-recon-action]:focus-visible {
+    opacity: 1;
+  }
+
+  [data-recon-action='accept']:hover {
+    background-color: var(--journals-reconciled);
+    color: var(--journals-bg);
+  }
+
+  [data-recon-action='reject']:hover {
+    background-color: var(--journals-danger);
+    color: var(--journals-bg);
+  }
+
+  [data-recon-action='undo']:hover {
+    background-color: var(--journals-accent);
+    color: var(--journals-bg);
+  }
+
+  [data-recon-action='create-entry'] {
+    width: auto;
+    height: auto;
+    padding: 0 1ch;
+    font-size: 0.85em;
+    border: 1px solid var(--journals-hairline);
+    background-color: var(--journals-bg);
+    color: var(--journals-fg2);
+  }
+
+  [data-recon-action='create-entry']:hover {
+    color: var(--journals-fg);
+    border-color: var(--journals-accent);
   }
 }

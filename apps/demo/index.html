@@ -57,6 +57,21 @@
       </section>
 
       <section>
+        <h2>Reconciliation</h2>
+        <p class="section-note">
+          <code>Reconciliation</code> treats bank reconciliation like conflict
+          resolution: statement lines left, book postings right, proposed
+          matches as tinted pairs. Hover a pair to accept (&#10003;) or reject
+          (&#10007;); accept everything matched and watch the difference figure.
+          The bank fee needs a new entry; cheque 001232 is still outstanding.
+        </p>
+        <div id="reconciliation-host"></div>
+        <p id="reconciliation-readout" class="readout">
+          No reconciliation activity yet.
+        </p>
+      </section>
+
+      <section>
         <h2>Ledger view</h2>
         <p class="section-note">
           <code>LedgerView</code> stacking five account registers behind one

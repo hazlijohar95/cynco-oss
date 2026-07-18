@@ -1,10 +1,12 @@
 import { JSDOM } from 'jsdom';
 
 import type {
+  BookPostingRef,
   LedgerEntry,
   MinorUnits,
   Posting,
   RegisterRowData,
+  StatementLine,
 } from '../src/types';
 
 export interface DomHandle {
@@ -284,4 +286,63 @@ export function makeRows(count: number): RegisterRowData[] {
     });
   }
   return rows;
+}
+
+export interface MakeStatementLineOptions {
+  id: string;
+  date: string;
+  amount: MinorUnits;
+  description?: string;
+  currency?: string;
+}
+
+/** Handcrafted statement line for reconciliation fixtures. */
+export function makeStatementLine({
+  id,
+  date,
+  amount,
+  description,
+  currency = 'MYR',
+}: MakeStatementLineOptions): StatementLine {
+  return {
+    id,
+    date,
+    description: description ?? `Statement ${id}`,
+    amount,
+    currency,
+  };
+}
+
+export interface MakeBookPostingOptions {
+  entryId: string;
+  date: string;
+  amount: MinorUnits;
+  payee?: string;
+  currency?: string;
+  account?: string;
+}
+
+// Book-side posting reference: a balanced two-posting entry whose first
+// posting hits the reconciled account (postingIndex 0).
+export function makeBookPosting({
+  entryId,
+  date,
+  amount,
+  payee,
+  currency = 'MYR',
+  account = 'Assets:Current:Cash-Maybank',
+}: MakeBookPostingOptions): BookPostingRef {
+  const entry = makeEntry({
+    id: entryId,
+    date,
+    payee: payee ?? `Payee ${entryId}`,
+    narration: `Narration ${entryId}`,
+    tags: [],
+    links: [],
+    postings: [
+      { account, amount, currency },
+      { account: 'Income:Sales:Consulting', amount: -amount, currency },
+    ],
+  });
+  return { entry, postingIndex: 0 };
 }

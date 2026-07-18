@@ -15,6 +15,7 @@ import {
   PAYROLL_ENTRY,
   UNBALANCED_ENTRY,
 } from '@/examples/entries';
+import { ReconciliationDemo } from '@/examples/ReconciliationDemo';
 import { RegisterDemo } from '@/examples/RegisterDemo';
 
 export default function Home() {
@@ -25,6 +26,7 @@ export default function Home() {
       <section className="space-y-12 pb-8">
         <JournalEntrySection />
         <RegisterSection />
+        <ReconciliationSection />
         <AccountTreeSection />
         <UnbalancedSection />
       </section>
@@ -82,6 +84,26 @@ function RegisterSection() {
         }
       />
       <RegisterDemo />
+    </section>
+  );
+}
+
+function ReconciliationSection() {
+  return (
+    <section className="space-y-4">
+      <FeatureHeader
+        id="reconciliation"
+        title="Reconciliation as conflict resolution"
+        description={
+          <>
+            Statement lines left, book postings right, proposed matches as
+            tinted pairs — accept ✓ or reject ✗ from the center gutter, exactly
+            like resolving a merge conflict. The difference figure is integer
+            math and turns jade only at exactly zero.
+          </>
+        }
+      />
+      <ReconciliationDemo />
     </section>
   );
 }

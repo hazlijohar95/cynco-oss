@@ -51,6 +51,50 @@ export interface RegisterRowData {
  */
 export type RegisterDensity = 'comfortable' | 'compact';
 
+/** One line from a bank statement, already parsed to integer minor units. */
+export interface StatementLine {
+  /** Stable unique id (caller-provided). */
+  id: string;
+  /** ISO date `YYYY-MM-DD`. */
+  date: string;
+  description: string;
+  /** Signed from the account's perspective: deposits positive. */
+  amount: MinorUnits;
+  /** ISO 4217 or commodity code, e.g. `MYR`. */
+  currency: string;
+}
+
+/**
+ * A book-side posting reference: the entry plus which posting targets the
+ * reconciled account.
+ */
+export interface BookPostingRef {
+  entry: LedgerEntry;
+  /** Index into `entry.postings` of the posting hitting the account. */
+  postingIndex: number;
+}
+
+/**
+ * How a match was made: `exact` (same amount, currency, and date),
+ * `suggested` (same amount and currency within the date window), or
+ * `manual` (caller-constructed).
+ */
+export type MatchKind = 'exact' | 'suggested' | 'manual';
+
+/** Lifecycle of a match inside the reconciliation UI. */
+export type MatchStatus = 'proposed' | 'accepted' | 'rejected';
+
+export interface ReconciliationMatch {
+  /** Deterministic id: `m-<lineId>-<entryId>-<postingIndex>`. */
+  id: string;
+  statementLineId: string;
+  posting: BookPostingRef;
+  kind: MatchKind;
+  status: MatchStatus;
+  /** Days between statement and book dates (book − statement; 0 for exact). */
+  dateDelta: number;
+}
+
 /**
  * Pixel window (relative to scroll content top) that should have real DOM.
  * Produced by the Virtualizer from scroll position plus overscroll.
