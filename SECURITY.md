@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-Please report security issues privately to **hello@cynco.dev**. Do not open a
+Please report security issues privately to **coding@hazli.dev**. Do not open a
 public issue for anything you believe has security impact.
 
 You can expect an acknowledgement within 72 hours. Please include a reproduction
