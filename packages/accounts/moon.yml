@@ -39,6 +39,37 @@ tasks:
       persistent: true
       runInCI: 'skip'
 
+  # Extends the publishable tag chain: direct `pnpm publish` must fail while
+  # package.json still carries the inlined workspace dependencies. The real
+  # release path is `moonx accounts:publish`.
+  prepublish:
+    command: 'noop'
+    deps:
+      - 'assert-pnpm-version'
+      - 'build'
+      - 'assert-safe-publish'
+    options:
+      merge: 'replace'
+      cache: false
+      runInCI: 'skip'
+
+  assert-safe-publish:
+    command: 'bun scripts/assert-safe-publish.ts'
+    options:
+      cache: false
+      internal: true
+      runInCI: 'skip'
+
+  # Pack -> strip inlined workspace deps -> verify payload -> publish the
+  # rewritten tarball. Forward flags with `moonx accounts:publish -- --tag=x
+  # --dry-run`.
+  publish:
+    command: 'bun scripts/publish.ts'
+    options:
+      cache: false
+      interactive: true
+      runInCI: 'skip'
+
   # No preset: presets force `runInCI: skip` and moon refuses to run such
   # tasks in CI-detected shells (agent harnesses export CI=1). Never targeted
   # by the CI lanes; no graph edges so it can never be pulled in.

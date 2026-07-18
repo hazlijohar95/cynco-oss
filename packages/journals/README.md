@@ -10,6 +10,13 @@ and React components.
 - Journal entry cards with postings, tags, links, and flag states
 - Virtualized single-account registers with running balances
 - Ledger view stacking many registers behind one shared virtualizer
+- Reconciliation: statement lines vs book postings with a deterministic matching
+  engine (exact, date-window, and multi-posting sum passes) and
+  accept/reject/undo resolution — merge-conflict UI for bank reconciliation
+- Entry streaming: render entries live from a `ReadableStream` or
+  `AsyncIterable`, rAF-batched, with stick-to-bottom autoscroll
+- Optional worker pool (`@cynco/journals/worker`) that moves window rendering
+  and match proposals off the main thread, with transparent main-thread fallback
 - Debit/credit semantics styled like diff additions/deletions
 - Unbalanced entries flagged inline, never silently repaired
 - Light and dark from one DOM via `light-dark()`; themable through

@@ -39,6 +39,12 @@ Common methods:
 - `tree.getController()` for the model layer (search sessions, focus, ranges)
 - `tree.cleanUp()`
 
+The tree also supports inline rename (F2 or double-click a selected row),
+drag-and-drop re-parenting with Pierre-style guards (no self/descendant/parent
+drops, batch multi-select moves, spring-loaded expansion), and
+`flattenEmptyGroups` — single-child group chains collapse into one visible row
+without ever touching canonical topology.
+
 Status decorations are the git-status analog: colored dots (+ counts) on rows,
 rolled up onto collapsed ancestors.
 
