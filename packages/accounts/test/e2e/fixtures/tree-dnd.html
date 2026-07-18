@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>tree drag & drop fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      accounts-container {
+        height: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { AccountTree } from '/dist/index.js';
+
+      // 'Archive' starts collapsed so the suite can exercise spring-loaded
+      // expansion; the delay is shortened to keep the hover wait tight.
+      const tree = new AccountTree({
+        accounts: [
+          'Assets:Current:Cash-Maybank',
+          'Assets:Current:Cash-CIMB',
+          'Assets:Fixed:Equipment',
+          'Expenses:Rent',
+          'Expenses:Utilities:Electricity',
+          'Income:Sales',
+          'Archive:Old-Ledger',
+        ],
+        initialExpansion: [
+          'Assets',
+          'Assets:Current',
+          'Assets:Fixed',
+          'Expenses',
+          'Expenses:Utilities',
+          'Income',
+        ],
+        showBalances: false,
+        dragExpandDelayMs: 150,
+      });
+
+      window.__moves = [];
+      tree.onMove((moves) => {
+        window.__moves.push(moves.map((move) => ({ ...move })));
+      });
+
+      tree.render(document.getElementById('mount'));
+
+      const host = document.querySelector('accounts-container');
+      const scroller = host.shadowRoot.querySelector('[data-scroller]');
+      const controller = tree.getController();
+
+      window.__tree = tree;
+      window.__scroller = scroller;
+      window.__rowIndex = (path) => controller.getPathIndex(path);
+      window.__hasPath = (path) => controller.hasAccount(path);
+      window.__isExpanded = (path) => controller.isExpanded(path);
+      window.__dropTargetPath = () => {
+        const target = scroller.querySelector('[data-drop-target="true"]');
+        if (target == null) {
+          return null;
+        }
+        const index = Number(target.getAttribute('data-row-index'));
+        return controller.getVisiblePaths()[index] ?? null;
+      };
+
+      window.__treeDndReady = true;
+    </script>
+  </body>
+</html>

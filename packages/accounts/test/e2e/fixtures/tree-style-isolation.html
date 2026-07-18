@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>tree style isolation fixture</title>
+    <style>
+      /* Hostile page CSS. The component host is excluded from the universal
+       * rule (styling the host from the outer tree is supported theming, not
+       * a leak); everything else — including shadow-piercing attempts via
+       * descendant selectors and duplicate ids — must not reach the shadow
+       * DOM. */
+      *:not(accounts-container) {
+        background: red !important;
+        font-size: 40px !important;
+      }
+      /* Descendant selectors from the light DOM must not cross the shadow
+       * boundary, no matter how specific or important. */
+      accounts-container *,
+      accounts-container [data-row] {
+        background: lime !important;
+        color: rgb(0, 128, 0) !important;
+        display: inline !important;
+      }
+      /* Duplicate-id attack: only the light-DOM element may turn green. */
+      #dup-tree-row-id {
+        color: rgb(0, 128, 0) !important;
+      }
+      accounts-container {
+        height: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="dup-tree-row-id" data-test-outside-duplicate-id>
+      outside duplicate-id control
+    </div>
+    <div data-test-outside-pseudo-row data-row data-selected="true">
+      outside pseudo tree row
+    </div>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { AccountTree } from '/dist/index.js';
+
+      const tree = new AccountTree({
+        accounts: [
+          'Assets:Current:Cash-Maybank',
+          'Assets:Current:Cash-CIMB',
+          'Income:Sales',
+          'Expenses:Rent',
+        ],
+        initialExpansion: 'all',
+      });
+      tree.render(document.getElementById('mount'));
+
+      const host = document.querySelector('accounts-container');
+      host.id = 'test-tree-host';
+      host.style.setProperty('--accounts-bg-override', 'rgb(1, 2, 3)');
+
+      const waitForRows = async () => {
+        const started = performance.now();
+        for (;;) {
+          const row = host.shadowRoot?.querySelector('[data-row]');
+          if (row != null) {
+            return row;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for tree rows');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      const firstRow = await waitForRows();
+      firstRow.id = 'dup-tree-row-id';
+      firstRow.setAttribute('data-test-shadow-dup-id', 'true');
+
+      window.__treeStyleIsolationReady = true;
+    </script>
+  </body>
+</html>

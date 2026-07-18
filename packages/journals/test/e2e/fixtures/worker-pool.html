@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>worker pool fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      journals-container {
+        height: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { Register, renderRegisterRowsHTML } from '/dist/index.js';
+      import { WorkerPoolManager } from '/dist/worker/index.js';
+
+      const account = 'Assets:Current:Cash-Maybank';
+
+      const makeRows = (count) => {
+        const rows = [];
+        let balance = 0;
+        for (let index = 0; index < count; index += 1) {
+          const amount = (index % 2 === 0 ? 1 : -1) * (1000 + (index % 7) * 25);
+          balance += amount;
+          const day = (index % 28) + 1;
+          const posting = { account, amount, currency: 'MYR' };
+          rows.push({
+            entry: {
+              id: `e-${index}`,
+              date: `2026-07-${String(day).padStart(2, '0')}`,
+              flag: 'cleared',
+              payee: `Payee ${index}`,
+              narration: `Narration ${index}`,
+              tags: [],
+              links: [],
+              postings: [
+                posting,
+                { account: 'Income:Sales', amount: -amount, currency: 'MYR' },
+              ],
+            },
+            posting,
+            runningBalance: new Map([['MYR', balance]]),
+          });
+        }
+        return rows;
+      };
+
+      const rows = makeRows(500);
+      const range = { start: 40, end: 160 };
+
+      // Healthy pool: a REAL module worker loading the built dist entry.
+      const pool = new WorkerPoolManager({
+        workerFactory: () =>
+          new Worker(new URL('/dist/worker/worker.js', location.origin), {
+            type: 'module',
+          }),
+      });
+      await pool.initialize();
+
+      const pooledHTML = await pool.renderRegisterWindow({
+        rows,
+        range,
+        selectedIndex: null,
+      });
+      const syncHTML = renderRegisterRowsHTML(rows, range, null);
+
+      window.__pool = pool;
+      window.__pooledMatchesSync = pooledHTML === syncHTML;
+      window.__pooledLength = pooledHTML.length;
+      window.__stats = pool.getStats();
+
+      // Integration proof: a Register driven by the pool must commit the
+      // identical window HTML the sync renderer would produce.
+      const register = new Register({ account, workerPool: pool });
+      register.render({ rows, parentNode: document.getElementById('mount') });
+      const host = document.querySelector('journals-container');
+      window.__registerWindowMatchesSync = () => {
+        const rowsElement = host.shadowRoot?.querySelector(
+          '[data-register-rows]'
+        );
+        const rendered = register.getRenderedRange();
+        if (rowsElement == null || rendered == null) {
+          return false;
+        }
+        if (rowsElement.innerHTML === '') {
+          return false;
+        }
+        // Reading innerHTML back yields the browser's serialization (quote
+        // style, empty attributes), so the sync render string is normalized
+        // through the same serializer before comparing.
+        const template = document.createElement('div');
+        template.innerHTML = renderRegisterRowsHTML(rows, rendered, null);
+        return rowsElement.innerHTML === template.innerHTML;
+      };
+
+      // Broken pool: the worker script 404s, the worker fires an error
+      // event, and every job must fall back to the main thread with output
+      // identical to the sync renderer.
+      const brokenPool = new WorkerPoolManager({
+        workerFactory: () =>
+          new Worker(
+            new URL(
+              '/dist/worker/this-file-does-not-exist.js',
+              location.origin
+            ),
+            { type: 'module' }
+          ),
+      });
+      const brokenHTML = await brokenPool.renderRegisterWindow({
+        rows,
+        range,
+        selectedIndex: null,
+      });
+      window.__brokenMatchesSync = brokenHTML === syncHTML;
+      window.__brokenStats = () => brokenPool.getStats();
+
+      window.__workerPoolReady = true;
+    </script>
+  </body>
+</html>

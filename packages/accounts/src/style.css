@@ -190,6 +190,10 @@
     height: 100%;
     overflow: hidden auto;
     overscroll-behavior: contain;
+    /* Virtualized content: window commits rewrite rows and spacer heights,
+     * which Chrome's scroll anchoring would "compensate" by shifting
+     * scrollTop, corrupting the window math (the Pierre trees fix). */
+    overflow-anchor: none;
     padding-inline: var(--accounts-padding-inline);
     outline: none;
   }

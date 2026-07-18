@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>entry stream fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      journals-container {
+        height: 300px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { createEntryStreamFromArray, EntryStream } from '/dist/index.js';
+
+      const TOTAL = 30;
+      const entries = [];
+      for (let index = 0; index < TOTAL; index += 1) {
+        entries.push({
+          id: `e-${index}`,
+          date: `2026-07-${String((index % 28) + 1).padStart(2, '0')}`,
+          flag: 'cleared',
+          payee: `Payee ${index}`,
+          narration: `Narration ${index}`,
+          tags: [],
+          links: [],
+          postings: [
+            {
+              account: 'Assets:Current:Cash-Maybank',
+              amount: 1000 + index,
+              currency: 'MYR',
+            },
+            {
+              account: 'Income:Sales',
+              amount: -(1000 + index),
+              currency: 'MYR',
+            },
+          ],
+        });
+      }
+
+      window.__doneCount = null;
+      window.__samples = [];
+
+      // Streaming starts on demand so the suite controls timing. Mid-flight
+      // progress is observed by an in-page rAF sampler — driver-side polling
+      // could miss the whole 300ms stream under parallel-worker latency.
+      // `delayMs` widens the cadence for suites that need time for real
+      // driver interaction mid-stream.
+      window.__start = ({ delayMs = 10 } = {}) => {
+        const stream = new EntryStream({
+          stream: createEntryStreamFromArray(entries, { delayMs }),
+          total: TOTAL,
+          onDone: (count) => {
+            window.__doneCount = count;
+          },
+        });
+        stream.render({ parentNode: document.getElementById('mount') });
+        const host = document.querySelector('journals-container');
+        const scroller = host.shadowRoot.querySelector('[data-scroller]');
+        window.__stream = stream;
+        window.__scroller = scroller;
+
+        const sample = () => {
+          const count = scroller.querySelectorAll('[data-entry]').length;
+          window.__samples.push({ count, done: window.__doneCount != null });
+          if (window.__doneCount == null || count < TOTAL) {
+            requestAnimationFrame(sample);
+          }
+        };
+        requestAnimationFrame(sample);
+      };
+
+      window.__entryStreamReady = true;
+    </script>
+  </body>
+</html>

@@ -226,6 +226,10 @@
     height: 100%;
     overflow: hidden auto;
     overscroll-behavior: contain;
+    /* Virtualized content: window commits rewrite rows and spacer heights,
+     * which Chrome's scroll anchoring would "compensate" by shifting
+     * scrollTop, corrupting the window math (the Pierre trees fix). */
+    overflow-anchor: none;
   }
 
   /* Hover-revealed scrollbars: fully transparent at rest, thumb painted only

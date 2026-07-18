@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <title>color scheme fixture</title>
+    <style>
+      /* The page owns its own light/dark toggle (html class) and pins the
+       * component's color-scheme from the outer tree — the documented cure
+       * for light-dark() resolving from the OS preference instead of the
+       * page's chosen theme. */
+      html.dark journals-container {
+        color-scheme: dark;
+      }
+      html.light journals-container {
+        color-scheme: light;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="page-driven-mount"></div>
+    <div id="pinned-mount"></div>
+
+    <script type="module">
+      import { JournalEntry } from '/dist/index.js';
+
+      const entry = {
+        id: 'e-1',
+        date: '2026-07-01',
+        flag: 'cleared',
+        payee: 'Tech Ventures Sdn Bhd',
+        narration: 'Invoice for goods delivered',
+        tags: [],
+        links: [],
+        postings: [
+          {
+            account: 'Assets:Current:Cash-Maybank',
+            amount: 50000,
+            currency: 'MYR',
+          },
+          { account: 'Income:Sales', amount: -50000, currency: 'MYR' },
+        ],
+      };
+
+      // Card 1 follows the page's color-scheme CSS (default `system`).
+      const pageDriven = new JournalEntry();
+      pageDriven.render({
+        entry,
+        parentNode: document.getElementById('page-driven-mount'),
+      });
+      document
+        .querySelector('#page-driven-mount journals-container')
+        .setAttribute('data-fixture', 'page-driven');
+
+      // Card 2 pins colorScheme: 'dark' via the option — the inline
+      // `color-scheme` must beat the page rules regardless of html class.
+      const pinned = new JournalEntry({ colorScheme: 'dark' });
+      pinned.render({
+        entry,
+        parentNode: document.getElementById('pinned-mount'),
+      });
+      document
+        .querySelector('#pinned-mount journals-container')
+        .setAttribute('data-fixture', 'pinned');
+
+      window.__setPageScheme = (scheme) => {
+        document.documentElement.classList.toggle('dark', scheme === 'dark');
+        document.documentElement.classList.toggle('light', scheme === 'light');
+      };
+
+      window.__colorSchemeReady = true;
+    </script>
+  </body>
+</html>

@@ -25,6 +25,32 @@ jobs:
         with:
           auto-install: true
 
+      # Keep Playwright browsers across runs; system deps are per-runner and
+      # reinstalled by --with-deps below.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          key: ${{ runner.os }}-playwright-browsers-1.51.1
+          path: ~/.cache/ms-playwright
+
+      # Skip the expensive browser + system-deps install when moon will skip
+      # the e2e targets anyway. Fail-open: any query error installs.
+      - name: Check whether package e2e is affected
+        id: e2e-affected
+        run: |
+          out="$(moon query tasks --affected --downstream deep 2>/dev/null)" || out="test-e2e"
+          case "$out" in
+            *test-e2e*) echo "run=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "run=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      # System libraries are per-runner and not covered by the browser cache.
+      # The moon tasks also self-heal a missing binary, but installing here
+      # keeps --with-deps system libraries in place.
+      - name: Install Playwright browser
+        if: steps.e2e-affected.outputs.run == 'true'
+        run: pnpm dlx playwright@1.51.1 install --with-deps chromium
+
       - name: Format check
         run: moon run root:format-check
 
@@ -35,4 +61,5 @@ jobs:
       - name: Build, test, lint
         run: >-
           moon ci --include-relations --summary detailed :build demo:build
-          docs:build :test :typecheck root:lint root:lint-css
+          docs:build :test :typecheck journals:test-e2e accounts:test-e2e
+          root:lint root:lint-css

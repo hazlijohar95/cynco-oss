@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>tree keyboard fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      accounts-container {
+        height: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { AccountTree } from '/dist/index.js';
+
+      // Small deterministic tree. 'Assets:Fixed' starts collapsed so the
+      // suite can exercise ArrowRight-expands.
+      const tree = new AccountTree({
+        accounts: [
+          'Assets:Current:Cash-Maybank',
+          'Assets:Current:Cash-CIMB',
+          'Assets:Fixed:Equipment',
+          'Expenses:Rent',
+          'Income:Sales',
+        ],
+        initialExpansion: ['Assets', 'Assets:Current', 'Expenses', 'Income'],
+        showBalances: false,
+      });
+
+      window.__renames = [];
+      tree.onRename((oldPath, newPath) => {
+        window.__renames.push([oldPath, newPath]);
+      });
+
+      tree.render(document.getElementById('mount'));
+
+      const host = document.querySelector('accounts-container');
+      const scroller = host.shadowRoot.querySelector('[data-scroller]');
+      const controller = tree.getController();
+
+      window.__tree = tree;
+      window.__scroller = scroller;
+      window.__rowIndex = (path) => controller.getPathIndex(path);
+      window.__focusedPath = () => controller.getFocusedPath();
+      window.__selectedPaths = () => controller.getSelectedPaths();
+      window.__isExpanded = (path) => controller.isExpanded(path);
+      // Row-level DOM focus does not survive full window rewrites (expansion
+      // or rename rebuilds), so keyboard traversal drives the role="tree"
+      // scroller — the component's aria-activedescendant surface.
+      window.__focusScroller = () => scroller.focus();
+      window.__activeRename = () => {
+        const input = scroller.querySelector('[data-rename-input]');
+        if (!(input instanceof HTMLInputElement)) {
+          return null;
+        }
+        return {
+          focused: host.shadowRoot.activeElement === input,
+          value: input.value,
+          selectionStart: input.selectionStart,
+          selectionEnd: input.selectionEnd,
+        };
+      };
+
+      window.__treeKeyboardReady = true;
+    </script>
+  </body>
+</html>

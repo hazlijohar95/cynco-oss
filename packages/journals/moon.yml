@@ -13,3 +13,29 @@ tasks:
     options:
       cache: false
       runInCI: 'always'
+
+  # Playwright e2e against the BUILT dist served by the harness vite server
+  # (deps ['build'] keeps dist fresh). The leading check self-heals a missing
+  # Chromium binary so fresh clones and CI runners work without a manual
+  # install step.
+  test-e2e:
+    script:
+      '(bun ./test/e2e/check-playwright-binary.ts || pnpm exec playwright
+      install chromium) && pnpm exec playwright test -c
+      test/e2e/playwright.config.ts --grep-invert @diagnostic'
+    deps:
+      - 'build'
+    inputs:
+      - 'src/**/*'
+      - 'test/e2e/**/*'
+
+  # Spawned by playwright's webServer (also under CI); JOURNALS_E2E_PORT is
+  # provided by the caller, with a fixed default for manual runs.
+  test-e2e-server:
+    script:
+      'JOURNALS_E2E_PORT=${JOURNALS_E2E_PORT:-9231} vite --config
+      test/e2e/vite.config.ts'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'

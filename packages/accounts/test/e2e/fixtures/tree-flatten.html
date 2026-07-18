@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>tree flatten fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      accounts-container {
+        height: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { AccountTree } from '/dist/index.js';
+
+      // Income -> Sales -> Online is a single-child GROUP chain, the flatten
+      // candidate; the other branches stay ordinary rows.
+      const tree = new AccountTree({
+        accounts: [
+          'Income:Sales:Online:Shopee',
+          'Income:Sales:Online:Lazada',
+          'Expenses:Rent',
+          'Assets:Cash',
+        ],
+        initialExpansion: 'all',
+        showBalances: false,
+      });
+      tree.render(document.getElementById('mount'));
+
+      const host = document.querySelector('accounts-container');
+      const scroller = host.shadowRoot.querySelector('[data-scroller]');
+      const controller = tree.getController();
+
+      window.__tree = tree;
+      window.__scroller = scroller;
+      window.__rowIndex = (path) => controller.getPathIndex(path);
+      window.__visibleCountNow = () => controller.getVisibleCount();
+      window.__selectedPaths = () => controller.getSelectedPaths();
+      window.__setFlatten = (value) => tree.setFlattenEmptyGroups(value);
+
+      window.__treeFlattenReady = true;
+    </script>
+  </body>
+</html>

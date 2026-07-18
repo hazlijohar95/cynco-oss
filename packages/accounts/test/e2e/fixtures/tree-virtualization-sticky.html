@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>tree virtualization + sticky fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      accounts-container {
+        height: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { AccountTree } from '/dist/index.js';
+
+      // Large generated chart: 6 top groups x 12 mid groups x 30 leaves,
+      // fully expanded (2160 leaves, 2238 visible rows at 30px each).
+      const accounts = [];
+      for (let top = 0; top < 6; top += 1) {
+        for (let mid = 0; mid < 12; mid += 1) {
+          for (let leaf = 0; leaf < 30; leaf += 1) {
+            accounts.push(
+              `Group${top}:Mid${String(mid).padStart(2, '0')}:Leaf${String(
+                leaf
+              ).padStart(2, '0')}`
+            );
+          }
+        }
+      }
+
+      const tree = new AccountTree({
+        accounts,
+        initialExpansion: 'all',
+        showBalances: false,
+      });
+      tree.render(document.getElementById('mount'));
+
+      const host = document.querySelector('accounts-container');
+      const scroller = host.shadowRoot.querySelector('[data-scroller]');
+      const controller = tree.getController();
+
+      window.__tree = tree;
+      window.__scroller = scroller;
+      window.__rowHeight = controller.getRowHeight();
+      window.__visibleCount = controller.getVisibleCount();
+      window.__rowIndex = (path) => controller.getPathIndex(path);
+
+      window.__readout = () => {
+        const parse = (element) =>
+          Number.parseFloat(element.style.height || '0');
+        return {
+          renderedCount: scroller.querySelectorAll('[data-rows] [data-row]')
+            .length,
+          before: parse(scroller.querySelector('[data-spacer="before"]')),
+          after: parse(scroller.querySelector('[data-spacer="after"]')),
+        };
+      };
+
+      window.__sticky = () => {
+        const header = scroller.querySelector('[data-sticky-header]');
+        const row = header?.querySelector('[data-row]');
+        return {
+          hidden: header?.hidden ?? true,
+          name: row?.querySelector('[data-name]')?.textContent ?? null,
+          ariaHidden: row?.getAttribute('aria-hidden') ?? null,
+          role: row?.getAttribute('role'),
+          stickyRow: row?.getAttribute('data-sticky-row') ?? null,
+          treeitemCount: header?.querySelectorAll('[role="treeitem"]').length,
+        };
+      };
+
+      window.__treeVirtualizationReady = true;
+    </script>
+  </body>
+</html>

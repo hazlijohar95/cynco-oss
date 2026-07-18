@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>register virtualization fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      journals-container {
+        height: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { Register } from '/dist/index.js';
+
+      const account = 'Assets:Current:Cash-Maybank';
+      const ROW_COUNT = 10000;
+
+      // Deterministic 10k-row register: payee/narration/date derive from the
+      // index so the suite can assert exact row content after scroll jumps.
+      const rows = [];
+      let balance = 0;
+      for (let index = 0; index < ROW_COUNT; index += 1) {
+        const amount = (index % 2 === 0 ? 1 : -1) * (1000 + (index % 7) * 25);
+        balance += amount;
+        const day = (index % 28) + 1;
+        const posting = { account, amount, currency: 'MYR' };
+        rows.push({
+          entry: {
+            id: `e-${index}`,
+            date: `2026-07-${String(day).padStart(2, '0')}`,
+            flag: 'cleared',
+            payee: `Payee ${index}`,
+            narration: `Narration ${index}`,
+            tags: [],
+            links: [],
+            postings: [
+              posting,
+              { account: 'Income:Sales', amount: -amount, currency: 'MYR' },
+            ],
+          },
+          posting,
+          runningBalance: new Map([['MYR', balance]]),
+        });
+      }
+
+      const register = new Register({ account });
+      register.render({ rows, parentNode: document.getElementById('mount') });
+
+      const host = document.querySelector('journals-container');
+      const scroller = host.shadowRoot.querySelector('[data-scroller]');
+
+      window.__register = register;
+      window.__scroller = scroller;
+      window.__rowCount = ROW_COUNT;
+      window.__rowHeight = register.getRowHeight();
+      window.__headerHeight = 44;
+
+      // One readout for every geometry assertion: rendered DOM row count and
+      // the two spacer pixel heights.
+      window.__readout = () => {
+        const parse = (element) =>
+          Number.parseFloat(element.style.height || '0');
+        return {
+          renderedCount: scroller.querySelectorAll(
+            '[data-register-rows] [data-row]'
+          ).length,
+          before: parse(
+            scroller.querySelector('[data-register-spacer="before"]')
+          ),
+          after: parse(
+            scroller.querySelector('[data-register-spacer="after"]')
+          ),
+        };
+      };
+
+      window.__registerVirtualizationReady = true;
+    </script>
+  </body>
+</html>

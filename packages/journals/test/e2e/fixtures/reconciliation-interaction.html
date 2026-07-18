@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>reconciliation interaction fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      journals-container {
+        height: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { Reconciliation } from '/dist/index.js';
+
+      const account = 'Assets:Current:Cash-Maybank';
+
+      // Exactly-balancing fixture: every statement line has one book posting
+      // with the same amount, currency, and date, so the default proposal
+      // engine yields three exact matches and full acceptance reconciles the
+      // difference to zero.
+      const statementLines = [
+        {
+          id: 'l-1',
+          date: '2026-07-01',
+          description: 'CHEQUE DEPOSIT',
+          amount: 50000,
+          currency: 'MYR',
+        },
+        {
+          id: 'l-2',
+          date: '2026-07-02',
+          description: 'ONLINE TRANSFER TNB',
+          amount: -20000,
+          currency: 'MYR',
+        },
+        {
+          id: 'l-3',
+          date: '2026-07-03',
+          description: 'DUITNOW INBOUND',
+          amount: 12345,
+          currency: 'MYR',
+        },
+      ];
+
+      const makeEntry = (id, date, payee, amount) => ({
+        id,
+        date,
+        flag: 'cleared',
+        payee,
+        narration: 'Book entry',
+        tags: [],
+        links: [],
+        postings: [
+          { account, amount, currency: 'MYR' },
+          { account: 'Income:Sales', amount: -amount, currency: 'MYR' },
+        ],
+      });
+
+      const postings = [
+        {
+          entry: makeEntry('e-1', '2026-07-01', 'Tech Ventures Sdn Bhd', 50000),
+          postingIndex: 0,
+        },
+        {
+          entry: makeEntry('e-2', '2026-07-02', 'TNB', -20000),
+          postingIndex: 0,
+        },
+        {
+          entry: makeEntry('e-3', '2026-07-03', 'Delima Trading', 12345),
+          postingIndex: 0,
+        },
+      ];
+
+      const recon = new Reconciliation({
+        account,
+        periodLabel: 'Jul 2026',
+        statementLines,
+        postings,
+      });
+      recon.render({ parentNode: document.getElementById('mount') });
+
+      window.__recon = recon;
+      window.__matchIds = recon.getState().matches.map((match) => match.id);
+
+      window.__reconciliationReady = true;
+    </script>
+  </body>
+</html>

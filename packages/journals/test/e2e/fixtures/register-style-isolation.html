@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>register style isolation fixture</title>
+    <style>
+      /* Hostile page CSS. The component host is excluded from the universal
+       * rule (styling the host from the outer tree is supported theming, not
+       * a leak); everything else — including shadow-piercing attempts via
+       * descendant selectors and duplicate ids — must not reach the shadow
+       * DOM. */
+      *:not(journals-container) {
+        background: red !important;
+        font-size: 40px !important;
+      }
+      /* Descendant selectors from the light DOM must not cross the shadow
+       * boundary, no matter how specific or important. */
+      journals-container *,
+      journals-container [data-row] {
+        background: lime !important;
+        color: rgb(0, 128, 0) !important;
+        display: inline !important;
+      }
+      /* Duplicate-id attack: only the light-DOM element may turn green. */
+      #dup-row-id {
+        color: rgb(0, 128, 0) !important;
+      }
+      journals-container {
+        height: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="dup-row-id" data-test-outside-duplicate-id>
+      outside duplicate-id control
+    </div>
+    <div data-test-outside-pseudo-row data-row data-row-selected="true">
+      outside pseudo register row
+    </div>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { Register } from '/dist/index.js';
+
+      const account = 'Assets:Current:Cash-Maybank';
+      const rows = [];
+      let balance = 0;
+      for (let index = 0; index < 5; index += 1) {
+        const amount = (index % 2 === 0 ? 1 : -1) * (1000 + index * 25);
+        balance += amount;
+        const posting = { account, amount, currency: 'MYR' };
+        rows.push({
+          entry: {
+            id: `e-${index}`,
+            date: `2026-07-0${index + 1}`,
+            flag: 'cleared',
+            payee: `Payee ${index}`,
+            narration: `Narration ${index}`,
+            tags: [],
+            links: [],
+            postings: [
+              posting,
+              { account: 'Income:Sales', amount: -amount, currency: 'MYR' },
+            ],
+          },
+          posting,
+          runningBalance: new Map([['MYR', balance]]),
+        });
+      }
+
+      const register = new Register({ account });
+      register.render({ rows, parentNode: document.getElementById('mount') });
+
+      const host = document.querySelector('journals-container');
+      host.id = 'test-register-host';
+      host.style.setProperty('--journals-bg-override', 'rgb(1, 2, 3)');
+
+      // Wait until the register committed its first row window, then tag a
+      // shadow row with the duplicate id for the isolation assertions.
+      const waitForRows = async () => {
+        const started = performance.now();
+        for (;;) {
+          const row = host.shadowRoot?.querySelector('[data-row]');
+          if (row != null) {
+            return row;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for register rows');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      const firstRow = await waitForRows();
+      firstRow.id = 'dup-row-id';
+      firstRow.setAttribute('data-test-shadow-dup-id', 'true');
+
+      window.__registerStyleIsolationReady = true;
+    </script>
+  </body>
+</html>
