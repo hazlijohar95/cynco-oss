@@ -9,15 +9,15 @@
     "double-entry",
     "ledger"
   ],
-  "homepage": "https://github.com/hazlijohar95/cynco/tree/main/packages/ledger-store",
+  "homepage": "https://github.com/hazlijohar95/cynco-oss/tree/main/packages/ledger-store",
   "bugs": {
-    "url": "https://github.com/hazlijohar95/cynco/issues"
+    "url": "https://github.com/hazlijohar95/cynco-oss/issues"
   },
   "license": "MIT",
   "author": "Cynco <hello@cynco.dev>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hazlijohar95/cynco.git",
+    "url": "git+https://github.com/hazlijohar95/cynco-oss.git",
     "directory": "packages/ledger-store"
   },
   "files": [
