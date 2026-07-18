@@ -57,6 +57,18 @@
       </section>
 
       <section>
+        <h2>Entry stream</h2>
+        <p class="section-note">
+          <code>EntryStream</code> renders journal entries as they arrive from a
+          <code>ReadableStream</code> — appends are batched to one DOM write per
+          frame, the footer tracks the running count, and stick-to-bottom
+          autoscroll releases the moment you scroll up.
+          <button id="stream-restart" type="button">Restart stream</button>
+        </p>
+        <div id="stream-host"></div>
+      </section>
+
+      <section>
         <h2>Reconciliation</h2>
         <p class="section-note">
           <code>Reconciliation</code> treats bank reconciliation like conflict
@@ -69,6 +81,28 @@
         <p id="reconciliation-readout" class="readout">
           No reconciliation activity yet.
         </p>
+      </section>
+
+      <section>
+        <h2>Chart of accounts</h2>
+        <p class="section-note">
+          <code>AccountTree</code> over the workload&rsquo;s chart with
+          rolled-up balances. <strong>Flatten</strong> merges single-child group
+          chains into one row. Double-click a selected row (or press F2) to
+          rename it inline &mdash; Enter commits, Escape cancels, blur commits.
+          Drag any row onto a group to re-parent it (drag a selected row to move
+          the whole selection); hovering a collapsed group mid-drag springs it
+          open.
+        </p>
+        <div class="tree-controls">
+          <label class="toolbar-control">
+            <input type="checkbox" id="flatten-toggle" />
+            Flatten empty groups
+          </label>
+          <button id="tree-reset" type="button">Reset tree</button>
+        </div>
+        <div id="accounts-host"></div>
+        <p id="accounts-readout" class="readout">No account selected.</p>
       </section>
 
       <section>

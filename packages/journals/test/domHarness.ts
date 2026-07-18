@@ -99,14 +99,22 @@ export function installDom(): DomHandle {
 
   // Bun has no requestAnimationFrame; back frames with setTimeout so renders
   // scheduled via rAF run on the macrotask queue and wait(0) can flush them.
+  // The callback is kept alongside the timer so cleanup() can FLUSH pending
+  // frames instead of dropping them: the shared UniversalRenderingManager
+  // holds a module-level frameId across test files, and silently discarding
+  // a scheduled frame would leave it stale and stall every later suite.
+  interface PendingFrame {
+    timeout: ReturnType<typeof setTimeout>;
+    callback: FrameRequestCallback;
+  }
   let nextFrameId = 0;
-  const frames = new Map<number, ReturnType<typeof setTimeout>>();
+  const frames = new Map<number, PendingFrame>();
 
   Object.assign(globalThis, {
     cancelAnimationFrame: ((id: number) => {
-      const timeout = frames.get(id);
-      if (timeout != null) {
-        clearTimeout(timeout);
+      const frame = frames.get(id);
+      if (frame != null) {
+        clearTimeout(frame.timeout);
         frames.delete(id);
       }
     }) as typeof cancelAnimationFrame,
@@ -127,7 +135,7 @@ export function installDom(): DomHandle {
         frames.delete(id);
         callback(performance.now());
       }, 0);
-      frames.set(id, timeout);
+      frames.set(id, { timeout, callback });
       return id;
     }) as typeof requestAnimationFrame,
     ResizeObserver: MockResizeObserver,
@@ -147,8 +155,20 @@ export function installDom(): DomHandle {
   return {
     window: dom.window,
     cleanup() {
-      for (const timeout of frames.values()) {
-        clearTimeout(timeout);
+      // Flush (not drop) pending frames so shared rAF-queue singletons see
+      // their scheduled frame complete and reset their state for the next
+      // suite. Bounded in case a flushed callback keeps rescheduling.
+      for (let pass = 0; pass < 10 && frames.size > 0; pass += 1) {
+        const pending = [...frames.values()];
+        frames.clear();
+        for (const frame of pending) {
+          clearTimeout(frame.timeout);
+          try {
+            frame.callback(performance.now());
+          } catch {
+            // Cleanup must not fail because a late frame touched dead DOM.
+          }
+        }
       }
       frames.clear();
 

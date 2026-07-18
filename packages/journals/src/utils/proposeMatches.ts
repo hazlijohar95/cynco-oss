@@ -6,48 +6,70 @@ import type {
 
 export interface ProposeMatchesOptions {
   /**
-   * Maximum |book date − statement date| in days for the suggestion pass.
-   * Default 3. Pass 0 to disable suggestions and keep only exact matches.
+   * Maximum |book date − statement date| in days for the suggestion and sum
+   * passes. Default 3. Pass 0 to disable both and keep only exact matches.
    */
   dateWindowDays?: number;
+  /**
+   * Maximum number of postings a sum match may group (pass 3). Default 3.
+   * Pass 1 (or 0) to disable sum matching entirely.
+   */
+  maxGroupSize?: number;
+  /**
+   * Cap on combinations explored per statement line during the sum pass, so
+   * pathological inputs (hundreds of same-currency candidates) stay bounded.
+   * Search aborts for that line once exceeded. Default 10_000.
+   */
+  maxSumCombinations?: number;
 }
 
 const MILLISECONDS_PER_DAY = 86_400_000;
+const DEFAULT_MAX_SUM_COMBINATIONS = 10_000;
 
 interface PostingCandidate {
   ref: BookPostingRef;
   /** Book date in whole days since the epoch (UTC). */
   epochDays: number;
+  amount: number;
+  currency: string;
   used: boolean;
 }
 
 /**
- * Deterministic 1:1 matching between statement lines and book postings.
+ * Deterministic matching between statement lines and book postings.
  *
  * Pass 1 pairs exact matches (same amount, currency, and date). Pass 2 pairs
  * remaining lines with the nearest-dated remaining posting of the same
- * amount and currency within ±`dateWindowDays`. Both passes visit lines in
- * ascending id order, so when two lines compete for one posting the earlier
- * statement line id wins; within one line, an equidistant earlier book date
- * beats a later one. Every line and posting is used at most once.
+ * amount and currency within ±`dateWindowDays`. Pass 3 covers remaining
+ * lines with the sum of 2..`maxGroupSize` remaining postings in the same
+ * currency, all within the date window (kind `sum`). Every pass visits
+ * lines in ascending id order, so when two lines compete for one posting the
+ * earlier statement line id wins. Every line and posting is used at most
+ * once across all passes.
  *
- * Limitation (by design, documented): matching is strictly 1:1 on identical
- * amounts. It never proposes sum matches (one statement line covering
- * several postings, or vice versa) — those stay unmatched for a human to
- * resolve via `onCreateEntry` or a manual match.
+ * The sum pass is a bounded depth-first search over candidates ordered by
+ * (date distance, amount desc, entry id): the first combination found under
+ * that ordering wins, suffix max/min sums prune impossible branches, and at
+ * most `maxSumCombinations` nodes are explored per line — so worst-case cost
+ * stays O(lines × cap) regardless of how adversarial the amounts are.
  */
 export function proposeMatches(
   lines: readonly StatementLine[],
   postings: readonly BookPostingRef[],
   options: ProposeMatchesOptions = {}
 ): ReconciliationMatch[] {
-  const { dateWindowDays = 3 } = options;
+  const {
+    dateWindowDays = 3,
+    maxGroupSize = 3,
+    maxSumCombinations = DEFAULT_MAX_SUM_COMBINATIONS,
+  } = options;
 
   // Bucket candidates by `${currency}:${amount}` and sort each bucket by
   // date once, so per-line lookups are a binary search plus a bounded
   // outward walk — O(n log n) overall instead of rescanning all postings
   // per line.
   const buckets = new Map<string, PostingCandidate[]>();
+  const allCandidates: PostingCandidate[] = [];
   for (const ref of postings) {
     const posting = ref.entry.postings[ref.postingIndex];
     if (posting == null) {
@@ -57,31 +79,27 @@ export function proposeMatches(
     if (epochDays == null) {
       continue;
     }
+    const candidate: PostingCandidate = {
+      ref,
+      epochDays,
+      amount: posting.amount,
+      currency: posting.currency,
+      used: false,
+    };
+    allCandidates.push(candidate);
     const key = `${posting.currency}:${posting.amount}`;
     let bucket = buckets.get(key);
     if (bucket == null) {
       bucket = [];
       buckets.set(key, bucket);
     }
-    bucket.push({ ref, epochDays, used: false });
+    bucket.push(candidate);
   }
   for (const bucket of buckets.values()) {
-    // Date first; entry id + posting index as total tiebreak so bucket order
-    // (and therefore matching) never depends on caller array order.
-    bucket.sort((a, b) => {
-      const byDate = a.epochDays - b.epochDays;
-      if (byDate !== 0) {
-        return byDate;
-      }
-      const byEntryId = compareStrings(a.ref.entry.id, b.ref.entry.id);
-      if (byEntryId !== 0) {
-        return byEntryId;
-      }
-      return a.ref.postingIndex - b.ref.postingIndex;
-    });
+    sortCandidatesByDate(bucket);
   }
 
-  // Lines are visited in ascending id order in both passes: the documented
+  // Lines are visited in ascending id order in every pass: the documented
   // "earlier statement line id wins" tiebreak for contested postings.
   const orderedLines = [...lines].sort((a, b) => compareStrings(a.id, b.id));
   const matchByLineId = new Map<string, ReconciliationMatch>();
@@ -98,7 +116,10 @@ export function proposeMatches(
       0
     );
     if (candidate != null) {
-      matchByLineId.set(line.id, createMatch(line, candidate, 'exact'));
+      matchByLineId.set(
+        line.id,
+        createMatch(line, [candidate.candidate.ref], 'exact', 0)
+      );
     }
   }
 
@@ -112,13 +133,51 @@ export function proposeMatches(
       if (lineDays == null) {
         continue;
       }
-      const candidate = takeNearestCandidate(
+      const taken = takeNearestCandidate(
         buckets.get(`${line.currency}:${line.amount}`),
         lineDays,
         dateWindowDays
       );
-      if (candidate != null) {
-        matchByLineId.set(line.id, createMatch(line, candidate, 'suggested'));
+      if (taken != null) {
+        matchByLineId.set(
+          line.id,
+          createMatch(line, [taken.candidate.ref], 'suggested', taken.dateDelta)
+        );
+      }
+    }
+  }
+
+  // Pass 3: sum matching over whatever is still unmatched on both sides.
+  if (dateWindowDays > 0 && maxGroupSize >= 2) {
+    for (const line of orderedLines) {
+      if (matchByLineId.has(line.id)) {
+        continue;
+      }
+      const lineDays = toEpochDays(line.date);
+      if (lineDays == null) {
+        continue;
+      }
+      const group = findSumGroup({
+        line,
+        lineDays,
+        candidates: allCandidates,
+        dateWindowDays,
+        maxGroupSize,
+        maxSumCombinations,
+      });
+      if (group != null) {
+        for (const candidate of group) {
+          candidate.used = true;
+        }
+        matchByLineId.set(
+          line.id,
+          createMatch(
+            line,
+            group.map((candidate) => candidate.ref),
+            'sum',
+            getLargestMagnitudeDelta(group, lineDays)
+          )
+        );
       }
     }
   }
@@ -203,20 +262,186 @@ function takeNearestCandidate(
   return { candidate: best, dateDelta: best.epochDays - targetDays };
 }
 
+interface FindSumGroupProps {
+  line: StatementLine;
+  lineDays: number;
+  candidates: readonly PostingCandidate[];
+  dateWindowDays: number;
+  maxGroupSize: number;
+  maxSumCombinations: number;
+}
+
+// Sum pass for one line: bounded DFS over the eligible (unused, same
+// currency, in-window) candidates for a 2..maxGroupSize subset summing to
+// the line amount. Candidates are ordered by (date distance, amount desc,
+// entry id, posting index) so the first solution — and therefore the result
+// — is deterministic. Suffix max/min partial sums prune branches that can no
+// longer reach the target, and a node cap bounds the worst case.
+function findSumGroup({
+  line,
+  lineDays,
+  candidates,
+  dateWindowDays,
+  maxGroupSize,
+  maxSumCombinations,
+}: FindSumGroupProps): PostingCandidate[] | null {
+  const eligible = candidates.filter(
+    (candidate) =>
+      !candidate.used &&
+      candidate.currency === line.currency &&
+      Math.abs(candidate.epochDays - lineDays) <= dateWindowDays
+  );
+  if (eligible.length < 2) {
+    return null;
+  }
+  eligible.sort((a, b) => {
+    const byDistance =
+      Math.abs(a.epochDays - lineDays) - Math.abs(b.epochDays - lineDays);
+    if (byDistance !== 0) {
+      return byDistance;
+    }
+    if (a.amount !== b.amount) {
+      return b.amount - a.amount;
+    }
+    const byEntryId = compareStrings(a.ref.entry.id, b.ref.entry.id);
+    if (byEntryId !== 0) {
+      return byEntryId;
+    }
+    return a.ref.postingIndex - b.ref.postingIndex;
+  });
+
+  // suffixMax[r][i] / suffixMin[r][i]: the largest / smallest sum achievable
+  // by picking exactly up-to r candidates from eligible[i..]. Amounts are
+  // signed (mixed debits/credits), so both bounds are needed to prune.
+  const { suffixMax, suffixMin } = computeSuffixSumBounds(
+    eligible,
+    maxGroupSize
+  );
+
+  const chosen: PostingCandidate[] = [];
+  let explored = 0;
+
+  const search = (
+    startIndex: number,
+    sum: number
+  ): PostingCandidate[] | null => {
+    const slotsLeft = maxGroupSize - chosen.length;
+    if (chosen.length >= 2 && sum === line.amount) {
+      return [...chosen];
+    }
+    if (slotsLeft === 0 || startIndex >= eligible.length) {
+      return null;
+    }
+    const need = line.amount - sum;
+    // Prune: even the best/worst remaining combination cannot reach target.
+    if (
+      need > suffixMax[slotsLeft][startIndex] ||
+      need < suffixMin[slotsLeft][startIndex]
+    ) {
+      return null;
+    }
+    for (let i = startIndex; i < eligible.length; i += 1) {
+      explored += 1;
+      if (explored > maxSumCombinations) {
+        return null;
+      }
+      chosen.push(eligible[i]);
+      const found = search(i + 1, sum + eligible[i].amount);
+      chosen.pop();
+      if (found != null) {
+        return found;
+      }
+      if (explored > maxSumCombinations) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  return search(0, 0);
+}
+
+interface SuffixSumBounds {
+  suffixMax: number[][];
+  suffixMin: number[][];
+}
+
+// Dynamic-programming bounds for the DFS prune: choosing at most r items
+// from the suffix starting at i, what is the max/min achievable sum? O(n·k).
+function computeSuffixSumBounds(
+  eligible: readonly PostingCandidate[],
+  maxGroupSize: number
+): SuffixSumBounds {
+  const count = eligible.length;
+  const suffixMax: number[][] = [];
+  const suffixMin: number[][] = [];
+  for (let r = 0; r <= maxGroupSize; r += 1) {
+    suffixMax.push(new Array<number>(count + 1).fill(0));
+    suffixMin.push(new Array<number>(count + 1).fill(0));
+  }
+  for (let r = 1; r <= maxGroupSize; r += 1) {
+    for (let i = count - 1; i >= 0; i -= 1) {
+      const take = eligible[i].amount;
+      suffixMax[r][i] = Math.max(
+        suffixMax[r][i + 1],
+        take + suffixMax[r - 1][i + 1]
+      );
+      suffixMin[r][i] = Math.min(
+        suffixMin[r][i + 1],
+        take + suffixMin[r - 1][i + 1]
+      );
+    }
+  }
+  return { suffixMax, suffixMin };
+}
+
+function getLargestMagnitudeDelta(
+  group: readonly PostingCandidate[],
+  lineDays: number
+): number {
+  let worst = 0;
+  for (const candidate of group) {
+    const delta = candidate.epochDays - lineDays;
+    if (Math.abs(delta) > Math.abs(worst)) {
+      worst = delta;
+    }
+  }
+  return worst;
+}
+
 function createMatch(
   line: StatementLine,
-  taken: TakenCandidate,
-  kind: ReconciliationMatch['kind']
+  refs: readonly BookPostingRef[],
+  kind: ReconciliationMatch['kind'],
+  dateDelta: number
 ): ReconciliationMatch {
-  const { ref } = taken.candidate;
+  const suffix = refs
+    .map((ref) => `${ref.entry.id}-${ref.postingIndex}`)
+    .join('+');
   return {
-    id: `m-${line.id}-${ref.entry.id}-${ref.postingIndex}`,
+    id: `m-${line.id}-${suffix}`,
     statementLineId: line.id,
-    posting: ref,
+    postings: refs,
     kind,
     status: 'proposed',
-    dateDelta: taken.dateDelta,
+    dateDelta,
   };
+}
+
+function sortCandidatesByDate(bucket: PostingCandidate[]): void {
+  // Date first; entry id + posting index as total tiebreak so bucket order
+  // (and therefore matching) never depends on caller array order.
+  bucket.sort((a, b) => {
+    const byDate = a.epochDays - b.epochDays;
+    if (byDate !== 0) {
+      return byDate;
+    }
+    const byEntryId = compareStrings(a.ref.entry.id, b.ref.entry.id);
+    if (byEntryId !== 0) {
+      return byEntryId;
+    }
+    return a.ref.postingIndex - b.ref.postingIndex;
+  });
 }
 
 // ISO dates parse as UTC midnight, so integer division by a day is exact.

@@ -805,7 +805,8 @@
     background-color: var(--journals-bg-accepted);
   }
 
-  [data-date-delta] {
+  [data-date-delta],
+  [data-sum-badge] {
     color: var(--journals-fg3);
     font-size: 0.85em;
     border: 1px solid var(--journals-hairline);
@@ -813,6 +814,34 @@
     padding: 0 0.75ch;
     user-select: none;
     white-space: nowrap;
+  }
+
+  /* Sum matches: grouped postings stack inside one book cell with subtle
+   * inner dividers, closed by a Σ total row that mirrors the statement
+   * amount. */
+  [data-recon-cell][data-book-group] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  [data-book-line],
+  [data-book-sum] {
+    display: flex;
+    align-items: center;
+    gap: 1ch;
+    min-width: 0;
+    padding-block: 2px;
+  }
+
+  [data-book-line] + [data-book-line],
+  [data-book-line] + [data-book-sum] {
+    border-top: 1px solid
+      color-mix(in lab, var(--journals-border) 25%, transparent);
+  }
+
+  [data-book-sum] {
+    justify-content: flex-end;
   }
 
   [data-recon-empty] {
@@ -890,5 +919,51 @@
   [data-recon-action='create-entry']:hover {
     color: var(--journals-fg);
     border-color: var(--journals-accent);
+  }
+
+  /* Entry stream */
+  /* ------------ */
+  [data-entry-stream] [data-stream-entries] {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  /* Sticky footer strip: running count pinned to the scroller's bottom
+   * edge, over an opaque background so entries slide beneath it. */
+  [data-stream-footer] {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 1ch;
+    min-height: calc(1lh + 8px);
+    padding-inline: 2ch;
+    background-color: var(--journals-bg);
+    border-top: 1px solid var(--journals-hairline);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-stream-count] {
+    color: var(--journals-fg);
+    font-weight: 600;
+  }
+
+  [data-stream-total] {
+    color: var(--journals-fg3);
+  }
+
+  [data-stream-state] {
+    margin-left: auto;
+    color: var(--journals-pending);
+    font-size: 0.85em;
+    user-select: none;
+    transition: color 150ms ease;
+  }
+
+  [data-stream-state][data-stream-done='true'] {
+    color: var(--journals-reconciled);
   }
 }

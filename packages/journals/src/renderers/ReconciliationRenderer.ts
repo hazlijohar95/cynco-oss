@@ -34,7 +34,12 @@ export interface ReconciliationRow {
   /** Sort key: statement date for pairs/lines, entry date for book rows. */
   date: string;
   line: StatementLine | null;
-  posting: BookPostingRef | null;
+  /**
+   * Book postings for the row: the match's group for pairs (one for 1:1
+   * matches, several for sum matches), exactly one for book-only rows, and
+   * null for statement-only rows.
+   */
+  postings: readonly BookPostingRef[] | null;
   match: ReconciliationMatch | null;
 }
 
@@ -67,14 +72,12 @@ export function computeReconciliationRows(
       continue;
     }
     activeByLineId.set(match.statementLineId, match);
-    matchedPostingKeys.add(getPostingKey(match.posting));
+    for (const posting of match.postings) {
+      matchedPostingKeys.add(getPostingKey(posting));
+    }
   }
 
   const rows: ReconciliationRow[] = [];
-  const lineById = new Map<string, StatementLine>();
-  for (const line of state.lines) {
-    lineById.set(line.id, line);
-  }
   for (const line of state.lines) {
     const match = activeByLineId.get(line.id);
     if (match != null) {
@@ -82,7 +85,7 @@ export function computeReconciliationRows(
         type: 'pair',
         date: line.date,
         line,
-        posting: match.posting,
+        postings: match.postings,
         match,
       });
     } else {
@@ -90,7 +93,7 @@ export function computeReconciliationRows(
         type: 'statement-only',
         date: line.date,
         line,
-        posting: null,
+        postings: null,
         match: null,
       });
     }
@@ -103,7 +106,7 @@ export function computeReconciliationRows(
       type: 'book-only',
       date: posting.entry.date,
       line: null,
-      posting,
+      postings: [posting],
       match: null,
     });
   }
@@ -142,14 +145,16 @@ export function computeReconciliationTotals(
     if (match.status !== 'accepted') {
       continue;
     }
-    const posting = match.posting.entry.postings[match.posting.postingIndex];
-    if (posting == null) {
-      continue;
+    for (const ref of match.postings) {
+      const posting = ref.entry.postings[ref.postingIndex];
+      if (posting == null) {
+        continue;
+      }
+      cleared.set(
+        posting.currency,
+        (cleared.get(posting.currency) ?? 0) + posting.amount
+      );
     }
-    cleared.set(
-      posting.currency,
-      (cleared.get(posting.currency) ?? 0) + posting.amount
-    );
   }
   const difference = new Map<string, MinorUnits>();
   for (const [currency, total] of statement) {
@@ -251,9 +256,8 @@ function renderStatementCellHTML(row: ReconciliationRow): string {
 }
 
 function renderBookCellHTML(row: ReconciliationRow): string {
-  const { posting: ref } = row;
-  const posting = ref?.entry.postings[ref.postingIndex];
-  if (ref == null || posting == null) {
+  const refs = row.postings;
+  if (refs == null || refs.length === 0) {
     // Statement-only rows: pinstriped book cell plus the create-entry
     // affordance. The component only emits a callback — it never writes
     // entries itself.
@@ -264,20 +268,71 @@ function renderBookCellHTML(row: ReconciliationRow): string {
       '</div>'
     );
   }
+  if (refs.length === 1) {
+    return renderSingleBookCellHTML(refs[0], row.match);
+  }
+  return renderGroupedBookCellHTML(refs, row.match);
+}
+
+function renderSingleBookCellHTML(
+  ref: BookPostingRef,
+  match: ReconciliationMatch | null
+): string {
+  const posting = ref.entry.postings[ref.postingIndex];
+  if (posting == null) {
+    return '<div data-recon-cell="book" data-recon-empty></div>';
+  }
   const direction = posting.amount < 0 ? 'credit' : 'debit';
   const description = ref.entry.payee ?? ref.entry.narration;
   let html = `<div data-recon-cell="book" data-amount="${direction}">`;
   html += `<span data-date>${escapeHtml(ref.entry.date)}</span>`;
   html += `<span data-description>${escapeHtml(description)}</span>`;
-  if (row.match != null && row.match.kind === 'suggested') {
-    html += `<span data-date-delta>${formatDateDelta(row.match.dateDelta)}</span>`;
+  if (match != null && match.kind === 'suggested') {
+    html += `<span data-date-delta>${formatDateDelta(match.dateDelta)}</span>`;
   }
-  if (row.match?.status === 'accepted') {
+  if (match?.status === 'accepted') {
     html +=
       '<span data-flag-dot data-flag="cleared" aria-label="reconciled">\u25cf</span>';
   }
   html += renderCellAmountHTML(direction, posting.amount, posting.currency);
   html += '</div>';
+  return html;
+}
+
+// Sum matches stack every grouped posting inside one book cell (subtle
+// inner dividers), closed by a Σ total row that mirrors the statement
+// amount — the visual proof the group covers the line.
+function renderGroupedBookCellHTML(
+  refs: readonly BookPostingRef[],
+  match: ReconciliationMatch | null
+): string {
+  let total = 0;
+  let currency = '';
+  let html = '<div data-recon-cell="book" data-book-group>';
+  for (const ref of refs) {
+    const posting = ref.entry.postings[ref.postingIndex];
+    if (posting == null) {
+      continue;
+    }
+    total += posting.amount;
+    currency = posting.currency;
+    const direction = posting.amount < 0 ? 'credit' : 'debit';
+    const description = ref.entry.payee ?? ref.entry.narration;
+    html += `<span data-book-line data-amount="${direction}">`;
+    html += `<span data-date>${escapeHtml(ref.entry.date)}</span>`;
+    html += `<span data-description>${escapeHtml(description)}</span>`;
+    html += renderCellAmountHTML(direction, posting.amount, posting.currency);
+    html += '</span>';
+  }
+  const totalDirection = total < 0 ? 'credit' : 'debit';
+  html += `<span data-book-sum data-amount="${totalDirection}">`;
+  html += '<span data-sum-badge title="Sum of grouped postings">\u03a3</span>';
+  if (match?.status === 'accepted') {
+    html +=
+      '<span data-flag-dot data-flag="cleared" aria-label="reconciled">\u25cf</span>';
+  }
+  html += renderCellAmountHTML(totalDirection, total, currency);
+  html += '</span></div>';
   return html;
 }
 
@@ -360,8 +415,8 @@ function getRowIdentity(row: ReconciliationRow): string {
   if (row.line != null) {
     return `s-${row.line.id}`;
   }
-  if (row.posting != null) {
-    return `b-${getPostingKey(row.posting)}`;
+  if (row.postings != null && row.postings.length > 0) {
+    return `b-${getPostingKey(row.postings[0])}`;
   }
   return '';
 }

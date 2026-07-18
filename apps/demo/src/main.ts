@@ -1,4 +1,11 @@
 import {
+  type AccountMove,
+  accountsThemeVariables,
+  AccountTree,
+} from '@cynco/accounts';
+import {
+  createEntryStreamFromArray,
+  EntryStream,
   formatMinorUnits,
   JournalEntry,
   journalsThemeVariables,
@@ -8,7 +15,18 @@ import {
   type RegisterDensity,
   type RegisterRowData,
 } from '@cynco/journals';
-import { EntryStore, isEntryBalanced } from '@cynco/ledger-store';
+import {
+  getOrCreateWorkerPoolSingleton,
+  type WorkerPoolManager,
+} from '@cynco/journals/worker';
+// Vite bundles the portable worker (fully self-contained ESM) into a
+// same-origin worker asset and hands back a constructor.
+import JournalsWorkerPortable from '@cynco/journals/worker/worker-portable.js?worker';
+import {
+  EntryStore,
+  isEntryBalanced,
+  type LedgerEntry,
+} from '@cynco/ledger-store';
 import {
   WORKLOAD_ENTRY_COUNTS,
   type WorkloadName,
@@ -30,6 +48,13 @@ import './styles.css';
 
 /** Adds the `large` workload (100k entries) and selects it by default. */
 const CRAZY_LEDGER = false;
+
+/**
+ * Renders the big register's row windows through the @cynco/journals worker
+ * pool instead of on the main thread. Flip off to compare; output is
+ * byte-identical either way (same renderer runs in both places).
+ */
+const USE_WORKER_POOL = true;
 
 const DEFAULT_WORKLOAD: WorkloadName = CRAZY_LEDGER ? 'large' : 'medium';
 const DEFAULT_THEME: ThemeName = 'dark';
@@ -97,6 +122,12 @@ const reconciliationReadout = mustGetElement(
   'reconciliation-readout',
   HTMLElement
 );
+const accountsHost = mustGetElement('accounts-host', HTMLElement);
+const accountsReadout = mustGetElement('accounts-readout', HTMLElement);
+const flattenToggle = mustGetElement('flatten-toggle', HTMLInputElement);
+const treeReset = mustGetElement('tree-reset', HTMLButtonElement);
+const streamHost = mustGetElement('stream-host', HTMLElement);
+const streamRestart = mustGetElement('stream-restart', HTMLButtonElement);
 
 // --- Theme / chrome controls -------------------------------------------------
 
@@ -111,12 +142,22 @@ function applyTheme(name: ThemeName): void {
   for (const property of appliedThemeVariables) {
     stage.style.removeProperty(property);
   }
-  const variables = journalsThemeVariables(roles);
+  const variables = {
+    ...journalsThemeVariables(roles),
+    ...accountsThemeVariables(roles),
+  };
   for (const [property, value] of Object.entries(variables)) {
     stage.style.setProperty(property, value);
   }
   appliedThemeVariables = Object.keys(variables);
   stage.style.setProperty('color-scheme', scheme);
+  currentScheme = scheme;
+  // The tree pins light-dark() resolution per instance (colorScheme
+  // option), so theme changes rebuild it; boot builds it via
+  // rebuildDataViews instead.
+  if (accountTree != null) {
+    renderAccountTree();
+  }
   setChromeScheme(scheme);
 }
 
@@ -240,6 +281,7 @@ function renderRegister(
   register = new Register({
     account: REGISTER_ACCOUNT,
     density,
+    workerPool,
     onRowSelect(row, index) {
       console.log('register row selected', index, row);
       registerReadout.textContent = describeRow(row, index);
@@ -265,6 +307,105 @@ function renderLedgerView(store: EntryStore, density: RegisterDensity): void {
   }));
   ledgerView.render({ sections, parentNode: ledgerHost });
 }
+
+// --- Worker pool ---------------------------------------------------------------
+
+// One pool for the page; components fall back to the main thread on any
+// worker failure, so this is always safe to create.
+const workerPool: WorkerPoolManager | undefined = USE_WORKER_POOL
+  ? getOrCreateWorkerPoolSingleton({
+      workerFactory: () => new JournalsWorkerPortable(),
+    })
+  : undefined;
+
+// --- Entry stream ----------------------------------------------------------------
+
+let entryStream: EntryStream | undefined;
+
+// (Re)starts the streamed feed: 60 deterministic workload entries arriving
+// on a 40ms cadence. Restarting tears the old instance down (cancelling its
+// reader) and attaches a fresh single-use stream.
+function renderEntryStream(): void {
+  entryStream?.cleanUp();
+  const entries = workloads.small().slice(0, 60);
+  entryStream = new EntryStream({
+    stream: createEntryStreamFromArray(entries, { delayMs: 40 }),
+    total: entries.length,
+    showLineNumbers: false,
+    onDone(count) {
+      console.log(`entry stream done: ${count} entries`);
+    },
+  });
+  entryStream.render({ parentNode: streamHost });
+}
+
+streamRestart.addEventListener('click', renderEntryStream);
+
+// --- Chart of accounts --------------------------------------------------------
+
+let accountTree: AccountTree | undefined;
+let currentScheme: 'dark' | 'light' = 'dark';
+
+// The tree needs raw entries (its controller owns balances and the rename /
+// drag&drop remap machinery), so workload entry lists are cached separately
+// from the EntryStore cache.
+const entriesCache = new Map<WorkloadName, LedgerEntry[]>();
+
+function getEntries(name: WorkloadName): LedgerEntry[] {
+  let entries = entriesCache.get(name);
+  if (entries == null) {
+    entries = workloads[name]();
+    entriesCache.set(name, entries);
+  }
+  return entries;
+}
+
+function describeMoves(moves: readonly AccountMove[]): string {
+  return moves.map((move) => `${move.from} → ${move.to}`).join(' · ');
+}
+
+// (Re)creates the account tree for the current workload/density/flatten
+// selection. Renames and drops mutate the instance's internal remapped
+// entries; the Reset button simply rebuilds from the pristine workload.
+function renderAccountTree(): void {
+  accountTree?.cleanUp();
+  const workload = isWorkloadName(workloadSelect.value)
+    ? workloadSelect.value
+    : DEFAULT_WORKLOAD;
+  accountTree = new AccountTree({
+    entries: getEntries(workload),
+    currency: 'MYR',
+    density: densitySelect.value === 'compact' ? 'compact' : 'default',
+    initialExpansion: 'top-level',
+    flattenEmptyGroups: flattenToggle.checked,
+    colorScheme: currentScheme,
+    onSelect(selectedPaths, focusedPath) {
+      accountsReadout.textContent =
+        selectedPaths.length === 0
+          ? 'No account selected.'
+          : `selected ${selectedPaths.join(', ')} · focused ${focusedPath ?? '—'}`;
+    },
+    onRename(oldPath, newPath) {
+      console.log('account renamed', oldPath, newPath);
+      accountsReadout.textContent = `renamed ${oldPath} → ${newPath}`;
+    },
+    onMove(moves) {
+      console.log('accounts moved', moves);
+      accountsReadout.textContent = `moved ${describeMoves(moves)}`;
+    },
+  });
+  accountTree.render(accountsHost);
+}
+
+// Flatten is a live projection toggle on the existing instance — no rebuild.
+flattenToggle.addEventListener('change', () => {
+  accountTree?.setFlattenEmptyGroups(flattenToggle.checked);
+});
+
+treeReset.addEventListener('click', () => {
+  renderAccountTree();
+  accountsReadout.textContent = 'Tree reset. No account selected.';
+});
 
 // --- Reconciliation ----------------------------------------------------------
 
@@ -332,8 +473,10 @@ function rebuildDataViews(): void {
   const registerRows = buildRegisterRows(store, REGISTER_ACCOUNT);
   renderRegister(registerRows, density);
   renderLedgerView(store, density);
+  renderAccountTree();
   registerReadout.textContent = 'No row selected.';
   ledgerReadout.textContent = 'No row selected.';
+  accountsReadout.textContent = 'No account selected.';
   workloadStats.textContent =
     `${store.getEntryCount().toLocaleString('en-MY')} entries · ` +
     `${registerRows.length.toLocaleString('en-MY')} register rows`;
@@ -361,6 +504,7 @@ densitySelect.addEventListener('change', rebuildDataViews);
 
 applyTheme(DEFAULT_THEME);
 renderEntryGallery();
+renderEntryStream();
 renderReconciliation();
 populateWorkloadSelect();
 rebuildDataViews();

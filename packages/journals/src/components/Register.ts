@@ -5,6 +5,7 @@ import {
   JOURNALS_TAG_NAME,
 } from '../constants';
 import { InteractionManager } from '../managers/InteractionManager';
+import { queueRender } from '../managers/UniversalRenderingManager';
 import {
   type RegisterRenderOptions,
   renderRegisterHeaderHTML,
@@ -18,6 +19,7 @@ import type {
 } from '../types';
 import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import { computeRowWindow } from '../utils/computeRowWindow';
+import type { WorkerPoolManager } from '../worker/WorkerPoolManager';
 import { type VirtualizedInstance, Virtualizer } from './Virtualizer';
 import { JournalsContainerLoaded } from './web-components';
 
@@ -60,6 +62,15 @@ export interface RegisterOptions extends RegisterRenderOptions {
   getOffsetTop?(): number;
   /** Fired when a row is clicked, after the selection attribute is applied. */
   onRowSelect?(row: RegisterRowData, index: number): void;
+  /**
+   * Optional worker pool: when present (and healthy), window HTML is
+   * produced off the main thread and committed on the next animation frame.
+   * Spacer heights still update synchronously, so scroll geometry (and the
+   * scroll position) never jumps while a window is in flight. Without a
+   * pool — or once it reports failure — the synchronous path is used
+   * unchanged.
+   */
+  workerPool?: WorkerPoolManager;
 }
 
 export interface RegisterRenderProps {
@@ -81,6 +92,8 @@ export interface RegisterHydrateProps {
 // heights derive from the Virtualizer's pixel window with no per-row
 // measurement, so 100k-row registers render the same handful of nodes as
 // 100-row ones.
+let registerInstanceCount = -1;
+
 export class Register implements VirtualizedInstance {
   static LoadedCustomComponent: boolean = JournalsContainerLoaded;
 
@@ -96,6 +109,13 @@ export class Register implements VirtualizedInstance {
   private selectedIndex: number | null = null;
   private renderedRange: RowRange | undefined;
   private visible = false;
+
+  /** Unique per instance, prefixes worker cache keys so instances never collide. */
+  private readonly workerInstanceId: string = `register-${++registerInstanceCount}`;
+  /** Bumped per setRows so stale row data can never satisfy a cache key. */
+  private rowsVersion = 0;
+  /** Stamp for in-flight worker windows; only the latest response applies. */
+  private windowRenderVersion = 0;
 
   private virtualizer: Virtualizer | undefined;
   private ownsVirtualizer = false;
@@ -183,6 +203,7 @@ export class Register implements VirtualizedInstance {
 
   setRows(rows: readonly RegisterRowData[]): void {
     this.rows = rows;
+    this.rowsVersion += 1;
     this.renderedRange = undefined;
     if (this.headerElement != null && this.section != null) {
       const template = document.createElement('div');
@@ -373,12 +394,57 @@ export class Register implements VirtualizedInstance {
       'height',
       `${(this.rows.length - range.end) * rowHeight}px`
     );
-    rowsElement.innerHTML = renderRegisterRowsHTML(
-      this.rows,
-      range,
-      this.selectedIndex
-    );
     this.renderedRange = range;
+
+    const pool = this.options.workerPool;
+    if (pool == null || !pool.isWorkingPool()) {
+      rowsElement.innerHTML = renderRegisterRowsHTML(
+        this.rows,
+        range,
+        this.selectedIndex
+      );
+      return;
+    }
+
+    // Worker path: spacers above are already committed (so scrollHeight and
+    // scroll position hold steady), the row HTML resolves off-thread and is
+    // applied on the next animation frame. A version stamp drops responses
+    // for windows the user has already scrolled past.
+    const version = ++this.windowRenderVersion;
+    const { rows, selectedIndex } = this;
+    void pool
+      .renderRegisterWindow({
+        rows,
+        range,
+        selectedIndex,
+        cacheKey: `${this.workerInstanceId}:${this.rowsVersion}:${range.start}:${range.end}:${selectedIndex ?? 'none'}`,
+      })
+      .then((html) => {
+        if (version !== this.windowRenderVersion || this.rowsElement == null) {
+          return;
+        }
+        queueRender(() => {
+          if (
+            version !== this.windowRenderVersion ||
+            this.rowsElement == null
+          ) {
+            return;
+          }
+          this.rowsElement.innerHTML = html;
+        });
+      })
+      .catch(() => {
+        // Pool terminated (or rejected) mid-flight: fall back to the sync
+        // renderer if this window is still the one we want.
+        if (version !== this.windowRenderVersion || this.rowsElement == null) {
+          return;
+        }
+        this.rowsElement.innerHTML = renderRegisterRowsHTML(
+          this.rows,
+          range,
+          this.selectedIndex
+        );
+      });
   }
 
   private getRowElement(index: number): HTMLElement | undefined {

@@ -65,8 +65,11 @@ export function ChartOfAccounts({ entries }: { entries: LedgerEntry[] }) {
         entries,
         currency: 'MYR',
         initialExpansion: 'top-level',
+        flattenEmptyGroups: true,
         onSelect: (paths, focused) => setSelected(paths),
       }}
+      onRename={(oldPath, newPath) => console.log(oldPath, '→', newPath)}
+      onMove={(moves) => console.log(moves)}
       style={{ height: 420 }}
     />
   );
@@ -131,6 +134,68 @@ tree.setAccountStatus([
   { path: 'Assets:Current:AR', status: 'pending', count: 2 },
   { path: 'Liabilities:Current:SST-Payable', status: 'flagged' },
 ]);
+`;
+
+const FLATTEN_EXAMPLE = `
+const tree = new AccountTree({
+  entries,
+  flattenEmptyGroups: true, // 'Income' + 'Income:Sales' → one 'Income : Sales' row
+});
+
+// Live projection toggle — no rebuild, expansion state untouched:
+tree.setFlattenEmptyGroups(false);
+
+// The flattened row represents its deepest group; every public API keeps
+// canonical paths:
+tree.setExpanded('Income:Sales', false); // toggles the chain's row
+const controller = tree.getController();
+controller.getPathIndex('Income');       // -1: mid-chain paths have no row
+controller.getRow('Income:Sales')?.flattenedNames; // ['Income', 'Sales']
+`;
+
+const RENAME_EXAMPLE = `
+// View: F2 (focused row) or double-click an already-selected row opens the
+// inline editor. Enter commits, Escape cancels, blur commits. The editor
+// survives virtualization: session + draft live in the controller and the
+// input re-attaches when the row re-enters the window.
+const tree = new AccountTree({
+  entries,
+  onRename(oldPath, newPath) {
+    console.log(oldPath, '→', newPath); // 'Assets:Current' → 'Assets:Ops'
+  },
+});
+tree.beginRename('Assets:Current'); // programmatic entry point
+
+// Controller: validation + remap without any DOM.
+const controller = tree.getController();
+controller.beginRename('Assets:Current');
+controller.setRenameDraft('Ops');
+const result = controller.commitRename('Assets:Current', 'Ops');
+// { ok: true, newPath: 'Assets:Ops' } — descendants, balances, expansion,
+// selection, focus, and status decorations all follow the remap.
+// Failures: { ok: false, reason: 'unknown-path' | 'invalid-name' | 'collision' }
+controller.cancelRename();
+`;
+
+const DND_EXAMPLE = `
+// Rows are HTML5 drag sources; group rows are drop targets. Guards mirror
+// Pierre's trees: no self-drops, no drops into an own descendant, drops on
+// the current parent are no-ops, and leaf-name collisions at the target are
+// skipped. Dragging a selected row moves the whole selection (descendants
+// of dragged groups ride along); hovering a collapsed group for 700ms
+// spring-loads it open.
+const tree = new AccountTree({
+  entries,
+  onMove(moves) {
+    // [{ from: 'Assets:Current:Cash-Wise', to: 'Assets:Reserve:Cash-Wise' }]
+  },
+  dragExpandDelayMs: 700, // spring-load delay override
+});
+
+// The same machinery, programmatically:
+const controller = tree.getController();
+controller.getMovePlan(['Assets:Current:Cash-Wise'], 'Assets:Reserve'); // dry run
+controller.movePaths(['Assets:Current:Cash-Wise'], 'Assets:Reserve');  // applies + fires onMove
 `;
 
 export default function AccountsDocsPage() {
@@ -213,6 +278,44 @@ export default function AccountsDocsPage() {
               their descendants, so nothing hides below the fold.
             </p>
             <CodeBlock code={STATUS_EXAMPLE} />
+
+            <h2 id="flattening">Flattening empty groups</h2>
+            <p>
+              <code>flattenEmptyGroups</code> collapses single-child group
+              chains into one row labelled with the joined segments (
+              <code>Income : Sales</code>, separators in punctuation color). It
+              is purely a projection feature: canonical topology, expansion
+              state, selection, and focus all keep canonical colon-delimited
+              paths, and the flattened row stands in for its deepest group —
+              expanding or collapsing the row toggles that node.{' '}
+              <code>aria-posinset</code>/<code>aria-setsize</code> follow the
+              visible projection, and the row shows the deepest group&rsquo;s
+              rolled balance.
+            </p>
+            <CodeBlock code={FLATTEN_EXAMPLE} />
+
+            <h2 id="rename">Inline rename</h2>
+            <p>
+              Press <kbd>F2</kbd> on the focused row or double-click an
+              already-selected row to rename it in place. Names are validated
+              (non-empty, no <code>:</code>, no sibling collision); a commit
+              remaps the account and its whole subtree — postings, rolled
+              balances, expansion, selection, focus, and status decorations
+              follow. The remap rebuilds the path-derived store from remapped
+              entries (single-digit milliseconds at 10k entries).
+            </p>
+            <CodeBlock code={RENAME_EXAMPLE} />
+
+            <h2 id="drag-drop">Drag &amp; drop re-parenting</h2>
+            <p>
+              Drag a leaf or a group onto a group row to re-parent it — dropping{' '}
+              <code>Assets:Current:Cash-Wise</code> on{' '}
+              <code>Assets:Reserve</code> yields{' '}
+              <code>Assets:Reserve:Cash-Wise</code>, subtree included. The
+              dragged rows dim; a valid target shows the accent-subtle tint with
+              a 1px accent inset ring; invalid targets show nothing.
+            </p>
+            <CodeBlock code={DND_EXAMPLE} />
 
             <h2 id="react-api">React API</h2>
             <p>

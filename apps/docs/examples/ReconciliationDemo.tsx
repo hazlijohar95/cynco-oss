@@ -47,17 +47,24 @@ export function ReconciliationDemo() {
 
   const describe = (verb: string, match: ReconciliationMatch) => {
     const instance = getInstance();
-    const posting = match.posting.entry.postings[match.posting.postingIndex];
+    // Sum matches group several postings; the first one names the pair and
+    // the amounts are summed for the narration.
+    const first = match.postings[0];
+    const posting = first?.entry.postings[first.postingIndex];
+    let total = 0;
+    for (const ref of match.postings) {
+      total += ref.entry.postings[ref.postingIndex]?.amount ?? 0;
+    }
     const amount =
       posting == null
         ? ''
-        : ` (${formatMinorUnits(posting.amount, posting.currency, { sign: 'always' })} ${posting.currency})`;
+        : ` (${formatMinorUnits(total, posting.currency, { sign: 'always' })} ${posting.currency})`;
     const difference =
       instance == null
         ? ''
         : ` — difference now ${formatDifference(instance.getState().difference)}`;
     setReadout(
-      `${verb} ${match.kind} match for ${match.posting.entry.payee ?? match.posting.entry.narration}${amount}${difference}.`
+      `${verb} ${match.kind} match for ${first?.entry.payee ?? first?.entry.narration ?? match.statementLineId}${amount}${difference}.`
     );
   };
 

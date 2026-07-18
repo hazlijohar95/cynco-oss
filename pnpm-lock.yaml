@@ -54,6 +54,9 @@ catalogs:
     lint-staged:
       specifier: 16.2.7
       version: 16.2.7
+    lru_map:
+      specifier: 0.4.1
+      version: 0.4.1
     lucide-react:
       specifier: 0.545.0
       version: 0.545.0
@@ -147,6 +150,9 @@ importers:
 
   apps/demo:
     dependencies:
+      '@cynco/accounts':
+        specifier: workspace:*
+        version: link:../../packages/accounts
       '@cynco/journals':
         specifier: workspace:*
         version: link:../../packages/journals
@@ -306,6 +312,9 @@ importers:
       '@cynco/theme':
         specifier: workspace:*
         version: link:../theme
+      lru_map:
+        specifier: 'catalog:'
+        version: 0.4.1
     devDependencies:
       '@tsdown/css':
         specifier: 'catalog:'
@@ -2309,6 +2318,9 @@ packages:
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
+
+  lru_map@0.4.1:
+    resolution: {integrity: sha512-I+lBvqMMFfqaV8CJCISjI3wbjmwVu/VyOoU7+qtu9d7ioW5klMgsTTiUOUp+DJvfTTzKXoPbyC6YfgkNcyPSOg==}
 
   lucide-react@0.545.0:
     resolution: {integrity: sha512-7r1/yUuflQDSt4f1bpn5ZAocyIxcTyVyBBChSVtBKn5M+392cPmI5YJMWOJKk/HUWGm5wg83chlAZtCcGbEZtw==}
@@ -4449,6 +4461,8 @@ snapshots:
       wrap-ansi: 9.0.2
 
   lru-cache@10.4.3: {}
+
+  lru_map@0.4.1: {}
 
   lucide-react@0.545.0(react@19.2.7):
     dependencies:

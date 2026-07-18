@@ -20,6 +20,15 @@ export interface AccountTreeRenderOptions {
    * `aria-activedescendant` at the focused row. Omitted → rows carry no id.
    */
   idPrefix?: string;
+  /**
+   * Path of the row currently in an inline rename session. That row renders
+   * a text input (seeded with `renameDraft`) in place of its label, so the
+   * editor survives window rewrites: the controller owns the session state
+   * and the renderer reproduces the input wherever the row materializes.
+   */
+  renamingPath?: string | null;
+  /** Current rename draft, baked into the input's value attribute. */
+  renameDraft?: string;
 }
 
 // Chevron drawn with an inline SVG path in currentColor; collapsed groups
@@ -49,9 +58,16 @@ export function renderAccountRowHTML(
     row.kind === 'group'
       ? `<span data-chevron aria-hidden="true">${CHEVRON_SVG}</span>`
       : '<span data-chevron data-chevron-leaf aria-hidden="true"></span>';
-  html += `<span data-name>${escapeHtml(row.name)}</span>`;
-  html += renderStatusHTML(row);
-  html += renderBalanceHTML(row, options);
+  if (options.renamingPath != null && options.renamingPath === row.path) {
+    // Inline rename: the input replaces the label AND the trailing cells so
+    // the editor gets the row's full width. Status/balance return with the
+    // next render after the session ends.
+    html += renderRenameInputHTML(row, options);
+  } else {
+    html += renderRowLabelHTML(row);
+    html += renderStatusHTML(row);
+    html += renderBalanceHTML(row, options);
+  }
   html += '</div>';
   return html;
 }
@@ -95,11 +111,47 @@ export function renderStickyRowHTML(
     row.kind === 'group'
       ? `<span data-chevron aria-hidden="true">${CHEVRON_SVG}</span>`
       : '<span data-chevron data-chevron-leaf aria-hidden="true"></span>';
-  html += `<span data-name>${escapeHtml(row.name)}</span>`;
+  html += renderRowLabelHTML(row);
   html += renderStatusHTML(row);
   html += renderBalanceHTML(row, options);
   html += '</div>';
   return html;
+}
+
+// Row label: a plain leaf name, or — for flattened single-child group
+// chains — the chain's segments joined with punctuation-colored `:`
+// separators (`Income : Sales`), matching the trees.software flattened-label
+// presentation with our path separator.
+function renderRowLabelHTML(row: AccountTreeRowData): string {
+  const { flattenedNames } = row;
+  if (flattenedNames == null || flattenedNames.length < 2) {
+    return `<span data-name>${escapeHtml(row.name)}</span>`;
+  }
+  let html = '<span data-name data-flattened="true">';
+  for (let index = 0; index < flattenedNames.length; index += 1) {
+    if (index > 0) {
+      html += '<span data-name-separator aria-hidden="true">:</span>';
+    }
+    html += `<span data-name-segment>${escapeHtml(flattenedNames[index])}</span>`;
+  }
+  html += '</span>';
+  return html;
+}
+
+// Inline rename editor (Pierre's RenameInput adapted to string rendering):
+// inset background, hairline border, focus ring via CSS. The draft value is
+// baked into the value attribute so a re-rendered row reproduces the
+// in-progress text; the view re-focuses it after window rewrites.
+function renderRenameInputHTML(
+  row: AccountTreeRowData,
+  options: AccountTreeRenderOptions
+): string {
+  const draft = options.renameDraft ?? row.name;
+  return (
+    '<input data-rename-input type="text" spellcheck="false"' +
+    ` aria-label="Rename ${escapeHtml(row.name)}"` +
+    ` value="${escapeHtml(draft)}">`
+  );
 }
 
 /**
@@ -171,6 +223,12 @@ function rowAttributesHTML(
   if (row.status != null) {
     attributes += ` data-status="${row.status}"`;
   }
+  if (row.flattenedNames != null) {
+    attributes += ' data-flattened-row="true"';
+  }
+  // Rows are HTML5 drag sources (re-parenting); group rows double as drop
+  // targets, validated in the view's dragover handler.
+  attributes += ' draggable="true"';
   attributes += ` tabindex="${row.focused ? 0 : -1}"`;
   return attributes;
 }

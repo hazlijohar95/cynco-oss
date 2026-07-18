@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@cynco/accounts": "workspace:*",
     "@cynco/journals": "workspace:*",
     "@cynco/ledger-store": "workspace:*",
     "@cynco/ledger-test-data": "workspace:*",

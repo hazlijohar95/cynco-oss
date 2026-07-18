@@ -1,4 +1,5 @@
 import { JOURNALS_TAG_NAME } from '../constants';
+import { queueRender } from '../managers/UniversalRenderingManager';
 import {
   computeReconciliationTotals,
   type ReconciliationRenderState,
@@ -13,6 +14,7 @@ import type {
 } from '../types';
 import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import { proposeMatches } from '../utils/proposeMatches';
+import type { WorkerPoolManager } from '../worker/WorkerPoolManager';
 import { JournalsContainerLoaded } from './web-components';
 
 export interface ReconciliationOptions {
@@ -30,6 +32,19 @@ export interface ReconciliationOptions {
   matches?: readonly ReconciliationMatch[];
   /** Suggestion window forwarded to the default `proposeMatches`. Default 3. */
   dateWindowDays?: number;
+  /**
+   * Sum-pass group cap forwarded to the default `proposeMatches`. Default 3;
+   * pass 1 to disable sum matching.
+   */
+  maxGroupSize?: number;
+  /**
+   * Optional worker pool: match proposals are computed off the main thread
+   * and applied on the next animation frame after they resolve (the view
+   * renders unmatched until then). Without a pool — or once it reports
+   * failure — proposals are computed inline, unchanged. The engine is
+   * deterministic, so both paths produce the identical match set.
+   */
+  workerPool?: WorkerPoolManager;
   /**
    * Pins how `light-dark()` colors resolve. The stylesheet declares
    * `:host { color-scheme: light dark }`, which resolves from the USER's OS
@@ -79,6 +94,8 @@ export interface ReconciliationState {
 // ReconciliationRenderer string builder (SSR shares it verbatim); this class
 // owns match state, event delegation, and DOM lifecycle. Every figure is
 // integer minor-unit math — floats never touch amounts.
+let reconInstanceCount = -1;
+
 export class Reconciliation {
   static LoadedCustomComponent: boolean = JournalsContainerLoaded;
 
@@ -88,13 +105,18 @@ export class Reconciliation {
   private lastLines: readonly StatementLine[];
   private lastPostings: readonly BookPostingRef[];
 
+  /** Unique per instance, prefixes worker cache keys so instances never collide. */
+  private readonly workerInstanceId: string = `recon-${++reconInstanceCount}`;
+  /** Bumped per data change; stale async proposal results are dropped. */
+  private proposalsVersion = 0;
+
   constructor(
     public options: ReconciliationOptions,
     private isContainerManaged = false
   ) {
     this.lastLines = options.statementLines;
     this.lastPostings = options.postings;
-    this.matches = initializeMatches(options);
+    this.matches = this.initializeMatches();
   }
 
   // Replaces options. New statement/posting/match data (by reference)
@@ -113,7 +135,7 @@ export class Reconciliation {
     if (dataChanged) {
       this.lastLines = options.statementLines;
       this.lastPostings = options.postings;
-      this.matches = initializeMatches(options);
+      this.matches = this.initializeMatches();
       this.rerender();
     }
   }
@@ -273,17 +295,64 @@ export class Reconciliation {
       this.undoMatch(matchId);
     }
   };
-}
-
-// Seed matches from options: an explicit list wins (statuses respected),
-// otherwise run the deterministic proposal engine over the provided data.
-function initializeMatches(
-  options: ReconciliationOptions
-): ReconciliationMatch[] {
-  if (options.matches != null) {
-    return [...options.matches];
+  // Seed matches from options: an explicit list wins (statuses respected).
+  // Without a worker pool the deterministic proposal engine runs inline;
+  // with one, the seed is empty and the engine's (identical, deterministic)
+  // result lands asynchronously on the next animation frame after it
+  // resolves.
+  private initializeMatches(): ReconciliationMatch[] {
+    const { options } = this;
+    if (options.matches != null) {
+      return [...options.matches];
+    }
+    const pool = options.workerPool;
+    if (pool == null || !pool.isWorkingPool()) {
+      return proposeMatches(options.statementLines, options.postings, {
+        dateWindowDays: options.dateWindowDays,
+        maxGroupSize: options.maxGroupSize,
+      });
+    }
+    this.refreshProposalsViaPool();
+    return [];
   }
-  return proposeMatches(options.statementLines, options.postings, {
-    dateWindowDays: options.dateWindowDays,
-  });
+
+  private refreshProposalsViaPool(): void {
+    const pool = this.options.workerPool;
+    if (pool == null) {
+      return;
+    }
+    const version = ++this.proposalsVersion;
+    const { statementLines, postings, dateWindowDays, maxGroupSize } =
+      this.options;
+    void pool
+      .proposeMatches({
+        statementLines,
+        postings,
+        options: { dateWindowDays, maxGroupSize },
+        cacheKey: `${this.workerInstanceId}:${version}`,
+      })
+      .then((matches) => {
+        if (version !== this.proposalsVersion) {
+          return;
+        }
+        queueRender(() => {
+          if (version !== this.proposalsVersion) {
+            return;
+          }
+          this.matches = matches;
+          this.rerender();
+        });
+      })
+      .catch(() => {
+        // Pool terminated mid-flight: recompute inline if still current.
+        if (version !== this.proposalsVersion) {
+          return;
+        }
+        this.matches = proposeMatches(statementLines, postings, {
+          dateWindowDays,
+          maxGroupSize,
+        });
+        this.rerender();
+      });
+  }
 }

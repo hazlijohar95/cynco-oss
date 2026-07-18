@@ -2,7 +2,11 @@
 
 import { ACCOUNTS_TAG_NAME } from '../constants';
 import type { AccountTreeOptions } from '../render/AccountTree';
-import type { ColorScheme } from '../types';
+import type {
+  AccountMoveListener,
+  AccountRenameListener,
+  ColorScheme,
+} from '../types';
 import { useAccountTree } from './useAccountTree';
 import { mergeColorSchemeStyle } from './utils/mergeColorSchemeStyle';
 import { templateRender } from './utils/templateRender';
@@ -16,6 +20,16 @@ export interface AccountTreeProps {
    * requested mode before hydration runs.
    */
   colorScheme?: ColorScheme;
+  /**
+   * Shorthand for `options.onRename`: fired after a committed inline rename
+   * with the old and new canonical paths.
+   */
+  onRename?: AccountRenameListener;
+  /**
+   * Shorthand for `options.onMove`: fired after a drag & drop re-parenting
+   * with the applied `{ from, to }` moves.
+   */
+  onMove?: AccountMoveListener;
   className?: string;
   style?: React.CSSProperties;
   /**
@@ -30,12 +44,18 @@ export interface AccountTreeProps {
 export function AccountTree({
   options,
   colorScheme,
+  onRename,
+  onMove,
   className,
   style,
   ssrHTML,
 }: AccountTreeProps): React.JSX.Element {
-  const mergedOptions: AccountTreeOptions =
-    colorScheme != null ? { ...options, colorScheme } : options;
+  const mergedOptions: AccountTreeOptions = {
+    ...options,
+    colorScheme: colorScheme ?? options.colorScheme,
+    onRename: onRename ?? options.onRename,
+    onMove: onMove ?? options.onMove,
+  };
   const { ref } = useAccountTree(mergedOptions);
   return (
     <ACCOUNTS_TAG_NAME

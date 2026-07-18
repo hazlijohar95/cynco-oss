@@ -259,3 +259,80 @@ describe('renderReconciliationHTML', () => {
     expect(renderReconciliationHTML(makeState())).toMatchSnapshot();
   });
 });
+
+describe('renderReconciliationHTML sum matches', () => {
+  function makeSumState(): ReconciliationRenderState {
+    const lines = [
+      makeStatementLine({
+        id: 's1',
+        date: '2026-07-10',
+        amount: 15_000,
+        description: 'SETTLEMENT BATCH',
+      }),
+    ];
+    const postings = [
+      makeBookPosting({ entryId: 'e1', date: '2026-07-10', amount: 9_000 }),
+      makeBookPosting({ entryId: 'e2', date: '2026-07-11', amount: 6_000 }),
+    ];
+    return {
+      account: ACCOUNT,
+      lines,
+      postings,
+      matches: proposeMatches(lines, postings),
+    };
+  }
+
+  test('grouped book cell stacks lines and closes with a Σ total row', () => {
+    const root = parse(renderReconciliationHTML(makeSumState()));
+    const row = root.querySelector('[data-match-kind="sum"]');
+    expect(row).not.toBeNull();
+    const group = row?.querySelector(
+      '[data-recon-cell="book"][data-book-group]'
+    );
+    expect(group).not.toBeNull();
+    const bookLines = Array.from(
+      group?.querySelectorAll('[data-book-line]') ?? []
+    );
+    expect(bookLines.length).toBe(2);
+    expect(
+      bookLines.map(
+        (line) => line.querySelector('[data-amount-value]')?.textContent
+      )
+    ).toEqual(['90.00', '60.00']);
+    const sum = group?.querySelector('[data-book-sum]');
+    expect(sum?.querySelector('[data-sum-badge]')?.textContent).toBe('\u03a3');
+    expect(sum?.querySelector('[data-amount-value]')?.textContent).toBe(
+      '150.00'
+    );
+  });
+
+  test('accepting a sum match clears the whole group in the totals', () => {
+    const state = makeSumState();
+    const accepted = state.matches.map((match) => ({
+      ...match,
+      status: 'accepted' as const,
+    }));
+    const { cleared, difference } = computeReconciliationTotals({
+      ...state,
+      matches: accepted,
+    });
+    expect(cleared.get('MYR')).toBe(15_000);
+    expect(difference.get('MYR')).toBe(0);
+  });
+
+  test('rejected sum matches dissolve into one line and N book-only rows', () => {
+    const state = makeSumState();
+    const rejected = state.matches.map((match) => ({
+      ...match,
+      status: 'rejected' as const,
+    }));
+    const root = parse(
+      renderReconciliationHTML({ ...state, matches: rejected })
+    );
+    expect(root.querySelectorAll('[data-row-type="pair"]').length).toBe(0);
+    expect(
+      root.querySelectorAll('[data-row-type="statement-only"]').length
+    ).toBe(1);
+    expect(root.querySelectorAll('[data-row-type="book-only"]').length).toBe(2);
+  });
+});

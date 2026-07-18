@@ -222,3 +222,41 @@ describe('Reconciliation interaction', () => {
     harness.cleanUp();
   });
 });
+
+describe('Reconciliation interaction with sum matches', () => {
+  test('accept/undo difference math treats the group atomically', () => {
+    const events: string[] = [];
+    const harness = createHarness(
+      makeFullyMatchedOptions(events, {
+        statementLines: [
+          makeStatementLine({ id: 's1', date: '2026-07-02', amount: 15_000 }),
+        ],
+        postings: [
+          makeBookPosting({ entryId: 'e1', date: '2026-07-02', amount: 9_000 }),
+          makeBookPosting({ entryId: 'e2', date: '2026-07-02', amount: 6_000 }),
+        ],
+      }),
+      events
+    );
+    const state = harness.instance.getState();
+    expect(state.matches.length).toBe(1);
+    expect(state.matches[0].kind).toBe('sum');
+    const matchId = state.matches[0].id;
+    expect(state.difference.get('MYR')).toBe(15_000);
+
+    harness.clickAction('accept', matchId);
+    expect(harness.instance.getState().difference.get('MYR')).toBe(0);
+    const verdict = harness
+      .section()
+      .querySelector('[data-recon-figure="difference"]');
+    expect(verdict?.getAttribute('data-difference')).toBe('zero');
+
+    harness.clickAction('undo', matchId);
+    expect(harness.instance.getState().difference.get('MYR')).toBe(15_000);
+    expect(harness.events).toEqual([
+      `accept:${matchId}:accepted`,
+      `undo:${matchId}:proposed`,
+    ]);
+    harness.cleanUp();
+  });
+});

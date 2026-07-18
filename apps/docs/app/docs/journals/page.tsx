@@ -112,10 +112,13 @@ view.render({
 const RECONCILIATION_API = `
 import { proposeMatches, Reconciliation } from '@cynco/journals';
 
-// Deterministic proposals: exact (amount + currency + date) first, then
-// nearest-date within ±3 days. Strictly 1:1 — sums stay unmatched.
+// Deterministic proposals, three passes: exact (amount + currency + date),
+// nearest-date within ±dateWindowDays, then sum matching — one statement
+// line covered by 2..maxGroupSize postings in the same currency and window
+// (kind 'sum', rendered as a stacked group with a Σ total row).
 const matches = proposeMatches(statementLines, postings, {
-  dateWindowDays: 3,
+  dateWindowDays: 3, // default
+  maxGroupSize: 3, // default; pass 1 to disable sum matching
 });
 
 const reconciliation = new Reconciliation({
@@ -134,10 +137,59 @@ const reconciliation = new Reconciliation({
 });
 reconciliation.render({ parentNode: document.querySelector('#host')! });
 
-// Imperative controls mirror the gutter buttons.
+// Imperative controls mirror the gutter buttons. Match ids are
+// deterministic: m-<lineId>-<entryId>-<postingIndex>, '+'-joined for sums.
 reconciliation.acceptMatch('m-l1-e1-0');
 const { matches: current, difference } = reconciliation.getState();
+// Each match carries postings: readonly BookPostingRef[] (one entry for
+// exact/suggested, 2..maxGroupSize for sums).
 // difference: Map<currency, MinorUnits> — statement − accepted, exact.
+`;
+
+const ENTRY_STREAM_API = `
+import { createEntryStreamFromArray, EntryStream } from '@cynco/journals';
+
+const stream = new EntryStream({
+  // ReadableStream<LedgerEntry> or any AsyncIterable<LedgerEntry>;
+  // consumed exactly once.
+  stream: entrySource,
+  total: 500, // optional: footer shows "n / 500"
+  autoScroll: true, // stick to bottom until the user scrolls up
+  onEntry(entry, index) {},
+  onDone(count) {},
+});
+stream.render({ parentNode: document.querySelector('#host')! });
+
+// Entries arriving within one frame commit as ONE DOM write; the sticky
+// footer tracks the running count. cleanUp() cancels the reader.
+stream.cleanUp();
+
+// Demo/test helper: array -> stream on a fixed cadence.
+const entrySource = createEntryStreamFromArray(entries, { delayMs: 40 });
+`;
+
+const WORKER_API = `
+import {
+  getOrCreateWorkerPoolSingleton,
+} from '@cynco/journals/worker';
+// Vite: the fully-bundled portable worker entry.
+import JournalsWorker from '@cynco/journals/worker/worker-portable.js?worker';
+
+const pool = getOrCreateWorkerPoolSingleton({
+  workerFactory: () => new JournalsWorker(),
+  // poolSize: min(2, hardwareConcurrency); resultCacheSize: 200 (LRU)
+});
+
+// Components accept the pool as an option; without one (or after any
+// worker failure) they use the synchronous path — same renderer, same
+// output, so workers are purely a performance upgrade.
+new Register({ account, workerPool: pool });
+new Reconciliation({ account, statementLines, postings, workerPool: pool });
+
+// Direct API, resolved off-thread with dedupe + LRU caching:
+const html = await pool.renderRegisterWindow({ rows, range, selectedIndex });
+const matches = await pool.proposeMatches({ statementLines, postings });
+pool.subscribeToStatChanges((stats) => console.log(stats.busyWorkers));
 `;
 
 const REACT_API = `
@@ -330,14 +382,18 @@ export default async function JournalsDocsPage() {
               The accounting analog of a merge-conflict resolver: statement
               lines on the left, book postings on the right, proposed matches as
               tinted pairs with accept / reject in a center gutter.{' '}
-              <code>proposeMatches</code> is deterministic and strictly 1:1 on
-              identical amounts — an <em>exact</em> match shares amount,
-              currency, and date; a <em>suggested</em> match shares amount and
-              currency within <code>dateWindowDays</code>. It never proposes sum
-              matches; unmatched lines keep a <em>create entry</em> affordance
-              and unmatched postings read as <em>outstanding</em>. The header
-              difference (statement total − accepted book total) is integer
-              minor-unit math and flips to jade only at exactly zero.
+              <code>proposeMatches</code> is deterministic and runs three passes
+              — an <em>exact</em> match shares amount, currency, and date; a{' '}
+              <em>suggested</em> match shares amount and currency within{' '}
+              <code>dateWindowDays</code>; a <em>sum</em> match covers one
+              statement line with 2..<code>maxGroupSize</code> postings (bounded
+              search, capped at 10,000 combinations per line, so adversarial
+              inputs stay cheap). Sum pairs render the group stacked in one book
+              cell with a <code>Σ</code> total row. Unmatched lines keep a{' '}
+              <em>create entry</em> affordance and unmatched postings read as{' '}
+              <em>outstanding</em>. The header difference (statement total −
+              accepted book total) is integer minor-unit math and flips to jade
+              only at exactly zero.
             </p>
             <CodeBlock code={RECONCILIATION_API} />
             <ul>
@@ -356,6 +412,53 @@ export default async function JournalsDocsPage() {
                 <code>preloadReconciliationHTML</code> from{' '}
                 <code>@cynco/journals/ssr</code> follow the same hydration
                 contract as the other components.
+              </li>
+            </ul>
+
+            <h2 id="entry-stream">EntryStream</h2>
+            <p>
+              Renders journal entries live from a{' '}
+              <code>ReadableStream&lt;LedgerEntry&gt;</code> (or any async
+              iterable). Arrivals are buffered through the shared
+              animation-frame queue: however many entries land within one frame,
+              the DOM sees exactly one append — never more than one layout per
+              frame. A sticky footer strip tracks the running count, and
+              stick-to-bottom autoscroll releases the moment the user scrolls up
+              (and re-engages when they return to the bottom). Also available as{' '}
+              <code>&lt;EntryStream options /&gt;</code> from{' '}
+              <code>@cynco/journals/react</code>.
+            </p>
+            <CodeBlock code={ENTRY_STREAM_API} />
+
+            <h2 id="worker-pool">Worker pool</h2>
+            <p>
+              <code>@cynco/journals/worker</code> moves the heavy pure
+              computations — register window HTML and reconciliation proposals —
+              off the main thread. The renderers are DOM-free string builders,
+              so the worker runs the exact same code the sync path runs; results
+              are deduped by key, LRU-cached, and committed on the next
+              animation frame with spacer geometry already in place, so scroll
+              position never jumps. If workers cannot start (or die mid-job) the
+              pool transparently computes on the main thread instead — a failed
+              pool is a performance regression, never a correctness one.
+            </p>
+            <CodeBlock code={WORKER_API} />
+            <ul>
+              <li>
+                <code>@cynco/journals/worker/worker.js</code> — plain module
+                worker entry for bundlers that can follow package imports inside
+                workers.
+              </li>
+              <li>
+                <code>@cynco/journals/worker/worker-portable.js</code> —
+                fully-bundled variant (no imports) for bundler worker plugins
+                like Vite&apos;s <code>?worker</code>.
+              </li>
+              <li>
+                React: <code>WorkerPoolProvider</code> /{' '}
+                <code>useWorkerPool()</code> from{' '}
+                <code>@cynco/journals/react</code> thread one pool through a
+                subtree; components work without it.
               </li>
             </ul>
 

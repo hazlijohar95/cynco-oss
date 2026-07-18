@@ -4,17 +4,18 @@
 // attribute patching for selection/focus-only changes — no framework
 // anywhere. Fixed row heights make all window math pure arithmetic.
 
-import { getParentAccountPath } from '@cynco/ledger-store';
-
 import { AccountsContainerLoaded } from '../components/web-components';
 import {
   ACCOUNTS_TAG_NAME,
   DEFAULT_CURRENCY,
   DEFAULT_OVERSCAN_ROWS,
   DEFAULT_VIEWPORT_HEIGHT,
+  DRAG_EXPAND_DELAY_MS,
 } from '../constants';
 import { AccountTreeController } from '../model/AccountTreeController';
 import type {
+  AccountMoveListener,
+  AccountRenameListener,
   AccountStatusEntry,
   AccountTreeChange,
   AccountTreeControllerOptions,
@@ -65,6 +66,15 @@ export interface AccountTreeOptions extends AccountTreeControllerOptions {
   unsafeCSS?: string;
   /** Fired when the selection changes. */
   onSelect?: AccountTreeSelectCallback;
+  /** Fired after a committed inline rename (F2 / double-click-on-selected). */
+  onRename?: AccountRenameListener;
+  /** Fired after a drag & drop re-parenting, with the applied moves. */
+  onMove?: AccountMoveListener;
+  /**
+   * Spring-loaded expansion delay in ms: how long a drag must hover a
+   * collapsed group before it auto-expands. Default 700.
+   */
+  dragExpandDelayMs?: number;
 }
 
 export interface AccountTreeRenderProps {
@@ -91,7 +101,31 @@ export class AccountTree {
 
   private renderedRange: RowRange | undefined;
   private unsubscribeController: (() => void) | undefined;
+  private unsubscribeRename: (() => void) | undefined;
+  private unsubscribeMove: (() => void) | undefined;
   private readonly selectCallbacks = new Set<AccountTreeSelectCallback>();
+
+  /**
+   * Double-click disambiguation: rename only starts when the row was ALREADY
+   * selected before the click pair began (`detail === 1` snapshot), so the
+   * first double-click on a fresh group still just toggles it.
+   */
+  private lastClickPath: string | null = null;
+  private lastClickWasOnSelected = false;
+
+  /** Select-all is a begin-of-session affordance, not a re-attach one. */
+  private renameSelectAllPending = false;
+  /**
+   * Set while applyWindow rewrites rows: destroying a focused input can emit
+   * focusout in some engines, which must not be mistaken for a blur-commit.
+   */
+  private suppressRenameCommit = false;
+
+  /** Active HTML5 drag session (source paths), or null. */
+  private dragPaths: readonly string[] | null = null;
+  /** Path of the currently highlighted valid drop target, or null. */
+  private dropTargetPath: string | null = null;
+  private dragExpandTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     public options: AccountTreeOptions = {},
@@ -201,11 +235,25 @@ export class AccountTree {
   cleanUp(): void {
     this.unsubscribeController?.();
     this.unsubscribeController = undefined;
+    this.unsubscribeRename?.();
+    this.unsubscribeRename = undefined;
+    this.unsubscribeMove?.();
+    this.unsubscribeMove = undefined;
+    this.clearDragExpandTimer();
+    this.dragPaths = null;
+    this.dropTargetPath = null;
     if (this.scroller != null) {
       this.scroller.removeEventListener('scroll', this.handleScroll);
       this.scroller.removeEventListener('click', this.handleClick);
       this.scroller.removeEventListener('dblclick', this.handleDoubleClick);
       this.scroller.removeEventListener('keydown', this.handleKeyDown);
+      this.scroller.removeEventListener('input', this.handleInput);
+      this.scroller.removeEventListener('focusout', this.handleFocusOut);
+      this.scroller.removeEventListener('dragstart', this.handleDragStart);
+      this.scroller.removeEventListener('dragover', this.handleDragOver);
+      this.scroller.removeEventListener('dragleave', this.handleDragLeave);
+      this.scroller.removeEventListener('drop', this.handleDrop);
+      this.scroller.removeEventListener('dragend', this.handleDragEnd);
     }
     if (!this.isContainerManaged) {
       this.container?.remove();
@@ -255,6 +303,34 @@ export class AccountTree {
     return () => {
       this.selectCallbacks.delete(callback);
     };
+  }
+
+  /** Registers a rename callback; returns an unsubscribe function. */
+  onRename(callback: AccountRenameListener): () => void {
+    return this.controller.onRename(callback);
+  }
+
+  /** Registers a move callback; returns an unsubscribe function. */
+  onMove(callback: AccountMoveListener): () => void {
+    return this.controller.onMove(callback);
+  }
+
+  /**
+   * Starts an inline rename for a path (the F2 / double-click-on-selected
+   * flow, exposed for programmatic use). Reveals the row first so the input
+   * can render.
+   */
+  beginRename(path: string): void {
+    if (!this.controller.hasAccount(path)) {
+      return;
+    }
+    this.controller.revealPath(path);
+    this.startRenameSession(path);
+  }
+
+  /** Toggles single-child group-chain flattening (see controller docs). */
+  setFlattenEmptyGroups(value: boolean): void {
+    this.controller.setFlattenEmptyGroups(value);
   }
 
   /** `[start, end)` row range currently in the DOM (exposed for tests). */
@@ -316,10 +392,25 @@ export class AccountTree {
       this.scroller.addEventListener('click', this.handleClick);
       this.scroller.addEventListener('dblclick', this.handleDoubleClick);
       this.scroller.addEventListener('keydown', this.handleKeyDown);
+      this.scroller.addEventListener('input', this.handleInput);
+      this.scroller.addEventListener('focusout', this.handleFocusOut);
+      this.scroller.addEventListener('dragstart', this.handleDragStart);
+      this.scroller.addEventListener('dragover', this.handleDragOver);
+      this.scroller.addEventListener('dragleave', this.handleDragLeave);
+      this.scroller.addEventListener('drop', this.handleDrop);
+      this.scroller.addEventListener('dragend', this.handleDragEnd);
     }
     this.unsubscribeController ??= this.controller.onChange(
       this.handleControllerChange
     );
+    // Model-level rename/move events forward to the view options so React
+    // and vanilla callers wire callbacks in one place.
+    this.unsubscribeRename ??= this.controller.onRename((oldPath, newPath) => {
+      this.options.onRename?.(oldPath, newPath);
+    });
+    this.unsubscribeMove ??= this.controller.onMove((moves) => {
+      this.options.onMove?.(moves);
+    });
   }
 
   private getRenderOptions(): AccountTreeRenderOptions {
@@ -327,6 +418,8 @@ export class AccountTree {
       currency: this.options.currency ?? DEFAULT_CURRENCY,
       showBalances: this.options.showBalances,
       idPrefix: this.instanceId,
+      renamingPath: this.controller.getRenamingPath(),
+      renameDraft: this.controller.getRenameDraft(),
     };
   }
 
@@ -370,13 +463,20 @@ export class AccountTree {
       'height',
       `${Math.max(0, totalCount - range.end) * rowHeight}px`
     );
+    // The rewrite can destroy a focused rename input; that is an eviction,
+    // not a blur-commit, so the focusout handler is suppressed for its
+    // duration (the input reappears with the draft when the row re-renders).
+    this.suppressRenameCommit = true;
     rowsElement.innerHTML = renderAccountRowsHTML(
       this.controller.getRows(range.start, range.end),
       range,
       this.getRenderOptions()
     );
+    this.suppressRenameCommit = false;
     this.renderedRange = range;
     this.updateActiveDescendant();
+    this.patchDragStates();
+    this.restoreRenameFocus();
   }
 
   /**
@@ -465,7 +565,9 @@ export class AccountTree {
     }
     const visible = this.controller.getVisiblePaths();
     const topPath = visible[Math.min(topIndex, count - 1)];
-    const ancestorPath = getParentAccountPath(topPath);
+    // Nearest ancestor that owns a visible row: under flattening a plain
+    // parent lookup could land on a hidden mid-chain group.
+    const ancestorPath = this.controller.getVisibleParentPath(topPath);
     const ancestorRow =
       ancestorPath != null ? this.controller.getRow(ancestorPath) : null;
     if (ancestorRow == null) {
@@ -519,7 +621,11 @@ export class AccountTree {
   };
 
   private handleControllerChange = (change: AccountTreeChange): void => {
-    if (change.expansionChanged || change.statusChanged) {
+    if (
+      change.expansionChanged ||
+      change.statusChanged ||
+      change.renameChanged
+    ) {
       this.applyWindow(this.computeRange(), true);
       this.updateStickyHeader();
     } else if (change.selectionChanged || change.focusChanged) {
@@ -536,6 +642,13 @@ export class AccountTree {
   };
 
   private handleClick = (event: Event): void => {
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest('[data-rename-input]') != null
+    ) {
+      return; // Clicks inside the rename editor never drive tree behavior.
+    }
     const row = getRowFromEvent(event);
     if (row == null || row.getAttribute('data-sticky-row') === 'true') {
       return;
@@ -544,7 +657,14 @@ export class AccountTree {
     if (path == null) {
       return;
     }
-    const target = event.target;
+    const mouse = event as MouseEvent;
+    // Snapshot the pre-click selection state on the FIRST click of a pair so
+    // double-click can distinguish "was already selected" (rename) from
+    // "selected by this very click pair" (group toggle).
+    if (mouse.detail <= 1) {
+      this.lastClickPath = path;
+      this.lastClickWasOnSelected = this.controller.isSelected(path);
+    }
     const onChevron =
       target instanceof Element && target.closest('[data-chevron]') != null;
     if (onChevron && row.getAttribute('data-kind') === 'group') {
@@ -552,7 +672,6 @@ export class AccountTree {
       this.controller.setExpanded(path, !this.controller.isExpanded(path));
       return;
     }
-    const mouse = event as MouseEvent;
     this.controller.selectPath(path, {
       additive: mouse.metaKey || mouse.ctrlKey,
       range: mouse.shiftKey,
@@ -560,15 +679,28 @@ export class AccountTree {
   };
 
   private handleDoubleClick = (event: Event): void => {
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest('[data-rename-input]') != null
+    ) {
+      return;
+    }
     const row = getRowFromEvent(event);
     if (row == null || row.getAttribute('data-sticky-row') === 'true') {
       return;
     }
-    if (row.getAttribute('data-kind') !== 'group') {
-      return;
-    }
     const path = this.getRowPath(row);
     if (path == null) {
+      return;
+    }
+    // Double-click on an already-selected row starts a rename (Pierre's
+    // slow-rename analog); otherwise groups keep their toggle behavior.
+    if (this.lastClickPath === path && this.lastClickWasOnSelected) {
+      this.startRenameSession(path);
+      return;
+    }
+    if (row.getAttribute('data-kind') !== 'group') {
       return;
     }
     this.controller.setExpanded(path, !this.controller.isExpanded(path));
@@ -579,6 +711,32 @@ export class AccountTree {
     const { key } = keyboard;
     const controller = this.controller;
     const focused = controller.getFocusedPath();
+
+    // Keys typed inside the rename editor belong to it: Enter commits,
+    // Escape cancels, everything else is plain text editing — tree
+    // navigation must not hijack arrows or type-ahead while renaming.
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest('[data-rename-input]') != null
+    ) {
+      if (key === 'Enter') {
+        keyboard.preventDefault();
+        this.commitRenameFromView();
+      } else if (key === 'Escape') {
+        keyboard.preventDefault();
+        this.controller.cancelRename();
+      }
+      return;
+    }
+
+    if (key === 'F2') {
+      if (focused != null) {
+        keyboard.preventDefault();
+        this.startRenameSession(focused);
+      }
+      return;
+    }
 
     let handled = true;
     switch (key) {
@@ -609,7 +767,9 @@ export class AccountTree {
         if (controller.isExpanded(focused)) {
           controller.setExpanded(focused, false);
         } else {
-          const parent = getParentAccountPath(focused);
+          // Nearest visible ancestor: under flattening the canonical parent
+          // can be a hidden mid-chain group with no row to focus.
+          const parent = controller.getVisibleParentPath(focused);
           if (parent != null) {
             controller.setFocusedPath(parent);
           }
@@ -653,6 +813,243 @@ export class AccountTree {
       }
     }
   };
+
+  // --- Rename session (view side) --------------------------------------------------------
+
+  // Begins the controller session and schedules the one-time select-all: the
+  // renameChanged event rebuilds the window, which renders the input, and
+  // restoreRenameFocus focuses + selects it.
+  private startRenameSession(path: string): void {
+    this.renameSelectAllPending = true;
+    if (!this.controller.beginRename(path)) {
+      this.renameSelectAllPending = false;
+    }
+  }
+
+  private commitRenameFromView(): void {
+    const path = this.controller.getRenamingPath();
+    if (path == null) {
+      return;
+    }
+    const result = this.controller.commitRename(
+      path,
+      this.controller.getRenameDraft()
+    );
+    if (!result.ok) {
+      // Invalid or colliding names revert (Pierre commits-or-reverts on
+      // blur; we mirror that for Enter too rather than trapping focus).
+      this.controller.cancelRename();
+    }
+  }
+
+  /**
+   * The rename-handoff half of the Pierre pattern: the controller owns the
+   * session, so whenever the renaming row (re)enters the window the freshly
+   * created input is re-focused and — only right after the session began —
+   * select-all'd. While the row is scrolled out there is simply no input.
+   */
+  private restoreRenameFocus(): void {
+    if (this.controller.getRenamingPath() == null) {
+      this.renameSelectAllPending = false;
+      return;
+    }
+    const input = this.rowsElement?.querySelector('[data-rename-input]');
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    const shadowRoot = this.container?.shadowRoot;
+    if (shadowRoot?.activeElement !== input) {
+      input.focus();
+    }
+    if (this.renameSelectAllPending) {
+      input.select();
+      this.renameSelectAllPending = false;
+    }
+  }
+
+  private handleInput = (event: Event): void => {
+    const target = event.target;
+    if (
+      target instanceof HTMLInputElement &&
+      target.matches('[data-rename-input]')
+    ) {
+      this.controller.setRenameDraft(target.value);
+    }
+  };
+
+  // Blur commits (Pierre's RenameInput behavior) — but only real blurs:
+  // window rewrites destroying the input set suppressRenameCommit first.
+  private handleFocusOut = (event: Event): void => {
+    if (this.suppressRenameCommit) {
+      return;
+    }
+    const target = event.target;
+    if (
+      target instanceof HTMLInputElement &&
+      target.matches('[data-rename-input]') &&
+      this.controller.getRenamingPath() != null
+    ) {
+      this.commitRenameFromView();
+    }
+  };
+
+  // --- Drag & drop (HTML5) -----------------------------------------------------------------
+
+  private handleDragStart = (event: Event): void => {
+    const row = getRowFromEvent(event);
+    if (row == null || row.getAttribute('data-sticky-row') === 'true') {
+      return;
+    }
+    const path = this.getRowPath(row);
+    if (path == null) {
+      return;
+    }
+    // Dragging a selected row drags the whole selection (batch move);
+    // dragging an unselected row drags just it, leaving selection alone.
+    const selected = this.controller.getSelectedPaths();
+    this.dragPaths = selected.includes(path) ? selected : [path];
+    this.dropTargetPath = null;
+    const dataTransfer = (event as DragEvent).dataTransfer;
+    if (dataTransfer != null) {
+      dataTransfer.effectAllowed = 'move';
+      dataTransfer.setData('text/plain', this.dragPaths.join('\n'));
+    }
+    this.patchDragStates();
+  };
+
+  private handleDragOver = (event: Event): void => {
+    if (this.dragPaths == null) {
+      return;
+    }
+    const row = getRowFromEvent(event);
+    const targetPath = this.getRowDropTargetPath(row);
+    if (targetPath == null) {
+      this.setDropTarget(null);
+      return;
+    }
+    // Only allow the drop when at least one dragged path survives the guard
+    // set (self/descendant/parent/collision) — invalid targets show nothing.
+    if (this.controller.getMovePlan(this.dragPaths, targetPath).length === 0) {
+      this.setDropTarget(null);
+      return;
+    }
+    event.preventDefault();
+    const dataTransfer = (event as DragEvent).dataTransfer;
+    if (dataTransfer != null) {
+      dataTransfer.dropEffect = 'move';
+    }
+    this.setDropTarget(targetPath);
+  };
+
+  private handleDragLeave = (event: Event): void => {
+    const row = getRowFromEvent(event);
+    if (row != null && this.getRowPath(row) === this.dropTargetPath) {
+      this.setDropTarget(null);
+    }
+  };
+
+  private handleDrop = (event: Event): void => {
+    if (this.dragPaths == null) {
+      return;
+    }
+    const row = getRowFromEvent(event);
+    const targetPath = this.getRowDropTargetPath(row);
+    if (targetPath != null) {
+      event.preventDefault();
+      // movePaths fires the controller's onMove, which startListening
+      // forwards to the view's onMove option.
+      this.controller.movePaths(this.dragPaths, targetPath);
+    }
+    this.endDragSession();
+  };
+
+  private handleDragEnd = (): void => {
+    this.endDragSession();
+  };
+
+  // Valid drop targets are group rows (including flattened chains, whose
+  // path is the chain's deepest group). Sticky mirrors and leaves are not
+  // targets.
+  private getRowDropTargetPath(row: HTMLElement | undefined): string | null {
+    if (
+      row == null ||
+      row.getAttribute('data-sticky-row') === 'true' ||
+      row.getAttribute('data-kind') !== 'group'
+    ) {
+      return null;
+    }
+    return this.getRowPath(row);
+  }
+
+  // Tracks the highlighted target and arms the spring-loaded expansion: a
+  // collapsed group hovered for the configured delay auto-expands so drags
+  // can descend into closed subtrees (Pierre's openOnDropDelay behavior).
+  private setDropTarget(path: string | null): void {
+    if (this.dropTargetPath === path) {
+      return;
+    }
+    this.dropTargetPath = path;
+    this.clearDragExpandTimer();
+    if (path != null && !this.controller.isExpanded(path)) {
+      this.dragExpandTimer = setTimeout(() => {
+        this.dragExpandTimer = undefined;
+        if (
+          this.dropTargetPath === path &&
+          this.dragPaths != null &&
+          !this.controller.isExpanded(path)
+        ) {
+          this.controller.setExpanded(path, true);
+        }
+      }, this.options.dragExpandDelayMs ?? DRAG_EXPAND_DELAY_MS);
+    }
+    this.patchDragStates();
+  }
+
+  private endDragSession(): void {
+    this.dragPaths = null;
+    this.dropTargetPath = null;
+    this.clearDragExpandTimer();
+    this.patchDragStates();
+  }
+
+  private clearDragExpandTimer(): void {
+    if (this.dragExpandTimer != null) {
+      clearTimeout(this.dragExpandTimer);
+      this.dragExpandTimer = undefined;
+    }
+  }
+
+  /**
+   * Applies drag visuals as attribute patches on the rendered rows (dragged
+   * rows dim, the valid target tints), and re-applies them after window
+   * rewrites so a spring-loaded expansion mid-drag keeps the highlights.
+   */
+  private patchDragStates(): void {
+    const { rowsElement } = this;
+    if (rowsElement == null) {
+      return;
+    }
+    const dragSet = new Set(this.dragPaths ?? []);
+    for (const element of rowsElement.children) {
+      if (!(element instanceof HTMLElement)) {
+        continue;
+      }
+      const path = this.getRowPath(element);
+      if (path == null) {
+        continue;
+      }
+      if (dragSet.has(path)) {
+        element.setAttribute('data-dragging', 'true');
+      } else {
+        element.removeAttribute('data-dragging');
+      }
+      if (this.dropTargetPath === path) {
+        element.setAttribute('data-drop-target', 'true');
+      } else {
+        element.removeAttribute('data-drop-target');
+      }
+    }
+  }
 
   private getRowPath(row: HTMLElement): string | null {
     const raw = row.getAttribute('data-row-index');

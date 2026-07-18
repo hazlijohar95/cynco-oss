@@ -53,6 +53,32 @@ group('AccountTreeController (medium workload: 10k entries)', () => {
     do_not_optimize(controller.beginSearch('cash'));
     controller.endSearch();
   });
+
+  // The rename/drag&drop remap engine rebuilds the store from remapped
+  // entries; renaming the same group back and forth keeps each iteration's
+  // input topology identical.
+  let renameToggle = false;
+  bench('commitRename remap (group + descendants, full rebuild)', () => {
+    renameToggle = !renameToggle;
+    do_not_optimize(
+      renameToggle
+        ? controller.commitRename('Expenses', 'Belanja')
+        : controller.commitRename('Belanja', 'Expenses')
+    );
+  });
+
+  // Separate instance: the rename bench above can leave the shared tree in
+  // its toggled state, which would silently guard these moves into no-ops.
+  const moveController = new AccountTreeController({ entries });
+  let moveToggle = false;
+  bench('movePaths remap (leaf between groups, full rebuild)', () => {
+    moveToggle = !moveToggle;
+    do_not_optimize(
+      moveToggle
+        ? moveController.movePaths(['Expenses:Travel:Grab'], 'Expenses:Office')
+        : moveController.movePaths(['Expenses:Office:Grab'], 'Expenses:Travel')
+    );
+  });
 });
 
 await run();

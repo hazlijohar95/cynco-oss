@@ -17,7 +17,9 @@
   ],
   "type": "module",
   "sideEffects": [
-    "dist/components/web-components.js"
+    "dist/components/web-components.js",
+    "dist/worker/worker.js",
+    "dist/worker/worker-portable.js"
   ],
   "typesVersions": {
     "*": {
@@ -29,6 +31,9 @@
       ],
       "ssr": [
         "dist/ssr/index.d.ts"
+      ],
+      "worker": [
+        "dist/worker/index.d.ts"
       ]
     }
   },
@@ -44,6 +49,18 @@
     "./ssr": {
       "types": "./dist/ssr/index.d.ts",
       "import": "./dist/ssr/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker/index.d.ts",
+      "import": "./dist/worker/index.js"
+    },
+    "./worker/worker.js": {
+      "types": "./dist/worker/worker.d.ts",
+      "import": "./dist/worker/worker.js"
+    },
+    "./worker/worker-portable.js": {
+      "types": "./dist/worker/worker-portable.d.ts",
+      "import": "./dist/worker/worker-portable.js"
     }
   },
   "publishConfig": {
@@ -53,7 +70,8 @@
     "prepublishOnly": "moon run journals:prepublish"
   },
   "dependencies": {
-    "@cynco/theme": "workspace:*"
+    "@cynco/theme": "workspace:*",
+    "lru_map": "catalog:"
   },
   "devDependencies": {
     "@tsdown/css": "catalog:",

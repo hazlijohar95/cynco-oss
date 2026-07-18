@@ -19,6 +19,8 @@
     --accounts-accent-override
     --accounts-accent-subtle-override
     --accounts-indent-guide-override
+    --accounts-punctuation-override
+    --accounts-input-bg-override
     --accounts-balance-override
     --accounts-balance-negative-override
 
@@ -76,6 +78,14 @@
     --accounts-indent-guide: var(
       --accounts-indent-guide-override,
       var(--accounts-theme-border-indent-guide, light-dark(#e5e5e5, #1d1d1d))
+    );
+    --accounts-punctuation: var(
+      --accounts-punctuation-override,
+      var(--accounts-theme-fg-fg4, light-dark(#8a8a8a, #636363))
+    );
+    --accounts-input-bg: var(
+      --accounts-input-bg-override,
+      var(--accounts-theme-bg-inset, light-dark(#ededed, #1d1d1d))
     );
     --accounts-balance: var(
       --accounts-balance-override,
@@ -353,6 +363,63 @@
 
   [data-row][data-kind='group'] [data-name] {
     font-weight: 600;
+  }
+
+  /* Flattened single-child group chains: segments joined by the path
+   * separator, with the separator in punctuation color so the joined label
+   * still reads as one row (`Income : Sales`). */
+  [data-name][data-flattened='true'] {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5ch;
+    min-width: 0;
+  }
+
+  [data-name-separator] {
+    color: var(--accounts-punctuation);
+    font-weight: 400;
+    user-select: none;
+  }
+
+  [data-name-segment] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Inline rename editor (Pierre RenameInput adapted): inset background,
+   * hairline border, focus ring; sized to sit inside the row. */
+  [data-rename-input] {
+    appearance: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: calc(var(--accounts-row-height) - 4px);
+    font-family: inherit;
+    font-size: inherit;
+    line-height: calc(var(--accounts-row-height) - 4px);
+    color: inherit;
+    background-color: var(--accounts-input-bg);
+    border: 1px solid var(--accounts-hairline);
+    border-radius: var(--accounts-border-radius);
+    padding-inline: 6px;
+    outline: none;
+  }
+
+  [data-rename-input]:focus-visible {
+    outline: var(--accounts-focus-ring-width) solid var(--accounts-accent);
+    outline-offset: var(--accounts-focus-ring-offset);
+  }
+
+  /* Drag & drop: dragged rows dim; the valid drop target gets the
+   * accent-subtle tint plus a 1px accent inset ring. Invalid targets show
+   * nothing (the dragover handler never marks them). */
+  [data-row][data-dragging='true'] {
+    opacity: 0.5;
+  }
+
+  [data-row][data-drop-target='true'] {
+    background-color: var(--accounts-accent-subtle);
+    outline: 1px solid var(--accounts-accent);
+    outline-offset: -1px;
   }
 
   [data-row][data-search-match='true'] [data-name] {

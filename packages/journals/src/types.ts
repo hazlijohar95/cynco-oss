@@ -76,22 +76,34 @@ export interface BookPostingRef {
 
 /**
  * How a match was made: `exact` (same amount, currency, and date),
- * `suggested` (same amount and currency within the date window), or
- * `manual` (caller-constructed).
+ * `suggested` (same amount and currency within the date window), `sum` (one
+ * statement line covered by the sum of several postings), or `manual`
+ * (caller-constructed).
  */
-export type MatchKind = 'exact' | 'suggested' | 'manual';
+export type MatchKind = 'exact' | 'suggested' | 'sum' | 'manual';
 
 /** Lifecycle of a match inside the reconciliation UI. */
 export type MatchStatus = 'proposed' | 'accepted' | 'rejected';
 
 export interface ReconciliationMatch {
-  /** Deterministic id: `m-<lineId>-<entryId>-<postingIndex>`. */
+  /**
+   * Deterministic id: `m-<lineId>-<entryId>-<postingIndex>` joined with `+`
+   * across postings for sum matches.
+   */
   id: string;
   statementLineId: string;
-  posting: BookPostingRef;
+  /**
+   * Book postings covering the statement line. Exactly one for
+   * exact/suggested matches; 2..maxGroupSize for `sum` matches. Their
+   * amounts sum to the statement line amount in its currency.
+   */
+  postings: readonly BookPostingRef[];
   kind: MatchKind;
   status: MatchStatus;
-  /** Days between statement and book dates (book − statement; 0 for exact). */
+  /**
+   * Days between statement and book dates (book − statement; 0 for exact).
+   * For sum matches this is the group's largest-magnitude signed delta.
+   */
   dateDelta: number;
 }
 

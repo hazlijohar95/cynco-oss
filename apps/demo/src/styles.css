@@ -202,6 +202,40 @@ journals-container {
   overflow: hidden;
 }
 
+#stream-host journals-container {
+  height: 420px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+#stream-restart {
+  margin-left: 8px;
+}
+
+/* Chart-of-accounts tree host + its control strip. */
+accounts-container {
+  display: block;
+}
+
+#accounts-host accounts-container {
+  height: 480px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tree-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 12px;
+}
+
+.tree-controls .toolbar-control {
+  gap: 6px;
+}
+
 /* Row-selection readouts under the register and ledger view. */
 .readout {
   margin: 12px 0 0;

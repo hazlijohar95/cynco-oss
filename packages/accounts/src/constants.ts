@@ -48,6 +48,13 @@ export const DEFAULT_CURRENCY = 'MYR';
  */
 export const SSR_MAX_PRELOADED_ROWS = 512;
 
+/**
+ * Spring-loaded expansion delay: how long a drag must hover a collapsed
+ * group before it auto-expands. Pierre's trees default to 800ms
+ * (`openOnDropDelay`); we run slightly snappier per the accounts spec.
+ */
+export const DRAG_EXPAND_DELAY_MS = 700;
+
 /** Proper minus sign (U+2212) used for negative balances. */
 export const MINUS_SIGN = '\u2212';
 

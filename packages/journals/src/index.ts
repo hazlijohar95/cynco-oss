@@ -1,3 +1,4 @@
+export * from './components/EntryStream';
 export * from './components/JournalEntry';
 export * from './components/LedgerView';
 export * from './components/Reconciliation';
@@ -14,6 +15,7 @@ export * from './utils/applyHostColorScheme';
 export * from './utils/areEntriesEqual';
 export * from './utils/areVirtualWindowSpecsEqual';
 export * from './utils/computeRowWindow';
+export * from './utils/createEntryStreamFromArray';
 export * from './utils/createWindowFromScrollPosition';
 export * from './utils/escapeHtml';
 export * from './utils/formatMinorUnits';

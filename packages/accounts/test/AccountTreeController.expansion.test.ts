@@ -86,6 +86,7 @@ describe('setExpanded', () => {
       selectionChanged: false,
       statusChanged: false,
       focusChanged: false,
+      renameChanged: false,
     });
 
     controller.setExpanded('Assets:Current:Cash-CIMB', false); // Leaf: no-op.

@@ -113,6 +113,13 @@ export interface AccountTreeRowData {
   status: AccountStatusKind | null;
   /** Total decorated item count behind `status` (0 when status is null). */
   statusCount: number;
+  /**
+   * Leaf names of the flattened single-child group chain this row stands in
+   * for (`['Income', 'Sales']`), head first. Null for ordinary rows and
+   * whenever `flattenEmptyGroups` is off. `path`/`name` always describe the
+   * chain's deepest group — the node expansion toggles operate on.
+   */
+  flattenedNames: readonly string[] | null;
 }
 
 /** Half-open `[start, end)` row index range. */
@@ -131,6 +138,8 @@ export interface AccountTreeChange {
   selectionChanged: boolean;
   statusChanged: boolean;
   focusChanged: boolean;
+  /** True when a rename session started, ended, or was committed. */
+  renameChanged: boolean;
 }
 
 /** Listener registered via `AccountTreeController.onChange`. */
@@ -159,6 +168,34 @@ export interface AccountSearchResult {
   expandedAncestors: readonly string[];
 }
 
+/** One re-parenting move applied by rename or drag & drop. */
+export interface AccountMove {
+  /** Canonical path before the move. */
+  from: string;
+  /** Canonical path after the move. Never inside `from`'s subtree. */
+  to: string;
+}
+
+/** Listener registered via `AccountTreeController.onMove`. */
+export type AccountMoveListener = (moves: readonly AccountMove[]) => void;
+
+/** Listener registered via `AccountTreeController.onRename`. */
+export type AccountRenameListener = (oldPath: string, newPath: string) => void;
+
+/** Why a `commitRename` attempt was rejected. */
+export type RenameErrorReason =
+  /** The path being renamed is not an account in the tree. */
+  | 'unknown-path'
+  /** Empty leaf name, or one containing the `:` path separator. */
+  | 'invalid-name'
+  /** Another account already occupies the resulting path. */
+  | 'collision';
+
+/** Result of `AccountTreeController.commitRename`. */
+export type RenameResult =
+  | { ok: true; newPath: string }
+  | { ok: false; reason: RenameErrorReason };
+
 /** Options bag for constructing an `AccountTreeController`. */
 export interface AccountTreeControllerOptions {
   /** Entries whose posting accounts seed the tree and its balances. */
@@ -176,4 +213,12 @@ export interface AccountTreeControllerOptions {
   currency?: string;
   /** Whether rows render the right-aligned balance column. Default true. */
   showBalances?: boolean;
+  /**
+   * Collapse single-child GROUP chains into one visible row labelled with
+   * the joined segments (`Income : Sales`). Projection-level only: canonical
+   * topology, expansion state, selection, and every public API keep
+   * canonical paths — the flattened row represents its deepest group, and
+   * expansion toggles that node. Default false.
+   */
+  flattenEmptyGroups?: boolean;
 }

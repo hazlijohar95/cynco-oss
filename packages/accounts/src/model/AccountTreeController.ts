@@ -19,6 +19,9 @@ import {
   DENSITY_ROW_HEIGHTS,
 } from '../constants';
 import type {
+  AccountMove,
+  AccountMoveListener,
+  AccountRenameListener,
   AccountSearchResult,
   AccountStatusEntry,
   AccountStatusKind,
@@ -28,6 +31,8 @@ import type {
   AccountTreeDensity,
   AccountTreeRowData,
   LedgerEntry,
+  Posting,
+  RenameResult,
   RowRange,
   SelectPathOptions,
 } from '../types';
@@ -58,7 +63,24 @@ const NO_CHANGE: AccountTreeChange = {
   selectionChanged: false,
   statusChanged: false,
   focusChanged: false,
+  renameChanged: false,
 };
+
+/**
+ * One row of the controller-owned visible projection. The projection layers
+ * flattening on top of the store's expansion state, so `path` names the row's
+ * identity node (the deepest group of a flattened chain) while `depth` and
+ * the aria fields describe the row's place in the *visible* projection.
+ */
+interface ProjectionRow {
+  path: string;
+  name: string;
+  depth: number;
+  kind: 'group' | 'leaf';
+  posInSet: number;
+  setSize: number;
+  flattenedNames: readonly string[] | null;
+}
 
 export class AccountTreeController {
   private store: AccountStore;
@@ -66,11 +88,21 @@ export class AccountTreeController {
   private allPaths: string[] = [];
   /** Paths that have at least one child (expandable groups). */
   private groupPaths: Set<string> = new Set();
+  /**
+   * Children per parent path ('' keys the roots), sorted by leaf name in the
+   * same code-point order the store sorts siblings. Drives the controller's
+   * own projection walk (which the flatten feature reshapes) and the aria
+   * posinset/setsize values under flattening.
+   */
+  private childrenByParent = new Map<string, string[]>();
 
   private density: AccountTreeDensity;
   private readonly currency: string;
   private readonly showBalances: boolean;
+  private flattenEmptyGroups: boolean;
   private accounts: readonly string[];
+  /** Retained so path remaps (rename, drag & drop) can rebuild balances. */
+  private entries: readonly LedgerEntry[];
 
   private readonly selection = new Set<string>();
   /** Anchor for shift-range selection: the last non-range selected path. */
@@ -85,16 +117,29 @@ export class AccountTreeController {
   private searchSession: SearchSession | null = null;
   private searchMatches = new Set<string>();
 
+  /** Path currently being renamed inline, or null. */
+  private renamingPath: string | null = null;
   /**
-   * Visible paths in render order plus a reverse index, rebuilt lazily after
-   * expansion changes. Keyboard navigation, range selection, and sticky
-   * ancestor lookup all need path→index mapping; caching it means one O(n)
-   * rebuild per expansion change instead of one scan per keystroke.
+   * Live rename input draft. Owned by the controller (not the DOM input) so
+   * the in-progress value survives the input being destroyed and recreated
+   * when its row leaves and re-enters the virtualization window.
    */
+  private renameDraft = '';
+
+  /**
+   * Visible projection (flatten-aware) in render order plus a reverse
+   * path→index map, rebuilt lazily after expansion/topology changes.
+   * Keyboard navigation, range selection, and sticky ancestor lookup all
+   * need the mapping; caching it means one O(n) rebuild per change instead
+   * of one scan per keystroke.
+   */
+  private projectionCache: ProjectionRow[] | null = null;
   private visiblePathsCache: string[] | null = null;
   private visibleIndexByPath = new Map<string, number>();
 
   private readonly listeners = new Set<AccountTreeChangeListener>();
+  private readonly renameListeners = new Set<AccountRenameListener>();
+  private readonly moveListeners = new Set<AccountMoveListener>();
 
   constructor(options: AccountTreeControllerOptions = {}) {
     const {
@@ -104,11 +149,14 @@ export class AccountTreeController {
       density = 'default',
       currency = DEFAULT_CURRENCY,
       showBalances = true,
+      flattenEmptyGroups = false,
     } = options;
     this.density = density;
     this.currency = currency;
     this.showBalances = showBalances;
+    this.flattenEmptyGroups = flattenEmptyGroups;
     this.accounts = accounts;
+    this.entries = entries;
     this.store = this.buildStore(entries, accounts);
     this.applyInitialExpansion(initialExpansion);
   }
@@ -129,6 +177,7 @@ export class AccountTreeController {
       }
     }
 
+    this.entries = entries;
     this.store = this.buildStore(entries, this.accounts);
     for (const path of collapsedGroups) {
       this.store.setExpanded(path, false);
@@ -224,40 +273,42 @@ export class AccountTreeController {
 
   /** Number of rows currently visible given the expansion state. */
   getVisibleCount(): number {
-    return this.store.getVisibleCount();
+    return this.ensureProjection().length;
   }
 
   /**
    * Materializes decoration-complete rows for the half-open `[start, end)`
-   * range: the store's per-row data plus selection, focus, search-match, and
-   * effective status, with the rolled balance extracted in the primary
+   * range: the projection's per-row data plus selection, focus, search-match,
+   * and effective status, with the rolled balance extracted in the primary
    * display currency. Slices are viewport-sized, so allocation stays bounded.
    */
   getRows(start: number, end: number): AccountTreeRowData[] {
-    const rows = this.store.getVisibleSlice(start, end);
+    const projection = this.ensureProjection();
+    const clampedStart = Math.max(0, Math.floor(start));
+    const clampedEnd = Math.min(projection.length, Math.floor(end));
     const decorated: AccountTreeRowData[] = [];
-    for (const row of rows) {
-      const status = this.getEffectiveStatus(
-        row.path,
-        row.kind === 'group',
-        row.expanded
-      );
+    for (let index = clampedStart; index < clampedEnd; index += 1) {
+      const row = projection[index];
+      const isGroup = row.kind === 'group';
+      const expanded = isGroup && this.store.isExpanded(row.path);
+      const status = this.getEffectiveStatus(row.path, isGroup, expanded);
       decorated.push({
         path: row.path,
         name: row.name,
         depth: row.depth,
         kind: row.kind,
-        expanded: row.expanded,
+        expanded,
         setSize: row.setSize,
         posInSet: row.posInSet,
         balance: this.showBalances
-          ? (row.rolledBalances.get(this.currency) ?? null)
+          ? (this.store.getRolledBalances(row.path)?.get(this.currency) ?? null)
           : null,
         selected: this.selection.has(row.path),
         focused: this.focusedPath === row.path,
         searchMatch: this.searchMatches.has(row.path),
         status: status?.status ?? null,
         statusCount: status?.count ?? 0,
+        flattenedNames: row.flattenedNames,
       });
     }
     return decorated;
@@ -279,13 +330,50 @@ export class AccountTreeController {
 
   /** Visible paths in render order (cached; do not mutate). */
   getVisiblePaths(): readonly string[] {
-    return this.ensureVisibleCache();
+    this.ensureProjection();
+    return this.visiblePathsCache ?? [];
   }
 
   /** Index of a path in the visible projection, or -1 when hidden/unknown. */
   getPathIndex(path: string): number {
-    this.ensureVisibleCache();
+    this.ensureProjection();
     return this.visibleIndexByPath.get(path) ?? -1;
+  }
+
+  /**
+   * Nearest ancestor of a path that owns a row in the visible projection, or
+   * null. Under `flattenEmptyGroups`, mid-chain ancestors have no row of
+   * their own, so "jump to parent" and the sticky mirror must walk up until
+   * they find the flattened row that actually represents the chain.
+   */
+  getVisibleParentPath(path: string): string | null {
+    const ancestors = getAncestorAccountPaths(path);
+    for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+      if (this.getPathIndex(ancestors[index]) >= 0) {
+        return ancestors[index];
+      }
+    }
+    return null;
+  }
+
+  // --- Flattening -----------------------------------------------------------------
+
+  getFlattenEmptyGroups(): boolean {
+    return this.flattenEmptyGroups;
+  }
+
+  /**
+   * Toggles single-child group-chain flattening at runtime. Purely a
+   * projection change — canonical topology and expansion state are
+   * untouched — so switching back restores the exact previous tree.
+   */
+  setFlattenEmptyGroups(value: boolean): void {
+    if (this.flattenEmptyGroups === value) {
+      return;
+    }
+    this.flattenEmptyGroups = value;
+    this.invalidateVisibleCache();
+    this.emit({ ...NO_CHANGE, expansionChanged: true });
   }
 
   // --- Expansion --------------------------------------------------------------------
@@ -611,6 +699,187 @@ export class AccountTreeController {
     return this.rolledStatus.get(path) ?? null;
   }
 
+  // --- Rename ------------------------------------------------------------------------------------
+
+  /** Path currently in an inline rename session, or null. */
+  getRenamingPath(): string | null {
+    return this.renamingPath;
+  }
+
+  /** Current rename draft text (survives virtualization-window eviction). */
+  getRenameDraft(): string {
+    return this.renameDraft;
+  }
+
+  /**
+   * Updates the rename draft as the user types. Deliberately does not emit a
+   * change event — the DOM input already shows the text; the draft only
+   * needs to be re-read when the row re-renders.
+   */
+  setRenameDraft(value: string): void {
+    if (this.renamingPath != null) {
+      this.renameDraft = value;
+    }
+  }
+
+  /**
+   * Starts an inline rename session for a path. The draft seeds from the
+   * leaf name. Returns false for unknown paths.
+   */
+  beginRename(path: string): boolean {
+    if (!this.store.hasAccount(path) || this.renamingPath === path) {
+      return this.renamingPath === path;
+    }
+    this.renamingPath = path;
+    this.renameDraft = getAccountLeafName(path);
+    this.emit({ ...NO_CHANGE, renameChanged: true });
+    return true;
+  }
+
+  /** Ends the rename session without applying anything. */
+  cancelRename(): void {
+    if (this.renamingPath == null) {
+      return;
+    }
+    this.renamingPath = null;
+    this.renameDraft = '';
+    this.emit({ ...NO_CHANGE, renameChanged: true });
+  }
+
+  /**
+   * Validates and applies a leaf rename: `Assets:Current` renamed to `Ops`
+   * becomes `Assets:Ops`, and every descendant, the expansion set, the
+   * selection, focus, and status decorations follow the remap. The store is
+   * entry/path-derived, so the remap rebuilds it from remapped inputs (a
+   * medium-workload rebuild measures ~4ms — see scripts/benchmark.ts).
+   * Fires `onRename(oldPath, newPath)` on success. On failure the rename
+   * session (if any) stays open so the view can decide to retry or cancel.
+   */
+  commitRename(path: string, newLeafName: string): RenameResult {
+    if (!this.store.hasAccount(path)) {
+      return { ok: false, reason: 'unknown-path' };
+    }
+    const leaf = newLeafName.trim();
+    if (leaf === '' || leaf.includes(':')) {
+      return { ok: false, reason: 'invalid-name' };
+    }
+    const parent = getParentAccountPath(path);
+    const newPath = parent == null ? leaf : `${parent}:${leaf}`;
+    if (!isValidAccountPath(newPath)) {
+      return { ok: false, reason: 'invalid-name' };
+    }
+    if (newPath === path) {
+      // Committing the unchanged name is a successful no-op: end the session
+      // without firing onRename or rebuilding anything.
+      if (this.renamingPath === path) {
+        this.renamingPath = null;
+        this.renameDraft = '';
+        this.emit({ ...NO_CHANGE, renameChanged: true });
+      }
+      return { ok: true, newPath };
+    }
+    if (this.store.hasAccount(newPath)) {
+      return { ok: false, reason: 'collision' };
+    }
+
+    const renameEndsSession = this.renamingPath === path;
+    if (renameEndsSession) {
+      this.renamingPath = null;
+      this.renameDraft = '';
+    }
+    this.applyRemap([{ from: path, to: newPath }], {
+      renameChanged: renameEndsSession,
+    });
+    for (const listener of this.renameListeners) {
+      listener(path, newPath);
+    }
+    return { ok: true, newPath };
+  }
+
+  /** Registers a rename listener; returns an unsubscribe function. */
+  onRename(listener: AccountRenameListener): () => void {
+    this.renameListeners.add(listener);
+    return () => {
+      this.renameListeners.delete(listener);
+    };
+  }
+
+  // --- Drag & drop moves ---------------------------------------------------------------------------
+
+  /**
+   * Computes the moves a drop would perform, applying the Pierre guard set
+   * without mutating anything. Sources are normalized first (duplicates and
+   * descendants of other sources dropped, so each subtree moves once); then
+   * per source: unknown paths, self-drops, drops into the source's own
+   * subtree, drops onto the current parent (no-op), and leaf-name collisions
+   * at the target are all skipped. Returns [] when the target is not an
+   * existing group.
+   */
+  getMovePlan(
+    sourcePaths: readonly string[],
+    targetGroupPath: string
+  ): AccountMove[] {
+    if (!this.groupPaths.has(targetGroupPath)) {
+      return [];
+    }
+    const moves: AccountMove[] = [];
+    const claimedDestinations = new Set<string>();
+    for (const source of normalizeMoveSources(sourcePaths)) {
+      if (!this.store.hasAccount(source)) {
+        continue;
+      }
+      if (
+        targetGroupPath === source ||
+        targetGroupPath.startsWith(`${source}:`)
+      ) {
+        continue; // Self or own-descendant drop.
+      }
+      if (getParentAccountPath(source) === targetGroupPath) {
+        continue; // Already a child of the target: no-op.
+      }
+      const destination = `${targetGroupPath}:${getAccountLeafName(source)}`;
+      if (
+        this.store.hasAccount(destination) ||
+        claimedDestinations.has(destination)
+      ) {
+        continue; // Leaf-name collision at the target.
+      }
+      claimedDestinations.add(destination);
+      moves.push({ from: source, to: destination });
+    }
+    return moves;
+  }
+
+  /**
+   * Re-parents the sources under a target group using the same remap
+   * machinery as rename (subtrees move whole; balances re-roll under the new
+   * ancestors). Invalid sources are skipped per `getMovePlan`; fires
+   * `onMove` with the applied moves and returns them ([] when nothing
+   * applied).
+   */
+  movePaths(
+    sourcePaths: readonly string[],
+    targetGroupPath: string
+  ): AccountMove[] {
+    const moves = this.getMovePlan(sourcePaths, targetGroupPath);
+    if (moves.length === 0) {
+      return moves;
+    }
+    this.applyRemap(moves, {});
+    for (const listener of this.moveListeners) {
+      listener(moves);
+    }
+    return moves;
+  }
+
+  /** Registers a move listener; returns an unsubscribe function. */
+  onMove(listener: AccountMoveListener): () => void {
+    this.moveListeners.add(listener);
+    return () => {
+      this.moveListeners.delete(listener);
+    };
+  }
+
   // --- Events -----------------------------------------------------------------------------------
 
   /** Registers a change listener; returns an unsubscribe function. */
@@ -652,15 +921,132 @@ export class AccountTreeController {
     }
 
     this.groupPaths = new Set();
+    this.childrenByParent = new Map();
     for (const path of all) {
-      const parent = getParentAccountPath(path);
-      if (parent != null) {
+      const parent = getParentAccountPath(path) ?? '';
+      if (parent !== '') {
         this.groupPaths.add(parent);
       }
+      const siblings = this.childrenByParent.get(parent);
+      if (siblings == null) {
+        this.childrenByParent.set(parent, [path]);
+      } else {
+        siblings.push(path);
+      }
+    }
+    // Sibling order must match the store's (plain code-point order on leaf
+    // names) so projection indexes agree with store slices.
+    for (const siblings of this.childrenByParent.values()) {
+      siblings.sort((a, b) => {
+        const leafA = getAccountLeafName(a);
+        const leafB = getAccountLeafName(b);
+        return leafA < leafB ? -1 : leafA > leafB ? 1 : 0;
+      });
     }
     this.allPaths = [...all];
     this.invalidateVisibleCache();
     return new AccountStore({ entries, accountPaths: accounts });
+  }
+
+  /**
+   * The shared remap engine behind rename and drag & drop. The store's
+   * topology is immutable and entry/path-derived, so a path remap means:
+   * rewrite every posting account and explicit account path through the move
+   * list, rebuild the store (single-digit milliseconds on the medium
+   * workload — balances re-roll under the new ancestors for free), then
+   * carry expansion, selection, focus, status decorations, and any search
+   * session across by remapping their paths too. Emits one honest change
+   * event for the whole operation.
+   */
+  private applyRemap(
+    moves: readonly AccountMove[],
+    extra: Partial<AccountTreeChange>
+  ): void {
+    if (moves.length === 0) {
+      return;
+    }
+    const remap = (path: string): string => remapPathThrough(moves, path);
+
+    // Snapshot collapsed groups before the rebuild (the fresh store defaults
+    // to fully expanded), remapped onto their new paths.
+    const collapsedGroups: string[] = [];
+    for (const path of this.groupPaths) {
+      if (!this.store.isExpanded(path)) {
+        collapsedGroups.push(remap(path));
+      }
+    }
+
+    this.entries = this.entries.map((entry) => remapEntry(entry, moves));
+    this.accounts = this.accounts.map(remap);
+
+    let selectionChanged = false;
+    const remappedSelection: string[] = [];
+    for (const path of this.selection) {
+      const next = remap(path);
+      if (next !== path) {
+        selectionChanged = true;
+      }
+      remappedSelection.push(next);
+    }
+    this.selection.clear();
+    for (const path of remappedSelection) {
+      this.selection.add(path);
+    }
+    if (this.selectionAnchor != null) {
+      this.selectionAnchor = remap(this.selectionAnchor);
+    }
+    let focusChanged = false;
+    if (this.focusedPath != null) {
+      const next = remap(this.focusedPath);
+      focusChanged = next !== this.focusedPath;
+      this.focusedPath = next;
+    }
+    if (this.renamingPath != null) {
+      this.renamingPath = remap(this.renamingPath);
+    }
+
+    // Status decorations follow their accounts; distinct old paths can only
+    // collide onto one new path through pathological move lists, but merge
+    // instead of dropping data if they ever do.
+    const remappedStatus = new Map<string, StatusAggregate>();
+    for (const [path, aggregate] of this.ownStatus) {
+      const next = remap(path);
+      const existing = remappedStatus.get(next);
+      remappedStatus.set(
+        next,
+        existing == null
+          ? aggregate
+          : mergeStatus(existing, aggregate.status, aggregate.count)
+      );
+    }
+    this.ownStatus = remappedStatus;
+
+    if (this.searchSession != null) {
+      this.searchSession = {
+        query: this.searchSession.query,
+        priorExpandedGroups: this.searchSession.priorExpandedGroups.map(remap),
+      };
+      const remappedMatches = new Set<string>();
+      for (const match of this.searchMatches) {
+        remappedMatches.add(remap(match));
+      }
+      this.searchMatches = remappedMatches;
+    }
+
+    this.store = this.buildStore(this.entries, this.accounts);
+    for (const path of collapsedGroups) {
+      this.store.setExpanded(path, false);
+    }
+    this.rebuildStatusRollup();
+    this.invalidateVisibleCache();
+    this.emit({
+      ...NO_CHANGE,
+      expansionChanged: true,
+      statusChanged: this.ownStatus.size > 0,
+      selectionChanged,
+      focusChanged,
+      ...extra,
+    });
   }
 
   /** Applies the constructor's initialExpansion mode onto a fresh store. */
@@ -745,22 +1131,107 @@ export class AccountTreeController {
     return null;
   }
 
-  private ensureVisibleCache(): string[] {
-    if (this.visiblePathsCache != null) {
-      return this.visiblePathsCache;
+  /**
+   * Rebuilds the flatten-aware visible projection when dirty: a preorder DFS
+   * over the controller's child table that only descends into expanded
+   * groups. With flattening on, a group whose only child is another group
+   * merges into one row keyed by the chain's deepest group; intermediate
+   * expansion states are deliberately ignored (the chain acts as one node,
+   * toggled via its deepest path), which is exactly what makes the feature
+   * projection-level: turning it off restores the store-truth tree.
+   */
+  private ensureProjection(): ProjectionRow[] {
+    if (this.projectionCache != null) {
+      return this.projectionCache;
     }
-    const rows = this.store.getVisibleSlice(0, this.store.getVisibleCount());
-    const paths: string[] = new Array(rows.length);
+    const projection: ProjectionRow[] = [];
+    const paths: string[] = [];
     this.visibleIndexByPath = new Map();
-    for (let index = 0; index < rows.length; index += 1) {
-      paths[index] = rows[index].path;
-      this.visibleIndexByPath.set(rows[index].path, index);
+
+    interface Frame {
+      path: string;
+      depth: number;
+      posInSet: number;
+      setSize: number;
     }
+    const stack: Frame[] = [];
+    const roots = this.childrenByParent.get('') ?? [];
+    for (let index = roots.length - 1; index >= 0; index -= 1) {
+      stack.push({
+        path: roots[index],
+        depth: 0,
+        posInSet: index + 1,
+        setSize: roots.length,
+      });
+    }
+
+    while (stack.length > 0) {
+      const frame = stack.pop();
+      if (frame == null) {
+        break;
+      }
+      // Flatten single-child group chains: follow the chain while the
+      // current group has exactly one child and that child is a group.
+      let rowPath = frame.path;
+      let flattenedNames: string[] | null = null;
+      if (this.flattenEmptyGroups) {
+        let chainNames: string[] | null = null;
+        while (this.groupPaths.has(rowPath)) {
+          const children = this.childrenByParent.get(rowPath);
+          if (
+            children == null ||
+            children.length !== 1 ||
+            !this.groupPaths.has(children[0])
+          ) {
+            break;
+          }
+          chainNames ??= [getAccountLeafName(frame.path)];
+          rowPath = children[0];
+          chainNames.push(getAccountLeafName(rowPath));
+        }
+        flattenedNames = chainNames;
+      }
+
+      const isGroup = this.groupPaths.has(rowPath);
+      const rowIndex = projection.length;
+      projection.push({
+        path: rowPath,
+        name: getAccountLeafName(rowPath),
+        depth: frame.depth,
+        kind: isGroup ? 'group' : 'leaf',
+        posInSet: frame.posInSet,
+        setSize: frame.setSize,
+        flattenedNames,
+      });
+      paths.push(rowPath);
+      this.visibleIndexByPath.set(rowPath, rowIndex);
+
+      if (isGroup && this.store.isExpanded(rowPath)) {
+        const children = this.childrenByParent.get(rowPath) ?? [];
+        for (let index = children.length - 1; index >= 0; index -= 1) {
+          stack.push({
+            path: children[index],
+            depth: frame.depth + 1,
+            posInSet: index + 1,
+            setSize: children.length,
+          });
+        }
+      }
+    }
+
+    this.projectionCache = projection;
     this.visiblePathsCache = paths;
-    return paths;
+    return projection;
+  }
+
+  /** Visible paths in render order (projection-backed). */
+  private ensureVisibleCache(): string[] {
+    this.ensureProjection();
+    return this.visiblePathsCache ?? [];
   }
 
   private invalidateVisibleCache(): void {
+    this.projectionCache = null;
     this.visiblePathsCache = null;
     this.visibleIndexByPath = new Map();
   }
@@ -786,7 +1257,8 @@ export class AccountTreeController {
       !change.expansionChanged &&
       !change.selectionChanged &&
       !change.statusChanged &&
-      !change.focusChanged
+      !change.focusChanged &&
+      !change.renameChanged
     ) {
       return;
     }
@@ -825,4 +1297,56 @@ function mergeStatus(
         : existing.status,
     count: existing.count + count,
   };
+}
+
+// Rewrites one path through a move list: an exact match maps to the move's
+// destination, a descendant keeps its suffix under the new prefix. Move
+// sources are disjoint (getMovePlan normalizes ancestors/descendants away),
+// so first match wins and one pass suffices.
+function remapPathThrough(moves: readonly AccountMove[], path: string): string {
+  for (const move of moves) {
+    if (path === move.from) {
+      return move.to;
+    }
+    if (path.startsWith(`${move.from}:`)) {
+      return move.to + path.slice(move.from.length);
+    }
+  }
+  return path;
+}
+
+// Rewrites an entry's posting accounts through the move list, preserving
+// object identity when nothing changed so untouched entries never re-render.
+function remapEntry(
+  entry: LedgerEntry,
+  moves: readonly AccountMove[]
+): LedgerEntry {
+  let changed = false;
+  const postings: Posting[] = entry.postings.map((posting) => {
+    const account = remapPathThrough(moves, posting.account);
+    if (account === posting.account) {
+      return posting;
+    }
+    changed = true;
+    return { ...posting, account };
+  });
+  return changed ? { ...entry, postings } : entry;
+}
+
+// Multi-select drags move each subtree once: duplicates and paths whose
+// ancestor is also being dragged are removed (the ancestor's move carries
+// them). Selections are small, so the ancestor scan per path is fine.
+function normalizeMoveSources(paths: readonly string[]): string[] {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const path of paths) {
+    if (!seen.has(path)) {
+      seen.add(path);
+      unique.push(path);
+    }
+  }
+  return unique.filter(
+    (path) =>
+      !unique.some((other) => other !== path && path.startsWith(`${other}:`))
+  );
 }
