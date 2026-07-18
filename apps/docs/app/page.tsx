@@ -2,11 +2,11 @@ import { preloadAccountTreeHTML } from '@cynco/accounts/ssr';
 import { JournalEntry } from '@cynco/journals/react';
 import { preloadJournalEntryHTML } from '@cynco/journals/ssr';
 import { workloads } from '@cynco/ledger-test-data';
-import { Asterisk } from 'lucide-react';
 
 import { CyncoCompanySection } from '@/components/CyncoCompanySection';
 import { FeatureHeader } from '@/components/FeatureHeader';
 import { Footer } from '@/components/Footer';
+import { Footnote } from '@/components/Footnote';
 import { Header } from '@/components/Header';
 import { Hero } from '@/components/Hero';
 import { AccountTreeDemo } from '@/examples/AccountTreeDemo';
@@ -15,6 +15,7 @@ import {
   PAYROLL_ENTRY,
   UNBALANCED_ENTRY,
 } from '@/examples/entries';
+import { JournalEntryDemo } from '@/examples/JournalEntryDemo';
 import { ReconciliationDemo } from '@/examples/ReconciliationDemo';
 import { RegisterDemo } from '@/examples/RegisterDemo';
 
@@ -53,18 +54,13 @@ async function JournalEntrySection() {
           <>
             A payroll run with EPF and SOCSO splits across six postings —
             server-rendered into a declarative shadow root and hydrated in
-            place. Debits read green, credits read red, and every amount is an
-            exact integer in minor units.
+            place. Pick the role palettes for each mode, pin the scheme, or
+            toggle the posting-number gutter: every color resolves through the{' '}
+            <code>@cynco/theme</code> chain.
           </>
         }
       />
-      <div className="demo-container">
-        <JournalEntry
-          entry={PAYROLL_ENTRY}
-          options={{ showLineNumbers: true }}
-          ssrHTML={ssrHTML}
-        />
-      </div>
+      <JournalEntryDemo ssrHTML={ssrHTML} />
     </section>
   );
 }
@@ -151,11 +147,10 @@ async function UnbalancedSection() {
       <div className="demo-container">
         <JournalEntry entry={UNBALANCED_ENTRY} ssrHTML={ssrHTML} />
       </div>
-      <p className="text-muted-foreground flex items-center gap-1 text-sm">
-        <Asterisk size={14} className="opacity-50" aria-hidden="true" />
+      <Footnote>
         The cash leg above is exactly RM&nbsp;1.00 short — rendered, flagged,
         never repaired.
-      </p>
+      </Footnote>
     </section>
   );
 }

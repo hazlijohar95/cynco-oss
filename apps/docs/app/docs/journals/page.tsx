@@ -331,11 +331,13 @@ export default async function JournalsDocsPage() {
               lines on the left, book postings on the right, proposed matches as
               tinted pairs with accept / reject in a center gutter.{' '}
               <code>proposeMatches</code> is deterministic and strictly 1:1 on
-              identical amounts — it never proposes sum matches; unmatched lines
-              keep a <em>create entry</em> affordance and unmatched postings
-              read as <em>outstanding</em>. The header difference (statement
-              total − accepted book total) is integer minor-unit math and flips
-              to jade only at exactly zero.
+              identical amounts — an <em>exact</em> match shares amount,
+              currency, and date; a <em>suggested</em> match shares amount and
+              currency within <code>dateWindowDays</code>. It never proposes sum
+              matches; unmatched lines keep a <em>create entry</em> affordance
+              and unmatched postings read as <em>outstanding</em>. The header
+              difference (statement total − accepted book total) is integer
+              minor-unit math and flips to jade only at exactly zero.
             </p>
             <CodeBlock code={RECONCILIATION_API} />
             <ul>

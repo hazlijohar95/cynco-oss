@@ -1,8 +1,16 @@
 'use client';
 
-import { formatMinorUnits, type ReconciliationMatch } from '@cynco/journals';
-import { Reconciliation } from '@cynco/journals/react';
-import { useState } from 'react';
+import {
+  formatMinorUnits,
+  proposeMatches,
+  Reconciliation as ReconciliationComponent,
+  type ReconciliationMatch,
+  type ReconciliationOptions,
+} from '@cynco/journals';
+import { useJournalsInstance } from '@cynco/journals/react';
+import { CheckCheck, RotateCcw } from 'lucide-react';
+import Link from 'next/link';
+import { useRef, useState } from 'react';
 
 import {
   RECONCILIATION_ACCOUNT,
@@ -10,51 +18,149 @@ import {
   RECONCILIATION_POSTINGS,
   RECONCILIATION_STATEMENT_LINES,
 } from './reconciliation';
+import { Footnote } from '@/components/Footnote';
+import { Button } from '@/components/ui/button';
 
-// Interactive reconciliation demo: proposals come from the deterministic
-// matching engine; the readout narrates the last action. The component owns
-// the accept/reject state — the page only listens.
+// Formats the per-currency difference map from getState() as a compact
+// mono-friendly string, e.g. `−1,240.00 MYR`.
+function formatDifference(difference: Map<string, number>): string {
+  const parts: string[] = [];
+  for (const [currency, amount] of difference) {
+    parts.push(`${formatMinorUnits(amount, currency)} ${currency}`);
+  }
+  return parts.length === 0 ? '0' : parts.join(' · ');
+}
+
+// Interactive reconciliation demo built on the vanilla class through the
+// shared instance hook (the plain React wrapper exposes no imperative
+// surface, and the control bar needs acceptMatch/setOptions). The component
+// owns match state; the page listens and narrates.
 export function ReconciliationDemo() {
+  // The journals instance hook (unlike the accounts one) exposes no
+  // getInstance, so the demo captures the vanilla instance itself in
+  // create() — the control bar needs acceptMatch/getState/setOptions.
+  const instanceRef = useRef<ReconciliationComponent | null>(null);
+  const getInstance = () => instanceRef.current;
   const [readout, setReadout] = useState(
-    'Hover a matched pair to accept or reject it.'
+    'Hover a matched pair to accept or reject it, or accept every exact match at once.'
   );
 
   const describe = (verb: string, match: ReconciliationMatch) => {
+    const instance = getInstance();
     const posting = match.posting.entry.postings[match.posting.postingIndex];
     const amount =
       posting == null
         ? ''
         : ` (${formatMinorUnits(posting.amount, posting.currency, { sign: 'always' })} ${posting.currency})`;
+    const difference =
+      instance == null
+        ? ''
+        : ` — difference now ${formatDifference(instance.getState().difference)}`;
     setReadout(
-      `${verb} ${match.kind} match for ${match.posting.entry.payee ?? match.posting.entry.narration}${amount}`
+      `${verb} ${match.kind} match for ${match.posting.entry.payee ?? match.posting.entry.narration}${amount}${difference}.`
+    );
+  };
+
+  const baseOptions: ReconciliationOptions = {
+    account: RECONCILIATION_ACCOUNT,
+    periodLabel: RECONCILIATION_PERIOD,
+    statementLines: RECONCILIATION_STATEMENT_LINES,
+    postings: RECONCILIATION_POSTINGS,
+    onAccept: (match) => describe('Accepted', match),
+    onReject: (match) => describe('Rejected', match),
+    onUndo: (match) => describe('Undid', match),
+    onCreateEntry: (line) =>
+      setReadout(
+        `Create-entry requested for "${line.description}" — the component only emits the callback.`
+      ),
+  };
+
+  const { ref } = useJournalsInstance<ReconciliationComponent>({
+    create(container) {
+      const instance = new ReconciliationComponent(baseOptions, true);
+      instance.hydrate({ container });
+      instanceRef.current = instance;
+      return instance;
+    },
+    update(instance) {
+      // Same statementLines/postings references and no `matches` key, so
+      // in-flight accept/reject state survives every React render.
+      instance.setOptions(baseOptions);
+    },
+    destroy(instance) {
+      instance.cleanUp();
+      instanceRef.current = null;
+    },
+  });
+
+  const acceptExactMatches = () => {
+    const instance = getInstance();
+    if (instance == null) return;
+    const exact = instance
+      .getState()
+      .matches.filter(
+        (match) => match.kind === 'exact' && match.status === 'proposed'
+      );
+    for (const match of exact) {
+      instance.acceptMatch(match.id);
+    }
+    const { difference } = instance.getState();
+    setReadout(
+      exact.length === 0
+        ? 'No proposed exact matches left to accept.'
+        : `Accepted ${exact.length} exact match${exact.length === 1 ? '' : 'es'} — difference now ${formatDifference(difference)}.`
+    );
+  };
+
+  const reset = () => {
+    const instance = getInstance();
+    if (instance == null) return;
+    // Passing an explicit match list re-derives state; re-proposing from
+    // the same data returns every pair to `proposed`.
+    instance.setOptions({
+      ...baseOptions,
+      matches: proposeMatches(
+        RECONCILIATION_STATEMENT_LINES,
+        RECONCILIATION_POSTINGS
+      ),
+    });
+    setReadout(
+      `Reset — difference back to ${formatDifference(instance.getState().difference)}.`
     );
   };
 
   return (
-    <div className="space-y-2">
-      <div className="demo-container">
-        <Reconciliation
-          options={{
-            account: RECONCILIATION_ACCOUNT,
-            periodLabel: RECONCILIATION_PERIOD,
-            statementLines: RECONCILIATION_STATEMENT_LINES,
-            postings: RECONCILIATION_POSTINGS,
-            onAccept: (match) => describe('Accepted', match),
-            onReject: (match) => describe('Rejected', match),
-            onUndo: (match) => describe('Undid', match),
-            onCreateEntry: (line) =>
-              setReadout(
-                `Create-entry requested for "${line.description}" — the component only emits the callback.`
-              ),
-          }}
-        />
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3 md:items-center">
+        <Button
+          variant="ghost"
+          className="text-muted-foreground hover:text-foreground font-normal"
+          onClick={acceptExactMatches}
+        >
+          <CheckCheck size={16} />
+          Accept exact matches
+        </Button>
+        <Button
+          variant="ghost"
+          className="text-muted-foreground hover:text-foreground font-normal"
+          onClick={reset}
+        >
+          <RotateCcw size={16} />
+          Reset
+        </Button>
       </div>
-      <p
-        className="text-muted-foreground font-mono text-xs"
-        data-reconciliation-readout
-      >
-        {readout}
-      </p>
+
+      <div className="demo-container">
+        <journals-container ref={ref} />
+      </div>
+      <Footnote>
+        <span data-reconciliation-readout>{readout}</span> Matching is
+        deterministic and 1:1 —{' '}
+        <Link href="/docs/journals#reconciliation" className="footnote-link">
+          read the matching engine docs
+        </Link>
+        .
+      </Footnote>
     </div>
   );
 }

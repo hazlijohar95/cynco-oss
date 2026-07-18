@@ -1,47 +1,120 @@
 'use client';
 
+import type { RegisterDensity } from '@cynco/journals';
 import { Register, type RegisterRowData } from '@cynco/journals/react';
 import { EntryStore } from '@cynco/ledger-store';
-import { WORKLOAD_ENTRY_COUNTS, workloads } from '@cynco/ledger-test-data';
+import {
+  WORKLOAD_ENTRY_COUNTS,
+  type WorkloadName,
+  workloads,
+} from '@cynco/ledger-test-data';
+import {
+  AlignJustify,
+  Check,
+  ChevronDown,
+  Database,
+  Rows3,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { buildRegisterRows } from './buildRegisterRows';
+import { Footnote } from '@/components/Footnote';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const REGISTER_ACCOUNT = 'Assets:Current:Cash-Maybank';
 
-// Virtualized register fed by the deterministic `medium` workload (10,000
-// entries). Generation and store indexing happen client-side in an effect —
-// the static HTML paints instantly with a fixed-height placeholder and the
-// rows land a few frames later, keeping first paint clean.
+/** The two seeded workloads offered by the picker. */
+const REGISTER_WORKLOADS: readonly WorkloadName[] = ['small', 'medium'];
+
+function workloadLabel(name: WorkloadName): string {
+  return `${WORKLOAD_ENTRY_COUNTS[name].toLocaleString('en-US')} entries`;
+}
+
+// Virtualized register with a density segmented control and a workload
+// picker. Generation and store indexing happen client-side in an effect —
+// the static HTML paints instantly with a fixed-height placeholder. Density
+// affects the fixed row height the window math depends on, so the Register
+// remounts (via key) rather than re-rendering in place.
 export function RegisterDemo() {
+  const [workload, setWorkload] = useState<WorkloadName>('medium');
+  const [density, setDensity] = useState<RegisterDensity>('comfortable');
   const [rows, setRows] = useState<RegisterRowData[] | null>(null);
 
   useEffect(() => {
-    const store = new EntryStore(workloads.medium());
+    setRows(null);
+    const store = new EntryStore(workloads[workload]());
     setRows(buildRegisterRows(store, REGISTER_ACCOUNT));
-  }, []);
+  }, [workload]);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3 md:items-center">
+        <ButtonGroup
+          value={density}
+          onValueChange={(value) => setDensity(value as RegisterDensity)}
+        >
+          <ButtonGroupItem value="comfortable">
+            <Rows3 size={16} />
+            Comfortable
+          </ButtonGroupItem>
+          <ButtonGroupItem value="compact">
+            <AlignJustify size={16} />
+            Compact
+          </ButtonGroupItem>
+        </ButtonGroup>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="min-w-[180px] justify-start">
+              <Database size={16} />
+              {workloadLabel(workload)}
+              <ChevronDown
+                size={14}
+                className="text-muted-foreground ml-auto"
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {REGISTER_WORKLOADS.map((name) => (
+              <DropdownMenuItem
+                key={name}
+                selected={workload === name}
+                onClick={() => setWorkload(name)}
+              >
+                {workloadLabel(name)}
+                {workload === name && <Check size={14} className="ml-auto" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       <div className="demo-container">
         {rows == null ? (
           <div className="text-muted-foreground flex h-[480px] items-center justify-center font-mono text-[13px]">
-            Generating {WORKLOAD_ENTRY_COUNTS.medium.toLocaleString('en-US')}{' '}
-            entries…
+            Generating {workloadLabel(workload)}…
           </div>
         ) : (
           <Register
+            key={`${workload}-${density}`}
             rows={rows}
-            options={{ account: REGISTER_ACCOUNT, density: 'comfortable' }}
+            options={{ account: REGISTER_ACCOUNT, density }}
             style={{ height: 480 }}
           />
         )}
       </div>
-      <p className="text-muted-foreground font-mono text-xs">
-        {WORKLOAD_ENTRY_COUNTS.medium.toLocaleString('en-US')} entries ·{' '}
+      <Footnote>
+        {workloadLabel(workload)} ·{' '}
         {rows == null ? '…' : rows.length.toLocaleString('en-US')} register rows
-        · seeded fixture
-      </p>
+        · a seeded fixture, so every visit renders byte-identical data.
+      </Footnote>
     </div>
   );
 }

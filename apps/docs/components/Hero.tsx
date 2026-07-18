@@ -52,13 +52,22 @@ export function Hero() {
       <LedgerGlyph />
 
       <h1 className="text-4xl font-semibold tracking-tight text-balance md:text-5xl lg:text-6xl">
-        Beautifully engineered ledger primitives.
+        Beautifully engineered ledger primitives
       </h1>
       <p className="text-md text-muted-foreground mb-2 max-w-[740px] text-pretty md:text-lg lg:text-xl">
         <code>@cynco/journals</code> renders journal entries and virtualized
         account registers. <code>@cynco/accounts</code> renders the chart of
         accounts. Vanilla core, React adapters, SSR built in — and every amount
-        is an exact integer. Made with love by Cynco Computing.
+        is an exact integer. Made with love by{' '}
+        <Link
+          target="_blank"
+          rel="noopener noreferrer"
+          href="https://cynco.dev"
+          className="hero-link"
+        >
+          Cynco Computing
+        </Link>
+        .
       </p>
 
       <div className="flex flex-col gap-3 min-[460px]:flex-row min-[460px]:items-center">

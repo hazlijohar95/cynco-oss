@@ -165,6 +165,35 @@
   @apply overflow-hidden rounded-lg border border-transparent dark:border-neutral-800;
 }
 
+/* One-cell grid that stacks children on top of each other — used to overlay
+ * a switch knob onto its pill button while keeping one hit target. */
+.gridstack {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+
+  > * {
+    grid-column-start: 1;
+    grid-row-start: 1;
+  }
+}
+
+/* Hero/footnote links: semibold with a hairline underline offset a quarter
+ * em, the decoration mixed toward transparent until hover. */
+.hero-link,
+.footnote-link {
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+  text-decoration-color: color-mix(in lab, currentcolor, transparent);
+  transition: text-decoration-color 150ms ease;
+}
+
+.hero-link:hover,
+.footnote-link:hover {
+  text-decoration-color: currentcolor;
+}
+
 [data-slot='header'] {
   @apply border-b border-transparent transition-[border-color] duration-200;
 }

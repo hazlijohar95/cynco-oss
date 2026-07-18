@@ -1,9 +1,12 @@
+import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { GITHUB_URL } from './Header';
 
 const linkClass =
   'text-muted-foreground hover:text-foreground text-sm transition-colors';
+
+const externalLinkClass = `${linkClass} inline-flex items-center gap-0.5`;
 
 export function Footer() {
   return (
@@ -45,17 +48,19 @@ export function Footer() {
               href={GITHUB_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className={linkClass}
+              className={externalLinkClass}
             >
               GitHub
+              <ArrowUpRight size={12} aria-hidden="true" />
             </Link>
             <Link
               href="https://cynco.dev"
               target="_blank"
               rel="noopener noreferrer"
-              className={linkClass}
+              className={externalLinkClass}
             >
               Cynco
+              <ArrowUpRight size={12} aria-hidden="true" />
             </Link>
           </nav>
         </div>

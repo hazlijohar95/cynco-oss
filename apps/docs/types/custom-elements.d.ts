@@ -11,6 +11,10 @@ declare module 'react' {
         React.HTMLAttributes<HTMLElement>,
         HTMLElement
       >;
+      'journals-container': React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement>,
+        HTMLElement
+      >;
     }
   }
 }
