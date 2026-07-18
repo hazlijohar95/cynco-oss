@@ -8,7 +8,10 @@ export function CyncoCompanySection() {
   return (
     <section className="mt-8 space-y-6 border-y py-16">
       <div className="space-y-3">
-        <h2 className="text-2xl font-medium">With love from Cynco Computing</h2>
+        <h2 className="text-2xl font-medium">With love from Cynco</h2>
+        <p className="text-muted-foreground text-sm">
+          Modern accounting infrastructure.
+        </p>
         <p className="text-muted-foreground max-w-2xl">
           We build accounting infrastructure the way systems engineers build
           databases: integer minor units end to end, balanced-by-construction

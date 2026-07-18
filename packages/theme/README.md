@@ -1,6 +1,7 @@
 # @cynco/theme
 
-Cynco theme: color palettes and semantic roles for ledger UIs. Consumed by
+Cynco theme: color palettes and semantic roles for ledger UIs, from
+[Cynco](https://cynco.dev) — modern accounting infrastructure. Consumed by
 `@cynco/journals` and `@cynco/accounts` as their default theme layer.
 
 Palette ramps are derived from the MIT-licensed

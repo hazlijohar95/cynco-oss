@@ -13,7 +13,7 @@ export function Footer() {
     <footer className="pt-12 pb-12">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-6 md:justify-between">
         <div className="text-muted-foreground col-span-2 text-sm md:col-span-1">
-          &copy; {new Date().getFullYear()} Cynco Computing
+          &copy; {new Date().getFullYear()} Cynco
         </div>
         <div className="hidden md:col-span-2 md:block" />
         <div>

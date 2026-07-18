@@ -194,6 +194,81 @@
   text-decoration-color: currentcolor;
 }
 
+/* Reconciliation legend swatches: page-side replicas of the tints the
+ * journals stylesheet derives inside its shadow root. Each color reads the
+ * same override → theme → default chain the component uses, so palette
+ * overrides and theme roles recolor the legend too. */
+.recon-swatch-match {
+  background-color: light-dark(
+    color-mix(
+      in lab,
+      var(--recon-swatch-bg) 92%,
+      var(--recon-swatch-match-color)
+    ),
+    color-mix(
+      in lab,
+      var(--recon-swatch-bg) 84%,
+      var(--recon-swatch-match-color)
+    )
+  );
+}
+
+.recon-swatch-accepted {
+  background-color: light-dark(
+    color-mix(
+      in lab,
+      var(--recon-swatch-bg) 93%,
+      var(--recon-swatch-reconciled-color)
+    ),
+    color-mix(
+      in lab,
+      var(--recon-swatch-bg) 86%,
+      var(--recon-swatch-reconciled-color)
+    )
+  );
+}
+
+.recon-swatch-plain {
+  background-color: var(--recon-swatch-bg);
+}
+
+/* The 45° buffer pinstripes on the component's 8px tile, scaled to read at
+ * swatch size. */
+.recon-swatch-pinstripe {
+  background-color: var(--recon-swatch-bg);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent calc(3px * 1.414),
+    var(--recon-swatch-buffer) calc(3px * 1.414),
+    var(--recon-swatch-buffer) calc(4px * 1.414)
+  );
+  background-size: 8px 8px;
+}
+
+.recon-swatch-match,
+.recon-swatch-accepted,
+.recon-swatch-plain,
+.recon-swatch-pinstripe {
+  --recon-swatch-bg: var(
+    --journals-bg-override,
+    var(--journals-theme-bg-editor, light-dark(#ffffff, #0a0a0a))
+  );
+  --recon-swatch-match-color: var(
+    --journals-match-override,
+    var(--journals-theme-states-match, light-dark(#693acf, #7b43f8))
+  );
+  --recon-swatch-reconciled-color: var(
+    --journals-reconciled-override,
+    var(--journals-theme-ledger-reconciled, light-dark(#18a46c, #60d199))
+  );
+  --recon-swatch-buffer: color-mix(
+    in lab,
+    var(--recon-swatch-bg) 92%,
+    light-dark(black, white)
+  );
+}
+
 [data-slot='header'] {
   @apply border-b border-transparent transition-[border-color] duration-200;
 }

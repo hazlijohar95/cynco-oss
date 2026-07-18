@@ -9,21 +9,28 @@ import { Footer } from '@/components/Footer';
 import { Footnote } from '@/components/Footnote';
 import { Header } from '@/components/Header';
 import { Hero } from '@/components/Hero';
+import { AccountTreeComparison } from '@/examples/AccountTreeComparison';
 import { AccountTreeDemo } from '@/examples/AccountTreeDemo';
 import {
   ACCOUNT_TREE_DEMO_ID,
   PAYROLL_ENTRY,
   UNBALANCED_ENTRY,
+  WORKSPACE_TREE_ID,
+  WORKSPACE_TREE_OPTIONS,
 } from '@/examples/entries';
 import { JournalEntryDemo } from '@/examples/JournalEntryDemo';
 import { ReconciliationDemo } from '@/examples/ReconciliationDemo';
+import { ReconciliationLegend } from '@/examples/ReconciliationLegend';
+import { RegisterComparison } from '@/examples/RegisterComparison';
 import { RegisterDemo } from '@/examples/RegisterDemo';
+import { WorkspaceDemo } from '@/examples/WorkspaceDemo';
 
 export default function Home() {
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5">
       <Header className="-mb-[1px]" />
       <Hero />
+      <WorkspaceSection />
       <section className="space-y-12 pb-8">
         <JournalEntrySection />
         <RegisterSection />
@@ -40,6 +47,21 @@ export default function Home() {
 // Each demo is server-prerendered where the packages support it: the SSR
 // preload functions return shadow-root HTML that the React components adopt
 // during hydration without re-rendering.
+
+// The workspace centerpiece sits directly under the hero, mirroring the
+// reference placement (IDE window right after the install pill).
+async function WorkspaceSection() {
+  const ssrHTML = await preloadAccountTreeHTML({
+    id: WORKSPACE_TREE_ID,
+    entries: workloads.small(),
+    ...WORKSPACE_TREE_OPTIONS,
+  });
+  return (
+    <section className="relative mb-16 max-md:-mx-5 max-md:overflow-x-clip max-md:px-5 md:-mt-6">
+      <WorkspaceDemo ssrHTML={ssrHTML} />
+    </section>
+  );
+}
 
 async function JournalEntrySection() {
   const ssrHTML = await preloadJournalEntryHTML(PAYROLL_ENTRY, {
@@ -80,6 +102,7 @@ function RegisterSection() {
         }
       />
       <RegisterDemo />
+      <RegisterComparison />
     </section>
   );
 }
@@ -100,6 +123,7 @@ function ReconciliationSection() {
         }
       />
       <ReconciliationDemo />
+      <ReconciliationLegend />
     </section>
   );
 }
@@ -125,6 +149,7 @@ async function AccountTreeSection() {
         }
       />
       <AccountTreeDemo ssrHTML={ssrHTML} />
+      <AccountTreeComparison />
     </section>
   );
 }

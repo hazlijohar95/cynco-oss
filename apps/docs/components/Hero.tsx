@@ -65,7 +65,7 @@ export function Hero() {
           href="https://cynco.dev"
           className="hero-link"
         >
-          Cynco Computing
+          Cynco
         </Link>
         .
       </p>

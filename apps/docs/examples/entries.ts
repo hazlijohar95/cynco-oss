@@ -8,6 +8,20 @@ import type { LedgerEntry } from '@cynco/journals';
  */
 export const ACCOUNT_TREE_DEMO_ID = 'home-accounts';
 
+/**
+ * Workspace hero tree: instance id and the controller options mirrored
+ * between `preloadAccountTreeHTML` and the client hook. Shared from this
+ * plain module (not the 'use client' demo file) for the same
+ * client-reference-proxy reason as above.
+ */
+export const WORKSPACE_TREE_ID = 'workspace-tree';
+
+export const WORKSPACE_TREE_OPTIONS = {
+  currency: 'MYR',
+  density: 'compact',
+  initialExpansion: 'all',
+} as const;
+
 // Handcrafted entries for the home-page demos. All amounts are exact integer
 // minor units (sen); every entry except the deliberate imbalance balances
 // per currency.
