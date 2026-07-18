@@ -105,7 +105,7 @@ export function AccountTreeDemo({ ssrHTML }: AccountTreeDemoProps) {
             placeholder="Search accounts…"
             spellCheck={false}
             aria-label="Search accounts"
-            className="placeholder:text-muted-foreground/60 bg-secondary/50 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-56 rounded-lg border py-2 pr-3 pl-8 font-mono text-[13px] transition-[border-color,box-shadow] duration-150 outline-none focus-visible:ring-[3px] dark:border-neutral-800"
+            className="placeholder:text-muted-foreground/60 bg-secondary/50 focus-visible:outline-ring h-9 w-56 rounded-none border py-2 pr-3 pl-8 font-mono text-[13px] transition-[border-color,box-shadow] duration-150 outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
           />
         </div>
 

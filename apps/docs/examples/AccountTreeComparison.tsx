@@ -45,7 +45,7 @@ function ComparisonTree({
   }, [getInstance]);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800">
+    <div className="border-border overflow-hidden rounded-none border">
       <accounts-container ref={ref} style={{ height: PANE_HEIGHT }} />
     </div>
   );

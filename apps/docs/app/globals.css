@@ -6,6 +6,13 @@
 
 @theme {
   --font-geist: var(--font-geist-sans);
+  /* Everything type-brand is monospace, opencode style: Berkeley Mono for
+   * those who have it locally, IBM Plex Mono as the loaded webfont, Geist
+   * Mono and system monos as fallbacks. Overrides Tailwind's font-mono. */
+  --font-mono:
+    'Berkeley Mono', var(--font-plex-mono), var(--font-geist-mono),
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -17,6 +24,7 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -29,80 +37,104 @@
   --color-border-opaque: var(--border-opaque);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-text-weak: var(--text-weak);
+  --color-icon: var(--icon);
+  --color-interactive: var(--interactive);
+  --color-interactive-weak: var(--interactive-weak);
 }
 
+/* Monochrome palette ported from opencode.ai/data (the stats site): pure
+ * white page over #fafafa/#eeeeee layers in light, graphite #161616 over
+ * #242424/#303030 layers in dark, 10%-alpha hairlines, and a blue accent
+ * reserved for focus outlines. Text runs in three tiers: strong (#161616 /
+ * #fff), muted (#5c5c5c / #d4d4d4), faint (#808080 both modes). */
 :root,
 .light {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --border-opaque: var(--border);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --radius: 0.375rem;
+  --background: #ffffff;
+  --foreground: #161616;
+  --card: #fafafa;
+  --card-foreground: #161616;
+  --popover: #ffffff;
+  --popover-foreground: #161616;
+  --primary: #161616;
+  --primary-hover: #242424;
+  --primary-foreground: #ffffff;
+  --secondary: #fafafa;
+  --secondary-foreground: #161616;
+  --muted: #fafafa;
+  --muted-foreground: #5c5c5c;
+  --accent: #eeeeee;
+  --accent-foreground: #161616;
+  --destructive: #b82d35;
+  --border: #0000001a;
+  --border-opaque: #00000033;
+  --input: #0000001a;
+  --ring: #3b5cf6;
+  --text-weak: #808080;
+  --icon: #808080;
+  --interactive: #3b5cf6;
+  --interactive-weak: #f4f6ff;
 
   color-scheme: light;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --border-opaque: color-mix(in oklch, #101010 90%, oklch(1 0 0));
-  --color-border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: #161616;
+  --foreground: #ffffff;
+  --card: #242424;
+  --card-foreground: #ffffff;
+  --popover: #242424;
+  --popover-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-hover: #eeeeee;
+  --primary-foreground: #161616;
+  --secondary: #242424;
+  --secondary-foreground: #ffffff;
+  --muted: #242424;
+  --muted-foreground: #d4d4d4;
+  --accent: #303030;
+  --accent-foreground: #ffffff;
+  --destructive: #b82d35;
+  --border: #ffffff1a;
+  --border-opaque: #ffffff33;
+  --color-border: #ffffff1a;
+  --input: #ffffff1a;
+  --ring: #6c7dff;
+  --text-weak: #808080;
+  --icon: #808080;
+  --interactive: #6c7dff;
+  --interactive-weak: #1d2130;
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --border-opaque: color-mix(in oklch, #101010 90%, oklch(1 0 0));
-    --color-border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --background: #161616;
+    --foreground: #ffffff;
+    --card: #242424;
+    --card-foreground: #ffffff;
+    --popover: #242424;
+    --popover-foreground: #ffffff;
+    --primary: #ffffff;
+    --primary-hover: #eeeeee;
+    --primary-foreground: #161616;
+    --secondary: #242424;
+    --secondary-foreground: #ffffff;
+    --muted: #242424;
+    --muted-foreground: #d4d4d4;
+    --accent: #303030;
+    --accent-foreground: #ffffff;
+    --destructive: #b82d35;
+    --border: #ffffff1a;
+    --border-opaque: #ffffff33;
+    --color-border: #ffffff1a;
+    --input: #ffffff1a;
+    --ring: #6c7dff;
+    --text-weak: #808080;
+    --icon: #808080;
+    --interactive: #6c7dff;
+    --interactive-weak: #1d2130;
     color-scheme: dark;
   }
 }
@@ -111,8 +143,8 @@
   /* Ledger components render in the same mono the rest of the site uses so
    * inline code and rendered entries read as one type system. Both packages
    * resolve their font through this single hook. */
-  --journals-font-family: var(--font-geist-mono);
-  --accounts-font-family: var(--font-geist-mono);
+  --journals-font-family: var(--font-mono);
+  --accounts-font-family: var(--font-mono);
   color-scheme: light;
   -webkit-font-smoothing: antialiased;
 }
@@ -125,11 +157,10 @@
     @apply bg-background text-foreground font-geist;
   }
   code {
-    font-family: var(--font-geist-mono);
+    font-family: var(--font-mono);
     font-size: 95%;
     font-weight: 500;
     color: var(--color-primary);
-    letter-spacing: -0.025em;
   }
 
   h2,
@@ -158,11 +189,173 @@
   }
 }
 
-/* Component demo containers: hairline framing for the shadow-rooted ledger
- * components, transparent in light mode (the components draw their own
- * borders) and neutral-800 in dark. */
+/* Component demo containers, /data card treatment: square corners, hairline
+ * border, and the compact-card micro-elevation (0.5px ring + soft drops). */
 .demo-container {
-  @apply overflow-hidden rounded-lg border border-transparent dark:border-neutral-800;
+  @apply border-border overflow-hidden rounded-none border;
+  box-shadow:
+    0 0 0 0.5px #0000001f,
+    0 1px 2px -1px #00000014,
+    0 2px 4px #0000000a;
+}
+
+.dark .demo-container {
+  box-shadow:
+    0 0 0 0.5px #ffffff1f,
+    0 1px 2px -1px #00000052,
+    0 2px 4px #0000003d;
+}
+
+/* The 6px pixel-checker ornament band from /data: a layer-2 fill masked by
+ * a repeating 2x2-in-6x6 SVG square. Used under the hero headline and above
+ * the footer bottom row. */
+.pixel-pattern {
+  /* Height is set at the point of use (h-4 bands, taller hero canvas) so
+   * Tailwind utilities aren't fighting this unlayered class. */
+  overflow: hidden;
+  background: var(--accent);
+  mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 6 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0H2V2H0V0Z' fill='black'/%3E%3C/svg%3E");
+  mask-position: center top;
+  mask-repeat: repeat;
+  mask-size: 6px 6px;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 6 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0H2V2H0V0Z' fill='black'/%3E%3C/svg%3E");
+  -webkit-mask-position: center top;
+  -webkit-mask-repeat: repeat;
+  -webkit-mask-size: 6px 6px;
+}
+
+/* /data's glossy 32px buttons: square corners, 13px mono, a 0.5px shadow
+ * ring instead of a border, and a top sheen painted by ::before. The
+ * contrast variant stays graphite in both themes. */
+.btn-data {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  appearance: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-data::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 16px;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(180deg, #ffffff00 0%, #ffffff12 100%);
+}
+
+.btn-data > * {
+  position: relative;
+  z-index: 1;
+}
+
+.btn-data:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.btn-data-contrast {
+  color: #ffffff;
+  background: #242424;
+  box-shadow:
+    0 0 0 0.5px #3a3a3a,
+    0 1px 1.5px 0 #00000033,
+    inset 0 -1px 2px 0 #0000000f,
+    inset 0 1px 2px 0 #ffffff24;
+}
+
+.btn-data-contrast:hover {
+  background: #303030;
+}
+
+.btn-data-neutral {
+  color: var(--foreground);
+  background: var(--background);
+  box-shadow:
+    0 0 0 0.5px #00000024,
+    0 1px 1.5px 0 #0000001a;
+}
+
+.btn-data-neutral:hover {
+  background: var(--secondary);
+}
+
+.dark .btn-data-neutral {
+  box-shadow:
+    0 0 0 0.5px #ffffff24,
+    0 1px 1.5px 0 #00000033;
+}
+
+.btn-data-neutral span {
+  color: var(--muted-foreground);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* /data's footer theme toggle: a layer-2 strip of 24x20 icon buttons where
+ * the active option gets the page background and a micro shadow ring. */
+.theme-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 1px;
+  background: var(--accent);
+}
+
+.theme-toggle-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  appearance: none;
+  background: transparent;
+  color: var(--text-weak);
+  cursor: pointer;
+}
+
+.theme-toggle-option:hover {
+  color: var(--foreground);
+}
+
+.theme-toggle-option:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.theme-toggle-option[aria-pressed='true'] {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow:
+    0 0 0 0.5px #0000001f,
+    0 1px 2px -1px #00000014,
+    0 2px 4px 0 #0000000a;
+}
+
+.dark .theme-toggle-option[aria-pressed='true'] {
+  box-shadow:
+    0 0 0 0.5px #ffffff1f,
+    0 1px 2px -1px #00000052,
+    0 2px 4px 0 #0000003d;
 }
 
 /* One-cell grid that stacks children on top of each other — used to overlay
@@ -269,19 +462,12 @@
   );
 }
 
-[data-slot='header'] {
-  @apply border-b border-transparent transition-[border-color] duration-200;
-}
-[data-slot='header'].is-stuck {
-  @apply border-foreground/10;
-}
-
 /* Shared mobile popover surface (docs sidebar, header menu) */
 .mobile-popover {
   @apply bg-background fixed top-16 right-4 left-4 z-[60];
   @apply max-h-[80dvh] overflow-y-auto;
   @apply -translate-y-2;
-  @apply rounded-xl border border-[rgb(0_0_0_/_0.15)] bg-clip-padding p-4 dark:border-[rgb(255_255_255_/_0.1)];
+  @apply border-border-opaque rounded-xl border bg-clip-padding p-4;
   @apply opacity-0 shadow-2xl;
   @apply pointer-events-none transition-all duration-200 ease-out;
   @apply [scrollbar-color:transparent_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin];

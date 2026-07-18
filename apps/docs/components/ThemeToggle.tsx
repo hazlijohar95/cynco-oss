@@ -12,7 +12,7 @@ type ResolvedTheme = 'light' | 'dark';
 // layout's pre-paint bootstrap script (which can't import this module).
 const MODE_THEME_COLOR: Record<ResolvedTheme, string> = {
   light: '#ffffff',
-  dark: '#0a0a0a',
+  dark: '#161616',
 };
 
 function readResolvedTheme(): ResolvedTheme {

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Geist, Geist_Mono, IBM_Plex_Mono } from 'next/font/google';
 
 import './globals.css';
 
@@ -13,13 +13,22 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
+// The brand monospace (opencode-style lander type). Berkeley Mono is listed
+// first in the CSS stack for users who have it installed; Plex Mono is the
+// webfont everyone else gets.
+const plexMono = IBM_Plex_Mono({
+  variable: '--font-plex-mono',
+  weight: ['400', '500', '600', '700'],
+  subsets: ['latin'],
+});
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   userScalable: false,
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
+    { media: '(prefers-color-scheme: dark)', color: '#161616' },
   ],
 };
 
@@ -69,7 +78,7 @@ const themeBootstrapScript = `(${String(function applyInitialTheme() {
     }
     themeColorMeta.setAttribute(
       'content',
-      resolvedTheme === 'dark' ? '#0a0a0a' : '#ffffff'
+      resolvedTheme === 'dark' ? '#161616' : '#ffffff'
     );
   } catch {
     // Ignore storage/media failures and let CSS defaults apply.
@@ -85,7 +94,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable}`}
+      className={`${geistSans.variable} ${geistMono.variable} ${plexMono.variable}`}
     >
       <head>
         <script

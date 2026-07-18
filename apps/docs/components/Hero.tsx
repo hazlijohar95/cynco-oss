@@ -1,39 +1,54 @@
 'use client';
 
-import { BookOpen, Check, Copy } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
 import journalsPackageJson from '../../../packages/journals/package.json';
-import { Button } from '@/components/ui/button';
+import { GITHUB_URL } from './Header';
 
-const INSTALL_COMMAND = 'pnpm add @cynco/journals';
+const INSTALL_COMMAND = 'pnpm add @cynco/journals @cynco/accounts';
 
-// Two-tone ledger glyph: a solid journal page beside a 40%-opacity account
-// column, echoing the debit/credit pairing the packages render.
-function LedgerGlyph() {
+// Copy affordance for the install chip: faint copy glyph that swaps to the
+// /data success green while the copied state is live.
+function CopyStatus({ copied }: { copied: boolean }) {
+  if (copied) {
+    return (
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#198b43"
+        strokeWidth="2"
+        strokeLinecap="square"
+        aria-hidden="true"
+        className="shrink-0"
+      >
+        <path d="M5 12.5L10 17.5L19 7" />
+      </svg>
+    );
+  }
   return (
     <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="64"
-      height="32"
-      viewBox="0 0 32 16"
-      className="mb-2"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="square"
       aria-hidden="true"
+      className="text-text-weak shrink-0"
     >
-      <path
-        fill="currentcolor"
-        d="M15.5 16H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3h12.5v16ZM5 4a1 1 0 0 0 0 2h5.5a1 1 0 1 0 0-2H5Zm0 3.5a1 1 0 0 0 0 2h5.5a1 1 0 1 0 0-2H5ZM5 11a1 1 0 1 0 0 2h3a1 1 0 1 0 0-2H5Z"
-      />
-      <path
-        fill="currentcolor"
-        d="M29 0a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H16.5V0H29Zm-8.5 4a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V5a1 1 0 0 0-1-1Zm7 3a1 1 0 0 0-1 1v3a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1Zm-3.5-1.5a1 1 0 0 0-1 1V11a1 1 0 1 0 2 0V6.5a1 1 0 0 0-1-1Z"
-        opacity=".4"
-      />
+      <rect x="9" y="9" width="11" height="11" />
+      <path d="M5 15H4V4h11v1" />
     </svg>
   );
 }
 
+// Hero in the opencode /data style: an oversized headline and right-aligned
+// summary knocked out of a 6px pixel-pattern band, followed by a layer-2
+// install chip and the glossy contrast/neutral button pair.
 export function Hero() {
   const [copied, setCopied] = useState(false);
 
@@ -41,61 +56,64 @@ export function Hero() {
     try {
       await navigator.clipboard.writeText(INSTALL_COMMAND);
       setCopied(true);
-      setTimeout(() => setCopied(false), 5000);
+      setTimeout(() => setCopied(false), 1500);
     } catch (err) {
       console.error('Failed to copy to clipboard', err);
     }
   };
 
   return (
-    <section className="flex max-w-3xl flex-col gap-3 pt-20 pb-10 md:pb-20 lg:max-w-4xl">
-      <LedgerGlyph />
+    <section className="flex flex-col gap-6 px-6 pt-20 pb-10 md:gap-5 md:px-8 md:pt-24 md:pb-8 lg:px-10">
+      {/* The knockout canvas: on desktop the h1 (top-left) and summary
+       * (bottom-right) sit on page-background plates layered over the
+       * centered pattern band, exactly like the /data hero. */}
+      <div className="flex flex-col gap-6 md:relative md:block md:h-[232px] md:overflow-hidden">
+        <h1 className="text-foreground order-1 text-[38px] leading-none font-medium md:absolute md:top-0 md:left-0 md:z-[1] md:w-max md:max-w-full md:bg-[var(--background)] md:pr-3 md:pb-3 md:text-[64px] md:whitespace-nowrap">
+          Ledger primitives
+        </h1>
+        <div
+          aria-hidden="true"
+          className="pixel-pattern order-2 w-full max-md:h-4 md:absolute md:top-1/2 md:left-1/2 md:h-[351px] md:w-[1280px] md:-translate-x-1/2 md:-translate-y-1/2"
+        />
+        <p className="text-muted-foreground order-3 text-base leading-normal md:absolute md:right-0 md:bottom-0 md:z-[1] md:w-[min(563px,100%)] md:bg-[var(--background)] md:pt-3 md:pl-4 md:text-right">
+          Beautifully engineered: <code>@cynco/journals</code> renders journal
+          entries and virtualized registers, <code>@cynco/accounts</code> the
+          chart of accounts. Vanilla core, React adapters, SSR built in — every
+          amount an exact integer.
+        </p>
+      </div>
 
-      <h1 className="text-4xl font-semibold tracking-tight text-balance md:text-5xl lg:text-6xl">
-        Beautifully engineered ledger primitives
-      </h1>
-      <p className="text-md text-muted-foreground mb-2 max-w-[740px] text-pretty md:text-lg lg:text-xl">
-        <code>@cynco/journals</code> renders journal entries and virtualized
-        account registers. <code>@cynco/accounts</code> renders the chart of
-        accounts. Vanilla core, React adapters, SSR built in — and every amount
-        is an exact integer. Made with love by{' '}
-        <Link
+      {/* Install chip, styled like the /data hero-meta ticker chip. */}
+      <button
+        onClick={() => void copyToClipboard()}
+        title="Copy to clipboard"
+        className="bg-accent text-muted-foreground flex h-6 w-fit max-w-full cursor-pointer items-center gap-2 overflow-hidden border-0 px-2 text-[13px] leading-[1.1] font-medium whitespace-nowrap"
+      >
+        <span className="text-text-weak" aria-hidden="true">
+          $
+        </span>
+        <span className="overflow-hidden text-ellipsis">{INSTALL_COMMAND}</span>
+        <CopyStatus copied={copied} />
+      </button>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href="/docs/journals" className="btn-data btn-data-contrast">
+          <strong>Read the docs</strong>
+        </Link>
+        <a
+          href={GITHUB_URL}
           target="_blank"
           rel="noopener noreferrer"
-          href="https://cynco.dev"
-          className="hero-link"
+          className="btn-data btn-data-neutral"
         >
-          Cynco
-        </Link>
-        .
-      </p>
-
-      <div className="flex flex-col gap-3 min-[460px]:flex-row min-[460px]:items-center">
-        <button
-          onClick={() => void copyToClipboard()}
-          title="Copy to clipboard"
-          className="inline-flex items-center gap-4 rounded-lg bg-neutral-900 px-5 py-3 font-mono text-sm tracking-tight text-white transition-colors hover:bg-neutral-800 md:text-base dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
-        >
-          <div className="size-4 min-[460px]:hidden" />
-          <span className="mx-auto text-[95%] min-[460px]:mx-0">
-            {INSTALL_COMMAND}
-          </span>
-          {copied ? <Check size={16} /> : <Copy size={16} />}
-        </button>
-        <Button
-          variant="secondary"
-          asChild
-          size="xl"
-          className="h-11 rounded-lg px-5 text-sm md:h-12 md:text-base"
-        >
-          <Link href="/docs/journals">
-            <BookOpen size={16} />
-            Documentation
-          </Link>
-        </Button>
+          <strong>GitHub</strong>
+          <span>[MIT]</span>
+        </a>
       </div>
-      <p className="text-muted-foreground mt-2 text-sm">
-        Currently v{journalsPackageJson.version}
+
+      <p className="text-text-weak text-[11px] leading-none">
+        v{journalsPackageJson.version} · vanilla core · React adapters · SSR
+        built in
       </p>
     </section>
   );

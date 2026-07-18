@@ -25,21 +25,25 @@ import { RegisterComparison } from '@/examples/RegisterComparison';
 import { RegisterDemo } from '@/examples/RegisterDemo';
 import { WorkspaceDemo } from '@/examples/WorkspaceDemo';
 
+// The /data section rhythm: every content section is a hairline-topped slab
+// with 6rem vertical padding inside a hairline-framed 80rem container.
+const SECTION = 'border-border border-t px-6 py-16 md:px-10 md:py-24 lg:px-12';
+
 export default function Home() {
   return (
-    <div className="mx-auto min-h-screen max-w-5xl px-5">
-      <Header className="-mb-[1px]" />
-      <Hero />
-      <WorkspaceSection />
-      <section className="space-y-12 pb-8">
+    <div className="flex min-h-screen flex-col font-mono">
+      <div className="border-border mx-auto w-full max-w-[80rem] flex-1 min-[81rem]:border-x">
+        <Header className="mx-0 px-6 md:px-10 lg:px-12" />
+        <Hero />
+        <WorkspaceSection />
         <JournalEntrySection />
         <RegisterSection />
         <ReconciliationSection />
         <AccountTreeSection />
         <UnbalancedSection />
-      </section>
-      <CyncoCompanySection />
-      <Footer />
+        <CyncoCompanySection />
+        <Footer />
+      </div>
     </div>
   );
 }
@@ -49,7 +53,7 @@ export default function Home() {
 // during hydration without re-rendering.
 
 // The workspace centerpiece sits directly under the hero, mirroring the
-// reference placement (IDE window right after the install pill).
+// reference placement (the first chart section right after the hero).
 async function WorkspaceSection() {
   const ssrHTML = await preloadAccountTreeHTML({
     id: WORKSPACE_TREE_ID,
@@ -57,7 +61,9 @@ async function WorkspaceSection() {
     ...WORKSPACE_TREE_OPTIONS,
   });
   return (
-    <section className="relative mb-16 max-md:-mx-5 max-md:overflow-x-clip max-md:px-5 md:-mt-6">
+    <section
+      className={`${SECTION} relative py-12 max-md:overflow-x-clip md:py-16`}
+    >
       <WorkspaceDemo ssrHTML={ssrHTML} />
     </section>
   );
@@ -68,7 +74,7 @@ async function JournalEntrySection() {
     showLineNumbers: true,
   });
   return (
-    <section className="space-y-4">
+    <section className={`${SECTION} space-y-8`}>
       <FeatureHeader
         id="journal-entries"
         title="Journal entries, rendered properly"
@@ -89,7 +95,7 @@ async function JournalEntrySection() {
 
 function RegisterSection() {
   return (
-    <section className="space-y-4">
+    <section className={`${SECTION} space-y-8`}>
       <FeatureHeader
         id="virtualized-register"
         title="A register that scales"
@@ -109,7 +115,7 @@ function RegisterSection() {
 
 function ReconciliationSection() {
   return (
-    <section className="space-y-4">
+    <section className={`${SECTION} space-y-8`}>
       <FeatureHeader
         id="reconciliation"
         title="Reconciliation as conflict resolution"
@@ -136,7 +142,7 @@ async function AccountTreeSection() {
     initialExpansion: 'top-level',
   });
   return (
-    <section className="space-y-4">
+    <section className={`${SECTION} space-y-8`}>
       <FeatureHeader
         id="chart-of-accounts"
         title="The chart of accounts as a tree"
@@ -157,7 +163,7 @@ async function AccountTreeSection() {
 async function UnbalancedSection() {
   const ssrHTML = await preloadJournalEntryHTML(UNBALANCED_ENTRY);
   return (
-    <section className="space-y-4">
+    <section className={`${SECTION} space-y-8`}>
       <FeatureHeader
         id="unbalanced-entries"
         title="Honest about imbalance"
