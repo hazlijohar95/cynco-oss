@@ -7,6 +7,8 @@ pnpm-debug.log*
 node_modules
 dist
 .next
+# Next static export (Cloudflare deploy artifact)
+apps/docs/out
 dist-ssr
 *.local
 tsconfig.tsbuildinfo
