@@ -119,7 +119,7 @@ const THEMING_CHAIN = `
 
 const THEMING_OVERRIDE = `
 accounts-container {
-  --accounts-font-family: var(--font-geist-mono);
+  --accounts-font-family: var(--font-mono);
   --accounts-accent-override: #009fff;
   --accounts-row-height-override: 28px;
   --accounts-status-unreconciled-override: #d5a910;

@@ -3,7 +3,7 @@
 import { Menu } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from './ui/button';
@@ -69,9 +69,36 @@ export interface HeaderProps {
 // Sticky site header in the opencode /data style: brand glyph + wordmark on
 // the left, 13px section nav in the middle, glossy neutral/contrast button
 // pair plus the theme toggle on the right, all over a hairline bottom
-// border on the page background.
+// border on the page background. The mobile menu closes on Escape and on
+// pointer-down outside itself.
 export function Header({ className }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    // The toggle button is excluded so its own click handler owns the flip
+    // (otherwise pointerdown-close + click-toggle would reopen the menu).
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target) === true) return;
+      if (menuButtonRef.current?.contains(target) === true) return;
+      setMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [menuOpen]);
 
   return (
     <header
@@ -81,6 +108,12 @@ export function Header({ className }: HeaderProps) {
         className
       )}
     >
+      <a
+        href="#main"
+        className="focus-visible:outline-ring focus-visible:bg-background sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:px-3 focus-visible:py-2 focus-visible:text-sm focus-visible:outline-2"
+      >
+        Skip to content
+      </a>
       <Link
         href="/"
         className="text-foreground flex flex-none items-center gap-2.5"
@@ -101,26 +134,30 @@ export function Header({ className }: HeaderProps) {
       </nav>
 
       <div className="ml-auto flex flex-none items-center gap-2 md:ml-0">
-        <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-data btn-data-neutral hidden sm:inline-flex"
-        >
-          <strong>GitHub</strong>
-          <span>[↗]</span>
-        </a>
-        <Link
-          href="/docs/journals"
-          className="btn-data btn-data-contrast hidden sm:inline-flex"
-        >
-          <strong>Get started</strong>
-        </Link>
+        {/* Wrapper (not `hidden` on the buttons themselves) because the
+         * unlayered .btn-data display rule outranks layered utilities. */}
+        <div className="hidden items-center gap-2 sm:flex">
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-data btn-data-neutral"
+          >
+            <strong>GitHub</strong>
+            <span>[↗]</span>
+          </a>
+          <Link href="/docs/journals" className="btn-data btn-data-contrast">
+            <strong>Get started</strong>
+          </Link>
+        </div>
         <ThemeToggle />
         <Button
+          ref={menuButtonRef}
           variant="ghost"
           size="icon"
-          aria-label="Open menu"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          aria-controls="site-mobile-menu"
           className="md:hidden"
           onClick={() => setMenuOpen((open) => !open)}
         >
@@ -129,6 +166,8 @@ export function Header({ className }: HeaderProps) {
       </div>
 
       <nav
+        id="site-mobile-menu"
+        ref={menuRef}
         className={cn('mobile-popover md:hidden', menuOpen && 'is-open')}
         onClick={() => setMenuOpen(false)}
       >

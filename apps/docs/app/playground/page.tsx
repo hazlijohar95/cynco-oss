@@ -15,7 +15,7 @@ export default function PlaygroundPage() {
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5">
       <Header />
-      <main className="py-8">
+      <main id="main" className="py-8">
         <PlaygroundClient />
       </main>
       <Footer />

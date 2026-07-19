@@ -10,9 +10,8 @@
    * those who have it locally, IBM Plex Mono as the loaded webfont, Geist
    * Mono and system monos as fallbacks. Overrides Tailwind's font-mono. */
   --font-mono:
-    'Berkeley Mono', var(--font-plex-mono), var(--font-geist-mono),
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-    'Courier New', monospace;
+    'Berkeley Mono', var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo,
+    Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -38,115 +37,71 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-text-weak: var(--text-weak);
-  --color-icon: var(--icon);
-  --color-interactive: var(--interactive);
-  --color-interactive-weak: var(--interactive-weak);
+  --color-success: var(--success);
 }
 
 /* Monochrome palette ported from opencode.ai/data (the stats site): pure
  * white page over #fafafa/#eeeeee layers in light, graphite #161616 over
  * #242424/#303030 layers in dark, 10%-alpha hairlines, and a blue accent
- * reserved for focus outlines. Text runs in three tiers: strong (#161616 /
- * #fff), muted (#5c5c5c / #d4d4d4), faint (#808080 both modes). */
-:root,
-.light {
-  --radius: 0.375rem;
-  --background: #ffffff;
-  --foreground: #161616;
-  --card: #fafafa;
-  --card-foreground: #161616;
-  --popover: #ffffff;
-  --popover-foreground: #161616;
-  --primary: #161616;
-  --primary-hover: #242424;
-  --primary-foreground: #ffffff;
-  --secondary: #fafafa;
-  --secondary-foreground: #161616;
-  --muted: #fafafa;
-  --muted-foreground: #5c5c5c;
-  --accent: #eeeeee;
-  --accent-foreground: #161616;
-  --destructive: #b82d35;
-  --border: #0000001a;
-  --border-opaque: #00000033;
-  --input: #0000001a;
-  --ring: #3b5cf6;
-  --text-weak: #808080;
-  --icon: #808080;
-  --interactive: #3b5cf6;
-  --interactive-weak: #f4f6ff;
-
-  color-scheme: light;
-}
-
-.dark {
-  --background: #161616;
-  --foreground: #ffffff;
-  --card: #242424;
-  --card-foreground: #ffffff;
-  --popover: #242424;
-  --popover-foreground: #ffffff;
-  --primary: #ffffff;
-  --primary-hover: #eeeeee;
-  --primary-foreground: #161616;
-  --secondary: #242424;
-  --secondary-foreground: #ffffff;
-  --muted: #242424;
-  --muted-foreground: #d4d4d4;
-  --accent: #303030;
-  --accent-foreground: #ffffff;
-  --destructive: #b82d35;
-  --border: #ffffff1a;
-  --border-opaque: #ffffff33;
-  --color-border: #ffffff1a;
-  --input: #ffffff1a;
-  --ring: #6c7dff;
-  --text-weak: #808080;
-  --icon: #808080;
-  --interactive: #6c7dff;
-  --interactive-weak: #1d2130;
-  color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) {
-    --background: #161616;
-    --foreground: #ffffff;
-    --card: #242424;
-    --card-foreground: #ffffff;
-    --popover: #242424;
-    --popover-foreground: #ffffff;
-    --primary: #ffffff;
-    --primary-hover: #eeeeee;
-    --primary-foreground: #161616;
-    --secondary: #242424;
-    --secondary-foreground: #ffffff;
-    --muted: #242424;
-    --muted-foreground: #d4d4d4;
-    --accent: #303030;
-    --accent-foreground: #ffffff;
-    --destructive: #b82d35;
-    --border: #ffffff1a;
-    --border-opaque: #ffffff33;
-    --color-border: #ffffff1a;
-    --input: #ffffff1a;
-    --ring: #6c7dff;
-    --text-weak: #808080;
-    --icon: #808080;
-    --interactive: #6c7dff;
-    --interactive-weak: #1d2130;
-    color-scheme: dark;
-  }
-}
-
+ * reserved for focus outlines. Text runs in three tiers: strong, muted, and
+ * weak (the weak tier is darkened to #6b6b6b in light so 11-13px metadata
+ * clears WCAG AA on every light surface).
+ *
+ * Every color is defined ONCE via light-dark(); the mode classes only pin
+ * color-scheme. Class-less first loads follow the OS via `light dark`. */
 :root {
+  --radius: 0.375rem;
+  --background: light-dark(#ffffff, #161616);
+  --foreground: light-dark(#161616, #ffffff);
+  --card: light-dark(#fafafa, #242424);
+  --card-foreground: light-dark(#161616, #ffffff);
+  --popover: light-dark(#ffffff, #242424);
+  --popover-foreground: light-dark(#161616, #ffffff);
+  --primary: light-dark(#161616, #ffffff);
+  --primary-hover: light-dark(#242424, #eeeeee);
+  --primary-foreground: light-dark(#ffffff, #161616);
+  --secondary: light-dark(#fafafa, #242424);
+  --secondary-foreground: light-dark(#161616, #ffffff);
+  --muted: light-dark(#fafafa, #242424);
+  --muted-foreground: light-dark(#5c5c5c, #d4d4d4);
+  --accent: light-dark(#eeeeee, #303030);
+  --accent-foreground: light-dark(#161616, #ffffff);
+  --destructive: #b82d35;
+  --success: #198b43;
+  --border: light-dark(#0000001a, #ffffff1a);
+  --border-opaque: light-dark(#00000033, #ffffff33);
+  --input: light-dark(#0000001a, #ffffff1a);
+  --ring: light-dark(#3b5cf6, #6c7dff);
+  --text-weak: light-dark(#6b6b6b, #808080);
+
   /* Ledger components render in the same mono the rest of the site uses so
    * inline code and rendered entries read as one type system. Both packages
    * resolve their font through this single hook. */
   --journals-font-family: var(--font-mono);
   --accounts-font-family: var(--font-mono);
-  color-scheme: light;
+
+  color-scheme: light dark;
   -webkit-font-smoothing: antialiased;
+}
+
+.light {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+/* Motion is decorative here (menu fades, hover transitions); collapse it
+ * for users who ask for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @layer base {
@@ -194,16 +149,9 @@
 .demo-container {
   @apply border-border overflow-hidden rounded-none border;
   box-shadow:
-    0 0 0 0.5px #0000001f,
-    0 1px 2px -1px #00000014,
-    0 2px 4px #0000000a;
-}
-
-.dark .demo-container {
-  box-shadow:
-    0 0 0 0.5px #ffffff1f,
-    0 1px 2px -1px #00000052,
-    0 2px 4px #0000003d;
+    0 0 0 0.5px light-dark(#0000001f, #ffffff1f),
+    0 1px 2px -1px light-dark(#00000014, #00000052),
+    0 2px 4px light-dark(#0000000a, #0000003d);
 }
 
 /* The 6px pixel-checker ornament band from /data: a layer-2 fill masked by
@@ -287,18 +235,12 @@
   color: var(--foreground);
   background: var(--background);
   box-shadow:
-    0 0 0 0.5px #00000024,
-    0 1px 1.5px 0 #0000001a;
+    0 0 0 0.5px light-dark(#00000024, #ffffff24),
+    0 1px 1.5px 0 light-dark(#0000001a, #00000033);
 }
 
 .btn-data-neutral:hover {
   background: var(--secondary);
-}
-
-.dark .btn-data-neutral {
-  box-shadow:
-    0 0 0 0.5px #ffffff24,
-    0 1px 1.5px 0 #00000033;
 }
 
 .btn-data-neutral span {
@@ -317,12 +259,14 @@
   background: var(--accent);
 }
 
+/* 28x24 hit targets clear the WCAG 2.5.8 24px minimum while keeping the
+ * strip visually compact. */
 .theme-toggle-option {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 20px;
+  width: 28px;
+  height: 24px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -346,16 +290,9 @@
   background: var(--background);
   color: var(--foreground);
   box-shadow:
-    0 0 0 0.5px #0000001f,
-    0 1px 2px -1px #00000014,
-    0 2px 4px 0 #0000000a;
-}
-
-.dark .theme-toggle-option[aria-pressed='true'] {
-  box-shadow:
-    0 0 0 0.5px #ffffff1f,
-    0 1px 2px -1px #00000052,
-    0 2px 4px 0 #0000003d;
+    0 0 0 0.5px light-dark(#0000001f, #ffffff1f),
+    0 1px 2px -1px light-dark(#00000014, #00000052),
+    0 2px 4px 0 light-dark(#0000000a, #0000003d);
 }
 
 /* One-cell grid that stacks children on top of each other — used to overlay

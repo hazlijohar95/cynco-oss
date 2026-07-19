@@ -247,7 +247,7 @@ const THEMING_CHAIN = `
 const THEMING_OVERRIDE = `
 /* One-off overrides: set the override hook on any ancestor. */
 journals-container {
-  --journals-font-family: var(--font-geist-mono);
+  --journals-font-family: var(--font-mono);
   --journals-accent-override: #009fff;
   --journals-debit-override: oklch(0.72 0.19 150);
 }

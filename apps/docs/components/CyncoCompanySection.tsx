@@ -7,13 +7,13 @@ export function CyncoCompanySection() {
     <section className="border-border border-t px-6 py-16 md:px-10 md:py-24 lg:px-12">
       <div className="grid max-w-2xl gap-4">
         <h2 className="text-foreground text-2xl leading-none font-medium tracking-[-0.03em]">
-          With love from Cynco
+          Built at Cynco
         </h2>
         <p className="text-muted-foreground text-base leading-normal">
-          We build accounting infrastructure the way systems engineers build
-          databases: integer minor units end to end, balanced-by-construction
-          entries, and rendering that stays honest at a million rows. These
-          packages are the primitives underneath everything we ship.
+          Accounting infrastructure, built the way systems engineers build
+          databases: integer minor units end to end, entries that balance by
+          construction, rendering that holds at six-figure row counts. These
+          packages are the primitives under everything we ship.
         </p>
       </div>
       <div className="mt-8 flex flex-wrap gap-2">

@@ -93,7 +93,7 @@ export function Footer() {
         <div className="flex items-center gap-6">
           <span>&copy; {new Date().getFullYear()} Cynco</span>
           <span className="flex items-center gap-2.5">
-            <i aria-hidden="true" className="block h-1.5 w-1.5 bg-[#198b43]" />v
+            <i aria-hidden="true" className="bg-success block h-1.5 w-1.5" />v
             {journalsPackageJson.version}
           </span>
         </div>

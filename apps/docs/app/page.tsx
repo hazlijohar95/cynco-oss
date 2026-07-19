@@ -34,14 +34,16 @@ export default function Home() {
     <div className="flex min-h-screen flex-col font-mono">
       <div className="border-border mx-auto w-full max-w-[80rem] flex-1 min-[81rem]:border-x">
         <Header className="mx-0 px-6 md:px-10 lg:px-12" />
-        <Hero />
-        <WorkspaceSection />
-        <JournalEntrySection />
-        <RegisterSection />
-        <ReconciliationSection />
-        <AccountTreeSection />
-        <UnbalancedSection />
-        <CyncoCompanySection />
+        <main id="main">
+          <Hero />
+          <WorkspaceSection />
+          <JournalEntrySection />
+          <RegisterSection />
+          <ReconciliationSection />
+          <AccountTreeSection />
+          <UnbalancedSection />
+          <CyncoCompanySection />
+        </main>
         <Footer />
       </div>
     </div>
@@ -77,14 +79,14 @@ async function JournalEntrySection() {
     <section className={`${SECTION} space-y-8`}>
       <FeatureHeader
         id="journal-entries"
-        title="Journal entries, rendered properly"
+        title="Journal entries, server-rendered"
         description={
           <>
-            A payroll run with EPF and SOCSO splits across six postings —
-            server-rendered into a declarative shadow root and hydrated in
-            place. Pick the role palettes for each mode, pin the scheme, or
-            toggle the posting-number gutter: every color resolves through the{' '}
-            <code>@cynco/theme</code> chain.
+            A six-posting payroll run — EPF and SOCSO splits — rendered on the
+            server as declarative shadow DOM and adopted at hydration, with no
+            client re-render. Every color resolves through the{' '}
+            <code>@cynco/theme</code> chain: override → role → default, per
+            color scheme.
           </>
         }
       />
@@ -101,9 +103,10 @@ function RegisterSection() {
         title="A register that scales"
         description={
           <>
-            Ten thousand generated entries, one cash account, a handful of DOM
-            nodes. Fixed row heights make the window math pure arithmetic, so a
-            100k-row register renders the same number of nodes as a 100-row one.
+            10,000 seeded entries against one cash account. Fixed row heights
+            reduce windowing to arithmetic — no measurement, no layout thrash —
+            so the register mounts the same number of DOM nodes at 100 rows or
+            100,000.
           </>
         }
       />
@@ -122,9 +125,9 @@ function ReconciliationSection() {
         description={
           <>
             Statement lines left, book postings right, proposed matches as
-            tinted pairs — accept ✓ or reject ✗ from the center gutter, exactly
-            like resolving a merge conflict. The difference figure is integer
-            math and turns jade only at exactly zero.
+            tinted pairs. Accept ✓ or reject ✗ from the center gutter, like
+            resolving a merge conflict. The difference is integer arithmetic and
+            reads reconciled only at exactly zero.
           </>
         }
       />
@@ -148,9 +151,10 @@ async function AccountTreeSection() {
         title="The chart of accounts as a tree"
         description={
           <>
-            <code>@cynco/accounts</code> materializes account paths into a
-            keyboard-navigable tree with rolled-up balances and status dots —
-            the accounting analog of a file tree with git status.
+            Canonical colon-delimited paths —{' '}
+            <code>Assets:Current:Cash-Maybank</code> — materialize into a
+            keyboard-navigable tree with rolled-up balances and status dots. A
+            file tree with git status, for accounts.
           </>
         }
       />
@@ -169,9 +173,9 @@ async function UnbalancedSection() {
         title="Honest about imbalance"
         description={
           <>
-            The data layer never silently repairs a broken entry. When postings
-            don&apos;t sum to zero, the renderer flags it with the dashed
-            checker bar and reports the exact per-currency residual.
+            The store never repairs a broken entry. When postings don&apos;t sum
+            to zero per currency, the renderer flags the entry and reports the
+            exact residual.
           </>
         }
       />

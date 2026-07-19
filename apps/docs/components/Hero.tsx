@@ -9,7 +9,7 @@ import { GITHUB_URL } from './Header';
 const INSTALL_COMMAND = 'pnpm add @cynco/journals @cynco/accounts';
 
 // Copy affordance for the install chip: faint copy glyph that swaps to the
-// /data success green while the copied state is live.
+// success green while the copied state is live.
 function CopyStatus({ copied }: { copied: boolean }) {
   if (copied) {
     return (
@@ -18,11 +18,11 @@ function CopyStatus({ copied }: { copied: boolean }) {
         height="14"
         viewBox="0 0 24 24"
         fill="none"
-        stroke="#198b43"
+        stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="square"
         aria-hidden="true"
-        className="shrink-0"
+        className="text-success shrink-0"
       >
         <path d="M5 12.5L10 17.5L19 7" />
       </svg>
@@ -68,33 +68,39 @@ export function Hero() {
        * (bottom-right) sit on page-background plates layered over the
        * centered pattern band, exactly like the /data hero. */}
       <div className="flex flex-col gap-6 md:relative md:block md:h-[232px] md:overflow-hidden">
-        <h1 className="text-foreground order-1 text-[38px] leading-none font-medium md:absolute md:top-0 md:left-0 md:z-[1] md:w-max md:max-w-full md:bg-[var(--background)] md:pr-3 md:pb-3 md:text-[64px] md:whitespace-nowrap">
+        <h1 className="text-foreground md:bg-background order-1 text-[38px] leading-none font-medium md:absolute md:top-0 md:left-0 md:z-[1] md:w-max md:max-w-full md:pr-3 md:pb-3 md:text-[64px] md:whitespace-nowrap">
           Ledger primitives
         </h1>
         <div
           aria-hidden="true"
           className="pixel-pattern order-2 w-full max-md:h-4 md:absolute md:top-1/2 md:left-1/2 md:h-[351px] md:w-[1280px] md:-translate-x-1/2 md:-translate-y-1/2"
         />
-        <p className="text-muted-foreground order-3 text-base leading-normal md:absolute md:right-0 md:bottom-0 md:z-[1] md:w-[min(563px,100%)] md:bg-[var(--background)] md:pt-3 md:pl-4 md:text-right">
-          Beautifully engineered: <code>@cynco/journals</code> renders journal
-          entries and virtualized registers, <code>@cynco/accounts</code> the
-          chart of accounts. Vanilla core, React adapters, SSR built in — every
-          amount an exact integer.
+        <p className="text-muted-foreground md:bg-background order-3 text-base leading-normal md:absolute md:right-0 md:bottom-0 md:z-[1] md:w-[min(563px,100%)] md:pt-3 md:pl-4 md:text-right">
+          <code>@cynco/journals</code> renders journal entries and virtualized
+          registers. <code>@cynco/accounts</code> renders the chart of accounts.
+          Vanilla TypeScript core, React adapters, declarative shadow DOM SSR.
+          Amounts are integer minor units — no floats, anywhere.
         </p>
       </div>
 
-      {/* Install chip, styled like the /data hero-meta ticker chip. */}
+      {/* Install chip, styled like the /data hero-meta ticker chip. Wraps
+       * on narrow viewports so the command is never truncated. */}
       <button
         onClick={() => void copyToClipboard()}
         title="Copy to clipboard"
-        className="bg-accent text-muted-foreground flex h-6 w-fit max-w-full cursor-pointer items-center gap-2 overflow-hidden border-0 px-2 text-[13px] leading-[1.1] font-medium whitespace-nowrap"
+        className="bg-accent text-muted-foreground flex w-fit max-w-full cursor-pointer items-center gap-2 border-0 px-2 py-1 text-left text-[13px] leading-[1.3] font-medium sm:h-6 sm:overflow-hidden sm:py-0 sm:leading-[1.1] sm:whitespace-nowrap"
       >
         <span className="text-text-weak" aria-hidden="true">
           $
         </span>
-        <span className="overflow-hidden text-ellipsis">{INSTALL_COMMAND}</span>
+        <span className="break-words sm:overflow-hidden sm:text-ellipsis">
+          {INSTALL_COMMAND}
+        </span>
         <CopyStatus copied={copied} />
       </button>
+      <span aria-live="polite" className="sr-only">
+        {copied ? 'Install command copied to clipboard' : ''}
+      </span>
 
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/docs/journals" className="btn-data btn-data-contrast">
@@ -112,8 +118,8 @@ export function Hero() {
       </div>
 
       <p className="text-text-weak text-[11px] leading-none">
-        v{journalsPackageJson.version} · vanilla core · React adapters · SSR
-        built in
+        v{journalsPackageJson.version} · MIT · TypeScript · web components +
+        React
       </p>
     </section>
   );

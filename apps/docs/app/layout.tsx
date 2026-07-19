@@ -1,42 +1,40 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono, IBM_Plex_Mono } from 'next/font/google';
+import { Geist, IBM_Plex_Mono } from 'next/font/google';
 
 import './globals.css';
 
+// Geist serves docs prose only, so it loads without a preload hint — the
+// marketing page paints entirely in the mono stack.
 const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],
+  preload: false,
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
-
-// The brand monospace (opencode-style lander type). Berkeley Mono is listed
-// first in the CSS stack for users who have it installed; Plex Mono is the
-// webfont everyone else gets.
+// The brand monospace (stats-style type). Berkeley Mono is listed first in
+// the CSS stack for users who have it installed; Plex Mono is the webfont
+// everyone else gets. 400/500/600 cover every weight the site uses.
 const plexMono = IBM_Plex_Mono({
   variable: '--font-plex-mono',
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '600'],
   subsets: ['latin'],
 });
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  userScalable: false,
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
     { media: '(prefers-color-scheme: dark)', color: '#161616' },
   ],
 };
 
-const title = 'Cynco, ledger primitives for the web';
+const title = 'Cynco — ledger primitives for the web';
 const description =
-  'Beautifully engineered ledger primitives: @cynco/journals renders journal ' +
-  'entries and virtualized account registers, @cynco/accounts renders the ' +
-  'chart of accounts. Vanilla core, React adapters, SSR built in.';
+  '@cynco/journals renders journal entries and virtualized registers; ' +
+  '@cynco/accounts renders the chart of accounts. Vanilla TypeScript core, ' +
+  'React adapters, declarative shadow DOM SSR. Amounts are integer minor ' +
+  'units end to end.';
 
 export const metadata: Metadata = {
   title: {
@@ -94,7 +92,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} ${plexMono.variable}`}
+      className={`${geistSans.variable} ${plexMono.variable}`}
     >
       <head>
         <script

@@ -18,6 +18,7 @@ import {
 import { useEffect, useState } from 'react';
 
 import { buildRegisterRows } from './buildRegisterRows';
+import { useInViewOnce } from './useInViewOnce';
 import { Footnote } from '@/components/Footnote';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -39,22 +40,26 @@ function workloadLabel(name: WorkloadName): string {
 
 // Virtualized register with a density segmented control and a workload
 // picker. Generation and store indexing happen client-side in an effect —
-// the static HTML paints instantly with a fixed-height placeholder. Density
-// affects the fixed row height the window math depends on, so the Register
-// remounts (via key) rather than re-rendering in place.
+// the static HTML paints instantly with a fixed-height placeholder, and the
+// 10k-entry generation is deferred until the section approaches the
+// viewport so it never competes with initial hydration. Density affects the
+// fixed row height the window math depends on, so the Register remounts
+// (via key) rather than re-rendering in place.
 export function RegisterDemo() {
   const [workload, setWorkload] = useState<WorkloadName>('medium');
   const [density, setDensity] = useState<RegisterDensity>('comfortable');
   const [rows, setRows] = useState<RegisterRowData[] | null>(null);
+  const { ref, inView } = useInViewOnce<HTMLDivElement>();
 
   useEffect(() => {
+    if (!inView) return;
     setRows(null);
     const store = new EntryStore(workloads[workload]());
     setRows(buildRegisterRows(store, REGISTER_ACCOUNT));
-  }, [workload]);
+  }, [workload, inView]);
 
   return (
-    <div className="space-y-4">
+    <div ref={ref} className="space-y-4">
       <div className="flex flex-wrap gap-3 md:items-center">
         <ButtonGroup
           value={density}

@@ -24,9 +24,12 @@ const STATUS_ENTRIES: readonly AccountStatusEntry[] = [
 // #ffffff (light) with the sidebar tree surface slightly elevated at
 // #141415 / #f8f8f8, so the pane split reads through surface contrast alone
 // (the divider itself is a transparent 1px column of chrome).
+// Inner pane surfaces resolve from the page tokens so the mock window sits
+// on the same graphite ramp as the rest of the site: sidebar on the layer
+// tint, editor on the page background.
 const WORKSPACE_SURFACES: CSSProperties = {
-  '--accounts-bg-override': 'light-dark(#f8f8f8, #141415)',
-  '--journals-bg-override': 'light-dark(#ffffff, #070707)',
+  '--accounts-bg-override': 'var(--card)',
+  '--journals-bg-override': 'var(--background)',
 } as CSSProperties;
 
 // Tab captions use the leaf segment; getAccountLeafName returns '' for
@@ -91,14 +94,14 @@ export function WorkspaceDemo({ ssrHTML }: WorkspaceDemoProps) {
 
   return (
     <div
-      className="relative flex h-[560px] flex-col overflow-hidden rounded-[14px] border border-black/10 bg-white bg-clip-padding p-1.5 shadow-lg dark:border-white/10 dark:bg-[#070707]"
+      className="border-border bg-background relative flex h-[560px] flex-col overflow-hidden rounded-[14px] border bg-clip-padding p-1.5 shadow-lg"
       style={WORKSPACE_SURFACES}
     >
       <div className="flex min-h-0 flex-1 flex-row">
         <aside className="flex w-[280px] shrink-0 flex-col max-md:w-[200px]">
           <div className="flex h-10 shrink-0 items-center gap-2.5 px-3">
             <TrafficLights />
-            <div className="min-w-0 truncate text-xs font-medium text-zinc-900 dark:text-neutral-200">
+            <div className="text-foreground min-w-0 truncate text-xs font-medium">
               acme-sdn-bhd — Cynco
             </div>
           </div>
@@ -118,7 +121,7 @@ export function WorkspaceDemo({ ssrHTML }: WorkspaceDemoProps) {
 
         <section className="flex min-w-0 flex-1 flex-col">
           <div className="flex h-10 shrink-0 items-center gap-1 px-2 pt-[3px]">
-            <div className="flex h-7 max-w-[240px] items-center gap-1.5 rounded-sm bg-zinc-100 pr-3 pl-2 text-xs font-medium text-zinc-900 dark:bg-neutral-900 dark:text-zinc-100">
+            <div className="bg-accent text-foreground flex h-7 max-w-[240px] items-center gap-1.5 rounded-sm pr-3 pl-2 text-xs font-medium">
               <Table2 size={13} className="shrink-0 opacity-70" />
               <span className="truncate">{tabLabel(account)} — Register</span>
             </div>

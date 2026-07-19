@@ -23,7 +23,10 @@ export function DocsLayout({ children }: DocsLayoutProps) {
   return (
     <>
       <Header className="-mb-[1px]" />
-      <div className="relative gap-6 pt-6 md:grid md:grid-cols-[220px_1fr] md:gap-12">
+      <div
+        id="main"
+        className="relative gap-6 pt-6 md:grid md:grid-cols-[220px_1fr] md:gap-12"
+      >
         <DocsSidebar
           isMobileOpen={isMobileMenuOpen}
           onMobileClose={() => setIsMobileMenuOpen(false)}
