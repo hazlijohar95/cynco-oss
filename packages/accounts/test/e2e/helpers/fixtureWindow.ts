@@ -22,6 +22,23 @@ export interface RenameReadout {
   selectionEnd: number | null;
 }
 
+/** Serializable snapshot of the sticky ancestor stack, top row first. */
+export interface StickyStackReadout {
+  hidden: boolean;
+  names: string[];
+  paths: (string | null)[];
+  ariaHidden: (string | null)[];
+  treeitemCount: number;
+}
+
+/** Serializable snapshot of the last context menu request a fixture saw. */
+export interface MenuRequestReadout {
+  path: string;
+  paths: string[];
+  source: 'pointer' | 'keyboard' | 'button';
+  anchor: { kind: 'rect' } | { kind: 'point'; x: number; y: number };
+}
+
 // Every fixture page exposes a subset of these hooks; suites and helpers
 // share one Window declaration so the merged global stays consistent.
 declare global {
@@ -31,6 +48,17 @@ declare global {
     __treeKeyboardReady?: boolean;
     __treeDndReady?: boolean;
     __treeFlattenReady?: boolean;
+    __treeContextMenuReady?: boolean;
+    __treeSearchStickyReady?: boolean;
+    __beginSearch?: (
+      query: string,
+      mode?: 'expand-matches' | 'collapse-non-matches' | 'hide-non-matches'
+    ) => void;
+    __endSearch?: () => void;
+    __matchState?: () => { index: number; total: number } | null;
+    __stickyStack?: () => StickyStackReadout;
+    __lastMenuRequest?: MenuRequestReadout;
+    __shadowActiveRowIndex?: () => string | null;
     __scroller?: HTMLElement;
     __rowHeight?: number;
     __visibleCount?: number;

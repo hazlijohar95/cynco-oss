@@ -255,9 +255,11 @@
     }
   }
 
-  /* Sticky ancestor header: the nearest off-screen ancestor group of the top
-   * visible row, mirrored above the tree. Hairline bottom border + editor bg
-   * so scrolled rows visibly slide beneath it. */
+  /* Sticky ancestor header: off-screen ancestor group(s) of the top visible
+   * row, mirrored above the tree. Hairline bottom border + editor bg so
+   * scrolled rows visibly slide beneath it. The default 'nearest' variant is
+   * inert (one decorative mirror row); the 'stack' variant forwards clicks
+   * to the real ancestor rows, so it opts back into pointer events. */
   [data-sticky-header] {
     position: sticky;
     top: 0;
@@ -265,6 +267,21 @@
     background-color: var(--accounts-bg);
     border-bottom: 1px solid var(--accounts-hairline);
     pointer-events: none;
+  }
+
+  [data-sticky-header][data-sticky-stack='true'] {
+    pointer-events: auto;
+  }
+
+  [data-sticky-header][data-sticky-stack='true'] [data-row] {
+    cursor: pointer;
+  }
+
+  @media (pointer: fine) {
+    [data-sticky-header][data-sticky-stack='true']
+      [data-row][data-sticky-row='true']:hover {
+      background-color: var(--accounts-bg-hover);
+    }
   }
 
   /* Rows */
@@ -460,6 +477,55 @@
   [data-status-dot][data-status='pending'],
   [data-status-count][data-status='pending'] {
     color: var(--accounts-status-pending);
+  }
+
+  /* Row-actions button ("…" lane, `contextMenu.rowButton`): a real control
+   * embedded in the treeitem like the rename input. Invisible at rest —
+   * revealed on row hover / focus-within (and on the keyboard-focused row)
+   * so the lane adds no noise — but always hit-testable, matching Pierre's
+   * trigger behavior. */
+  [data-row-action] {
+    appearance: none;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(20px * var(--accounts-density-scale));
+    height: calc(20px * var(--accounts-density-scale));
+    margin-left: auto;
+    padding: 0;
+    border: none;
+    border-radius: var(--accounts-border-radius);
+    background: none;
+    color: var(--accounts-fg3);
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity 150ms ease,
+      background-color 150ms ease;
+  }
+
+  /* When the balance column renders, IT carries the auto margin; the button
+   * then sits flush after it instead of splitting the free space. */
+  [data-balance] ~ [data-row-action] {
+    margin-left: 0;
+  }
+
+  [data-row]:hover [data-row-action],
+  [data-row]:focus-within [data-row-action],
+  [data-row][data-focused='true'] [data-row-action] {
+    opacity: 1;
+  }
+
+  [data-row-action]:hover {
+    background-color: var(--accounts-bg-hover);
+    color: var(--accounts-fg);
+  }
+
+  [data-row-action]:focus-visible {
+    opacity: 1;
+    outline: var(--accounts-focus-ring-width) solid var(--accounts-accent);
+    outline-offset: var(--accounts-focus-ring-offset);
   }
 
   /* Balance column: right-aligned, mono + tabular-nums so amounts line up

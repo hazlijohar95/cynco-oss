@@ -140,6 +140,14 @@ export interface AccountTreeChange {
   focusChanged: boolean;
   /** True when a rename session started, ended, or was committed. */
   renameChanged: boolean;
+  /**
+   * True when the search session state changed: a session began or ended,
+   * the query or mode changed, or the match set was recomputed. Search
+   * mutations usually also flip `expansionChanged` (ancestors auto-expand,
+   * `hide-non-matches` reshapes the projection), but this facet lets hosts
+   * track match decorations without inferring them from expansion events.
+   */
+  searchChanged: boolean;
 }
 
 /** Listener registered via `AccountTreeController.onChange`. */
@@ -155,6 +163,50 @@ export interface SelectPathOptions {
    * the existing selection instead of replacing it.
    */
   range?: boolean;
+}
+
+/**
+ * How an active search session reshapes the tree (the Pierre trees search
+ * modes adapted to account charts):
+ *
+ * - `expand-matches` (default): ancestors of every match are auto-expanded so
+ *   matches become visible; everything else keeps its current expansion.
+ * - `collapse-non-matches`: additionally collapses every group with no match
+ *   in its subtree, so the tree shows the minimal expansion revealing all
+ *   matches.
+ * - `hide-non-matches`: the visible projection is filtered to matches plus
+ *   their ancestors. Projection-level only (like `flattenEmptyGroups`):
+ *   canonical topology and expansion snapshots are untouched, and
+ *   `endSearch` restores the pre-session expansion exactly.
+ *
+ * Every mode snapshots expansion when the session begins and restores it on
+ * `endSearch`.
+ */
+export type AccountTreeSearchMode =
+  | 'expand-matches'
+  | 'collapse-non-matches'
+  | 'hide-non-matches';
+
+/** Options bag for `AccountTreeController.beginSearch`. */
+export interface BeginSearchOptions {
+  /**
+   * Search mode for the session. Omitted on the first `beginSearch` call of
+   * a session → `expand-matches` (the original behavior); omitted while
+   * refining an active session → the session keeps its current mode.
+   */
+  mode?: AccountTreeSearchMode;
+}
+
+/**
+ * Position of the focused search match within the active session, as shown
+ * in `3/12`-style readouts. `index` is 1-based: the focused match when focus
+ * sits on one, otherwise the next match at or after the focused row in
+ * projection order (wrapping past the end) — the match `focusNextSearchMatch`
+ * would land on. `index` is 0 only when the session has no matches.
+ */
+export interface AccountSearchMatchState {
+  index: number;
+  total: number;
 }
 
 /** Result of `AccountTreeController.beginSearch`. */
@@ -195,6 +247,99 @@ export type RenameErrorReason =
 export type RenameResult =
   | { ok: true; newPath: string }
   | { ok: false; reason: RenameErrorReason };
+
+/**
+ * How row names handle horizontal overflow:
+ *
+ * - `end` (default): plain CSS `text-overflow: ellipsis` — the tail clips.
+ * - `middle`: measured middle truncation. After each window commit (and on
+ *   container resize) the view measures rendered name elements in one
+ *   batched read-then-write pass and rewrites only the overflowing ones as
+ *   `head…tail`, keeping the leaf's tail visible (account names distinguish
+ *   at the end). Truncated rows carry `title` with the full name.
+ */
+export type AccountTreeNameTruncation = 'end' | 'middle';
+
+/**
+ * Sticky ancestor header behavior:
+ *
+ * - `nearest` (default): one mirror row of the nearest off-screen ancestor
+ *   of the top visible row (the original v1 behavior).
+ * - `stack`: a stacked breadcrumb of the top visible row's off-screen
+ *   ancestors (visible-parent chain, so flattening and `hide-non-matches`
+ *   never surface hidden mid-chain groups), capped at
+ *   `STICKY_ANCESTOR_STACK_MAX` rows with the nearest ancestors winning.
+ *   Clicking a mirror scrolls to and focuses the real ancestor row.
+ */
+export type AccountTreeStickyAncestors = 'nearest' | 'stack';
+
+/** How a context menu request was triggered. */
+export type AccountTreeContextMenuSource = 'pointer' | 'keyboard' | 'button';
+
+/**
+ * Where the host should position its menu: raw pointer coordinates for
+ * right-click opens, or the bounding rect of the originating row (keyboard
+ * opens) / row-actions button (button opens).
+ */
+export type AccountTreeContextMenuAnchor =
+  | { x: number; y: number }
+  | { rect: DOMRect };
+
+/** Options bag for `AccountTreeContextMenuRequest.close`. */
+export interface AccountTreeContextMenuCloseOptions {
+  /**
+   * Default `true`: closing returns focus to the tree and the originating
+   * row (re-materializing the row first if virtualization evicted it). Pass
+   * `false` when the host is about to hand focus to another owned surface —
+   * the rename-handoff contract: call `close({ restoreFocus: false })` and
+   * then `tree.beginRename(request.path)` so the rename input keeps focus
+   * without the tree stealing it back.
+   */
+  restoreFocus?: boolean;
+}
+
+/**
+ * One context menu session, emitted to `contextMenu.onOpen`. The component
+ * never renders a menu itself — it owns triggering, positioning data, ARIA,
+ * and the focus lifecycle; the host renders whatever menu it likes (Radix,
+ * native, hand-rolled) and MUST call `close()` when that menu dismisses.
+ *
+ * Exactly one session is live at a time: a newer open supersedes the
+ * previous session, whose `close()` becomes a no-op (safe to call late).
+ */
+export interface AccountTreeContextMenuRequest {
+  /** The row the menu was opened for. */
+  path: string;
+  /**
+   * The effective target set: when `path` is part of the current
+   * multi-selection, the whole selection (visible render order); otherwise
+   * just `[path]` — the same normalization drag & drop applies to sources.
+   */
+  paths: string[];
+  /** Positioning data for the host's menu. */
+  anchor: AccountTreeContextMenuAnchor;
+  /** What triggered the request. */
+  source: AccountTreeContextMenuSource;
+  /**
+   * Ends the session. The host MUST call this when its menu closes; see
+   * `AccountTreeContextMenuCloseOptions.restoreFocus` for the focus
+   * contract. Calling `close` on a superseded session is a no-op.
+   */
+  close(options?: AccountTreeContextMenuCloseOptions): void;
+}
+
+/** Context-menu composition options for `AccountTree`. */
+export interface AccountTreeContextMenuOptions {
+  /** Fired for every menu open (right-click, Shift+F10 / ContextMenu key,
+   * row button). The host renders the menu and calls `request.close()`. */
+  onOpen: (request: AccountTreeContextMenuRequest) => void;
+  /**
+   * Render a trailing "…" button per row (hidden until row hover /
+   * focus-within) that also opens the menu, with `source: 'button'` and the
+   * button's rect as the anchor. Default false.
+   */
+  rowButton?: boolean;
+}
 
 /** Options bag for constructing an `AccountTreeController`. */
 export interface AccountTreeControllerOptions {

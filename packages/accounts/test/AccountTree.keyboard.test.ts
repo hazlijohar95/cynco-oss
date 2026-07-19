@@ -160,3 +160,46 @@ describe('type-ahead', () => {
     expect(mounted.getFocusedPath()).toBeNull();
   });
 });
+
+describe('F3 search match stepping', () => {
+  test('F3 / Shift+F3 cycle matches while a search session is active', () => {
+    const { tree: mounted, scroller } = mountTree();
+    mounted.getController().beginSearch('cash');
+
+    dispatchKey(scroller, 'F3');
+    expect(mounted.getFocusedPath()).toBe('Assets:Current:Cash-CIMB');
+    dispatchKey(scroller, 'F3');
+    expect(mounted.getFocusedPath()).toBe('Assets:Current:Cash-Maybank');
+    // Cyclic: past the last match, F3 wraps to the first.
+    dispatchKey(scroller, 'F3');
+    expect(mounted.getFocusedPath()).toBe('Assets:Current:Cash-CIMB');
+    dispatchKey(scroller, 'F3', { shiftKey: true });
+    expect(mounted.getFocusedPath()).toBe('Assets:Current:Cash-Maybank');
+  });
+
+  test('without a session F3 is left to the browser find dialog', () => {
+    const { tree: mounted, scroller } = mountTree();
+    dispatchKey(scroller, 'F3');
+    expect(mounted.getFocusedPath()).toBeNull();
+  });
+
+  test('F3 during an IME composition never steps matches', () => {
+    const { tree: mounted, scroller } = mountTree();
+    mounted.getController().beginSearch('cash');
+    // Composition keydowns arrive with isComposing (or legacy keyCode 229);
+    // both must be swallowed by the shared IME guard.
+    for (const stub of [
+      { key: 'isComposing', value: true },
+      { key: 'keyCode', value: 229 },
+    ] as const) {
+      const event = new window.KeyboardEvent('keydown', {
+        key: 'F3',
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(event, stub.key, { value: stub.value });
+      scroller.dispatchEvent(event);
+      expect(mounted.getFocusedPath()).toBeNull();
+    }
+  });
+});

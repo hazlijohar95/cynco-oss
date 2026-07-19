@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>tree search modes + sticky stack + truncation fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      /* Narrow on purpose: the long leaf name must overflow so the
+         measured middle-truncation pass has something to truncate. */
+      accounts-container {
+        height: 480px;
+        width: 280px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { AccountTree } from '/dist/index.js';
+
+      // Wide chart (6 groups x 12 mids x 30 leaves) plus a 4-deep branch
+      // for the sticky stack and one long leaf name for truncation.
+      const accounts = [];
+      for (let top = 0; top < 6; top += 1) {
+        for (let mid = 0; mid < 12; mid += 1) {
+          for (let leaf = 0; leaf < 30; leaf += 1) {
+            accounts.push(
+              `Group${top}:Mid${String(mid).padStart(2, '0')}:Leaf${String(
+                leaf
+              ).padStart(2, '0')}`
+            );
+          }
+        }
+      }
+      for (let leaf = 0; leaf < 30; leaf += 1) {
+        accounts.push(
+          `Deep:Alpha:Beta:Gamma:Leaf${String(leaf).padStart(2, '0')}`
+        );
+      }
+      accounts.push('Assets:VeryVeryLongAccountNameThatOverflows-Ending');
+
+      const tree = new AccountTree({
+        accounts,
+        initialExpansion: 'all',
+        showBalances: false,
+        stickyAncestors: 'stack',
+        nameTruncation: 'middle',
+      });
+      tree.render(document.getElementById('mount'));
+
+      const host = document.querySelector('accounts-container');
+      const scroller = host.shadowRoot.querySelector('[data-scroller]');
+      const controller = tree.getController();
+
+      window.__tree = tree;
+      window.__scroller = scroller;
+      window.__rowHeight = controller.getRowHeight();
+      window.__visibleCountNow = () => controller.getVisibleCount();
+      window.__rowIndex = (path) => controller.getPathIndex(path);
+      window.__focusedPath = () => controller.getFocusedPath();
+      window.__focusScroller = () => scroller.focus();
+
+      window.__beginSearch = (query, mode) => {
+        controller.beginSearch(query, mode == null ? {} : { mode });
+      };
+      window.__endSearch = () => controller.endSearch();
+      window.__matchState = () => controller.getSearchMatchState();
+
+      window.__stickyStack = () => {
+        const header = scroller.querySelector('[data-sticky-header]');
+        const rows = [...(header?.querySelectorAll('[data-row]') ?? [])];
+        return {
+          hidden: header?.hidden ?? true,
+          names: rows.map(
+            (row) => row.querySelector('[data-name]')?.textContent ?? ''
+          ),
+          paths: rows.map((row) => row.getAttribute('data-path')),
+          ariaHidden: rows.map((row) => row.getAttribute('aria-hidden')),
+          treeitemCount:
+            header?.querySelectorAll('[role="treeitem"]').length ?? 0,
+        };
+      };
+
+      window.__treeSearchStickyReady = true;
+    </script>
+  </body>
+</html>

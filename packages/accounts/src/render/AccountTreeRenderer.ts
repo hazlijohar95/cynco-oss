@@ -29,6 +29,17 @@ export interface AccountTreeRenderOptions {
   renamingPath?: string | null;
   /** Current rename draft, baked into the input's value attribute. */
   renameDraft?: string;
+  /**
+   * True when the view has a context-menu composition configured: rows gain
+   * `aria-haspopup="menu"` so assistive tech announces the affordance.
+   */
+  contextMenu?: boolean;
+  /**
+   * True when `contextMenu.rowButton` is enabled: rows render a trailing
+   * "Row actions" button (revealed on hover/focus-within via CSS) that opens
+   * the menu with the button's rect as the anchor.
+   */
+  contextMenuRowButton?: boolean;
 }
 
 // Chevron drawn with an inline SVG path in currentColor; collapsed groups
@@ -38,6 +49,14 @@ const CHEVRON_SVG =
   '<svg viewBox="0 0 16 16" width="16" height="16" fill="none">' +
   '<path d="M4.5 6.25 8 9.75l3.5-3.5" stroke="currentColor" stroke-width="1.5" ' +
   'stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+
+// Horizontal ellipsis for the row-actions button, drawn in currentColor so
+// the button inherits the row's foreground chain like the chevron does.
+const ELLIPSIS_SVG =
+  '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">' +
+  '<circle cx="3.5" cy="8" r="1.25"></circle>' +
+  '<circle cx="8" cy="8" r="1.25"></circle>' +
+  '<circle cx="12.5" cy="8" r="1.25"></circle></svg>';
 
 /**
  * One tree row. Structure:
@@ -67,9 +86,26 @@ export function renderAccountRowHTML(
     html += renderRowLabelHTML(row);
     html += renderStatusHTML(row);
     html += renderBalanceHTML(row, options);
+    if (options.contextMenuRowButton === true) {
+      html += renderRowActionButtonHTML();
+    }
   }
   html += '</div>';
   return html;
+}
+
+// Trailing per-row "…" button opening the context menu (Pierre's row menu
+// button lane adapted to string rendering). A real, labelled control — like
+// the rename input, it lives inside the treeitem without breaking its
+// semantics — but tabindex -1 so the roving tabindex stays on rows; keyboard
+// users open the menu via Shift+F10 / the ContextMenu key instead. CSS keeps
+// it invisible until row hover / focus-within.
+function renderRowActionButtonHTML(): string {
+  return (
+    '<button data-row-action type="button" tabindex="-1"' +
+    ' aria-label="Row actions" aria-haspopup="menu">' +
+    `${ELLIPSIS_SVG}</button>`
+  );
 }
 
 /**
@@ -99,8 +135,12 @@ export function renderStickyRowHTML(
   row: AccountTreeRowData,
   options: AccountTreeRenderOptions
 ): string {
+  // data-path (never present on flow rows, which identify by index) lets
+  // the sticky-stack click forwarder resolve the real ancestor row even
+  // after scrolling has shifted every visible index.
   let html =
     '<div data-row data-sticky-row="true" aria-hidden="true"' +
+    ` data-path="${escapeHtml(row.path)}"` +
     ` data-depth="${row.depth}" data-kind="${row.kind}"` +
     ` data-expanded="${row.expanded}"` +
     (row.selected ? ' data-selected="true"' : '') +
@@ -207,6 +247,11 @@ function rowAttributesHTML(
     ` aria-selected="${row.selected}"`;
   if (options.idPrefix != null && options.idPrefix !== '') {
     attributes += ` id="${escapeHtml(options.idPrefix)}-row-${index}"`;
+  }
+  if (options.contextMenu === true) {
+    // Announce the menu affordance on every row (right-click / Shift+F10 /
+    // ContextMenu key all target the row), not just the optional button.
+    attributes += ' aria-haspopup="menu"';
   }
   if (row.kind === 'group') {
     attributes += ` data-expanded="${row.expanded}" aria-expanded="${row.expanded}"`;

@@ -55,6 +55,17 @@ export const SSR_MAX_PRELOADED_ROWS = 512;
  */
 export const DRAG_EXPAND_DELAY_MS = 700;
 
+/**
+ * Maximum mirror rows the `stickyAncestors: 'stack'` header renders. Deep
+ * charts can nest far past what a breadcrumb should occupy — an unbounded
+ * sticky stack eats the viewport it exists to contextualize — so the stack
+ * keeps only the NEAREST ancestors (the deepest ones carry the most
+ * information about the rows under the cursor; the root is the most
+ * guessable). Four rows ≈ one quarter of a 480px viewport at default
+ * density, the ceiling Pierre-style sticky overlays stay comfortable at.
+ */
+export const STICKY_ANCESTOR_STACK_MAX = 4;
+
 /** Proper minus sign (U+2212) used for negative balances. */
 export const MINUS_SIGN = '\u2212';
 

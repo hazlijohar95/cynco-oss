@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>tree context menu fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      accounts-container {
+        height: 480px;
+      }
+      /* Minimal real host menu: a plain positioned popup, no framework. */
+      #menu {
+        position: fixed;
+        z-index: 10;
+        min-width: 140px;
+        padding: 4px;
+        background: #ffffff;
+        border: 1px solid #888888;
+        border-radius: 6px;
+        font: 13px system-ui;
+      }
+      #menu [role='menuitem'] {
+        display: block;
+        width: 100%;
+        padding: 4px 8px;
+        border: none;
+        background: none;
+        text-align: left;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { AccountTree } from '/dist/index.js';
+
+      // The host-rendered menu for the composition contract: the tree emits
+      // requests; this fixture renders a real role="menu" popup, closes it
+      // via request.close() on Escape (focus returns to the row), and
+      // performs the rename handoff (close({restoreFocus:false}) followed by
+      // beginRename) from the Rename item.
+      let menuElement = null;
+
+      function destroyMenu() {
+        menuElement?.remove();
+        menuElement = null;
+      }
+
+      const tree = new AccountTree({
+        accounts: [
+          'Assets:Current:Cash-Maybank',
+          'Assets:Current:Cash-CIMB',
+          'Assets:Fixed:Equipment',
+          'Expenses:Rent',
+          'Income:Sales',
+        ],
+        showBalances: false,
+        contextMenu: {
+          rowButton: true,
+          onOpen(request) {
+            // A newer open supersedes the previous session; drop its menu.
+            destroyMenu();
+            window.__lastMenuRequest = {
+              path: request.path,
+              paths: request.paths,
+              source: request.source,
+              anchor:
+                'rect' in request.anchor
+                  ? { kind: 'rect' }
+                  : { kind: 'point', x: request.anchor.x, y: request.anchor.y },
+            };
+
+            const point =
+              'rect' in request.anchor
+                ? {
+                    x: request.anchor.rect.left,
+                    y: request.anchor.rect.bottom,
+                  }
+                : request.anchor;
+            const menu = document.createElement('div');
+            menu.id = 'menu';
+            menu.setAttribute('role', 'menu');
+            menu.tabIndex = -1;
+            menu.style.left = `${point.x}px`;
+            menu.style.top = `${point.y}px`;
+
+            const rename = document.createElement('button');
+            rename.id = 'menu-rename';
+            rename.type = 'button';
+            rename.setAttribute('role', 'menuitem');
+            rename.textContent = 'Rename';
+            rename.addEventListener('click', () => {
+              const path = request.path;
+              // The rename-handoff contract: end the session WITHOUT focus
+              // restore, then start the rename so its input keeps focus.
+              request.close({ restoreFocus: false });
+              destroyMenu();
+              tree.beginRename(path);
+            });
+            menu.appendChild(rename);
+
+            menu.addEventListener('keydown', (event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                request.close(); // Default restoreFocus: back to the row.
+                destroyMenu();
+              }
+            });
+
+            document.body.appendChild(menu);
+            menu.focus();
+            menuElement = menu;
+          },
+        },
+      });
+
+      tree.render(document.getElementById('mount'));
+
+      const host = document.querySelector('accounts-container');
+      const scroller = host.shadowRoot.querySelector('[data-scroller]');
+      const controller = tree.getController();
+
+      window.__tree = tree;
+      window.__scroller = scroller;
+      window.__rowIndex = (path) => controller.getPathIndex(path);
+      window.__focusedPath = () => controller.getFocusedPath();
+      window.__selectedPaths = () => controller.getSelectedPaths();
+      window.__focusScroller = () => scroller.focus();
+      // Which row element (by data-row-index) holds real DOM focus inside
+      // the shadow root, or null — the focus-restore assertions read this.
+      window.__shadowActiveRowIndex = () => {
+        const active = host.shadowRoot.activeElement;
+        return active?.getAttribute('data-row-index') ?? null;
+      };
+      window.__activeRename = () => {
+        const input = scroller.querySelector('[data-rename-input]');
+        if (!(input instanceof HTMLInputElement)) {
+          return null;
+        }
+        return {
+          focused: host.shadowRoot.activeElement === input,
+          value: input.value,
+          selectionStart: input.selectionStart,
+          selectionEnd: input.selectionEnd,
+        };
+      };
+
+      window.__treeContextMenuReady = true;
+    </script>
+  </body>
+</html>

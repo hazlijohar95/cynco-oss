@@ -22,6 +22,7 @@ import type {
   AccountMove,
   AccountMoveListener,
   AccountRenameListener,
+  AccountSearchMatchState,
   AccountSearchResult,
   AccountStatusEntry,
   AccountStatusKind,
@@ -30,6 +31,8 @@ import type {
   AccountTreeControllerOptions,
   AccountTreeDensity,
   AccountTreeRowData,
+  AccountTreeSearchMode,
+  BeginSearchOptions,
   LedgerEntry,
   Posting,
   RenameResult,
@@ -54,6 +57,8 @@ export interface StatusAggregate {
 /** Active search session: the query plus the expansion snapshot to restore. */
 interface SearchSession {
   query: string;
+  /** How the session reshapes the tree (see AccountTreeSearchMode). */
+  mode: AccountTreeSearchMode;
   /** Group paths that were expanded when the session began. */
   priorExpandedGroups: readonly string[];
 }
@@ -64,6 +69,7 @@ const NO_CHANGE: AccountTreeChange = {
   statusChanged: false,
   focusChanged: false,
   renameChanged: false,
+  searchChanged: false,
 };
 
 /**
@@ -116,6 +122,15 @@ export class AccountTreeController {
 
   private searchSession: SearchSession | null = null;
   private searchMatches = new Set<string>();
+  /**
+   * Projection overlay for `hide-non-matches`: the set of paths allowed to
+   * own visible rows (matches plus their ancestors), or null when no filter
+   * applies (other modes, no session, or an empty match set — filtering
+   * everything away on a miss would leave the user staring at a void).
+   * Precomputed once per query so the projection walk does set lookups, not
+   * per-row subtree scans.
+   */
+  private searchVisibleFilter: Set<string> | null = null;
 
   /** Path currently being renamed inline, or null. */
   private renamingPath: string | null = null;
@@ -356,6 +371,24 @@ export class AccountTreeController {
     return null;
   }
 
+  /**
+   * Every ancestor of a path that owns a row in the visible projection, in
+   * root-first order. The chain the sticky ancestor stack renders: one O(1)
+   * index lookup per canonical ancestor, so flattening and hide-non-matches
+   * (whose mid-chain ancestors own no row) fall out for free — the same
+   * visible-parent rule as `getVisibleParentPath`, extended to the full
+   * chain in a single O(depth) pass.
+   */
+  getVisibleAncestorPaths(path: string): string[] {
+    const visibleAncestors: string[] = [];
+    for (const ancestor of getAncestorAccountPaths(path)) {
+      if (this.getPathIndex(ancestor) >= 0) {
+        visibleAncestors.push(ancestor);
+      }
+    }
+    return visibleAncestors;
+  }
+
   // --- Flattening -----------------------------------------------------------------
 
   getFlattenEmptyGroups(): boolean {
@@ -586,20 +619,34 @@ export class AccountTreeController {
 
   /**
    * Starts (or refines) a search session: case-insensitive substring match
-   * of the query against each path segment. Ancestors of every match are
-   * auto-expanded so matches are visible; the expansion state from before
-   * the session is snapshotted once and restored by `endSearch`. An empty
-   * query matches nothing but keeps the session (and its snapshot) alive.
+   * of the query against each path segment. How matches reshape the tree is
+   * the session's mode (see AccountTreeSearchMode); the expansion state from
+   * before the session is snapshotted once and restored by `endSearch`. An
+   * empty query matches nothing but keeps the session (and its snapshot)
+   * alive — under the collapse/hide modes it also restores the snapshot
+   * expansion, since "minimal expansion revealing no matches" would
+   * otherwise collapse the whole tree mid-typing (backspace to empty).
    */
-  beginSearch(query: string): AccountSearchResult {
+  beginSearch(
+    query: string,
+    options: BeginSearchOptions = {}
+  ): AccountSearchResult {
     if (this.searchSession == null) {
       this.searchSession = {
         query,
+        mode: options.mode ?? 'expand-matches',
         priorExpandedGroups: this.snapshotExpandedGroups(),
       };
     } else {
-      this.searchSession = { ...this.searchSession, query };
+      // Refinement keeps the session's snapshot and (unless overridden) its
+      // mode, so query edits and mode switches share one restore point.
+      this.searchSession = {
+        ...this.searchSession,
+        query,
+        mode: options.mode ?? this.searchSession.mode,
+      };
     }
+    const mode = this.searchSession.mode;
 
     const needle = query.toLowerCase();
     const matches: string[] = [];
@@ -613,21 +660,49 @@ export class AccountTreeController {
       }
     }
 
+    // Distinct ancestors of all matches: the groups that must be expanded
+    // for every match to own a visible row, and — with their matches — the
+    // hide-non-matches projection filter. O(matches × depth).
     const expandedAncestors = new Set<string>();
     for (const match of matches) {
       for (const ancestor of getAncestorAccountPaths(match)) {
-        if (!expandedAncestors.has(ancestor)) {
-          expandedAncestors.add(ancestor);
-          this.store.setExpanded(ancestor, true);
-        }
+        expandedAncestors.add(ancestor);
       }
     }
+
+    if (mode === 'expand-matches' || matches.length === 0) {
+      // Original behavior: open ancestors, leave everything else alone. A
+      // matchless query under the collapse/hide modes falls back here too,
+      // restoring the snapshot instead of collapsing the world.
+      if (matches.length === 0 && mode !== 'expand-matches') {
+        this.restoreExpansionSnapshot();
+      }
+      for (const ancestor of expandedAncestors) {
+        this.store.setExpanded(ancestor, true);
+      }
+    } else {
+      // collapse-non-matches / hide-non-matches: the minimal expansion
+      // revealing all matches is exactly the ancestor set — every other
+      // group closes (hide additionally filters, but keeps the same minimal
+      // expansion so ending the filter never reveals a half-open tree).
+      for (const path of this.groupPaths) {
+        this.store.setExpanded(path, expandedAncestors.has(path));
+      }
+    }
+
+    // The hide filter allows matches and their ancestors only. Matches
+    // hidden inside another match's collapsed subtree stay hidden — the
+    // filter shapes which rows MAY appear; expansion still decides which do.
+    this.searchVisibleFilter =
+      mode === 'hide-non-matches' && matches.length > 0
+        ? new Set([...this.searchMatches, ...expandedAncestors])
+        : null;
 
     this.invalidateVisibleCache();
     // Every match is visible now that its ancestors are expanded, so tree
     // order is simply visible-index order.
     matches.sort((a, b) => this.getPathIndex(a) - this.getPathIndex(b));
-    this.emit({ ...NO_CHANGE, expansionChanged: true });
+    this.emit({ ...NO_CHANGE, expansionChanged: true, searchChanged: true });
     return { matches, expandedAncestors: [...expandedAncestors] };
   }
 
@@ -642,12 +717,10 @@ export class AccountTreeController {
     }
     this.searchSession = null;
     this.searchMatches.clear();
-    const restore = new Set(session.priorExpandedGroups);
-    for (const path of this.groupPaths) {
-      this.store.setExpanded(path, restore.has(path));
-    }
+    this.searchVisibleFilter = null;
+    this.restoreExpansionSnapshot(session);
     this.invalidateVisibleCache();
-    this.emit({ ...NO_CHANGE, expansionChanged: true });
+    this.emit({ ...NO_CHANGE, expansionChanged: true, searchChanged: true });
   }
 
   isSearchActive(): boolean {
@@ -656,6 +729,131 @@ export class AccountTreeController {
 
   getSearchQuery(): string | null {
     return this.searchSession?.query ?? null;
+  }
+
+  /** Mode of the active search session, or null when none is active. */
+  getSearchMode(): AccountTreeSearchMode | null {
+    return this.searchSession?.mode ?? null;
+  }
+
+  /**
+   * Focuses the next search match after the focused row, cycling past the
+   * end back to the first match. Deterministic order is projection (visible)
+   * order. Returns the focused path, or null with no session / no matches.
+   * (Pierre's trees clamp at the ends; we cycle so a single F3 keeps
+   * walking a small match set — documented deviation.)
+   */
+  focusNextSearchMatch(): string | null {
+    return this.focusRelativeSearchMatch(1);
+  }
+
+  /** Backward counterpart of `focusNextSearchMatch` (cyclic). */
+  focusPreviousSearchMatch(): string | null {
+    return this.focusRelativeSearchMatch(-1);
+  }
+
+  /**
+   * `{ index, total }` readout for the active session (`3/12`-style UIs):
+   * 1-based index of the focused match, or of the nearest upcoming match in
+   * projection order when focus is not on a match (the row
+   * `focusNextSearchMatch` would land on — Pierre's next-from-here
+   * semantics), wrapping past the end. Null when no session is active;
+   * `{ index: 0, total: 0 }` for a live session without matches.
+   */
+  getSearchMatchState(): AccountSearchMatchState | null {
+    if (this.searchSession == null) {
+      return null;
+    }
+    const matches = this.getOrderedSearchMatches();
+    if (matches.length === 0) {
+      return { index: 0, total: 0 };
+    }
+    return {
+      index: this.findRelativeSearchMatch(matches, 0) + 1,
+      total: matches.length,
+    };
+  }
+
+  /** Restores the session's (or the given) expansion snapshot exactly. */
+  private restoreExpansionSnapshot(
+    session: SearchSession | null = this.searchSession
+  ): void {
+    if (session == null) {
+      return;
+    }
+    const restore = new Set(session.priorExpandedGroups);
+    for (const path of this.groupPaths) {
+      this.store.setExpanded(path, restore.has(path));
+    }
+  }
+
+  /**
+   * Search matches in projection (visible) order. During a session every
+   * match owns a visible row (ancestors are expanded in all modes; the hide
+   * filter admits matches by construction), so filtering the visible paths
+   * is both the order and the reveal guarantee in one O(visible) pass.
+   */
+  private getOrderedSearchMatches(): string[] {
+    if (this.searchMatches.size === 0) {
+      return [];
+    }
+    const ordered: string[] = [];
+    for (const path of this.ensureVisibleCache()) {
+      if (this.searchMatches.has(path)) {
+        ordered.push(path);
+      }
+    }
+    return ordered;
+  }
+
+  // Shared engine for match navigation and the match-state readout: the
+  // match index `delta` steps away from the focused row. When focus already
+  // sits on a match, steps are match-to-match (cyclic); otherwise the
+  // anchor is the nearest match at/after the focused row (delta >= 0) or
+  // before it (delta < 0), wrapping around the ends.
+  private findRelativeSearchMatch(matches: string[], delta: number): number {
+    const total = matches.length;
+    const focused = this.focusedPath;
+    if (focused != null && this.searchMatches.has(focused)) {
+      const current = matches.indexOf(focused);
+      if (current >= 0) {
+        return (((current + delta) % total) + total) % total;
+      }
+    }
+    const focusedIndex = focused != null ? this.getPathIndex(focused) : -1;
+    if (delta >= 0) {
+      for (let index = 0; index < total; index += 1) {
+        if (this.getPathIndex(matches[index]) >= focusedIndex) {
+          return index;
+        }
+      }
+      return 0; // Focus sits past the last match: wrap to the first.
+    }
+    for (let index = total - 1; index >= 0; index -= 1) {
+      const matchIndex = this.getPathIndex(matches[index]);
+      if (matchIndex >= 0 && matchIndex < focusedIndex) {
+        return index;
+      }
+    }
+    return total - 1; // Focus sits before the first match: wrap to the last.
+  }
+
+  private focusRelativeSearchMatch(delta: -1 | 1): string | null {
+    if (this.searchSession == null) {
+      return null;
+    }
+    const matches = this.getOrderedSearchMatches();
+    if (matches.length === 0) {
+      return null;
+    }
+    // A focused non-match anchors AT the nearest upcoming match, so the
+    // first "next" lands on it rather than skipping over it.
+    const anchorsOnMatch =
+      this.focusedPath != null && this.searchMatches.has(this.focusedPath);
+    const step = anchorsOnMatch ? delta : delta > 0 ? 0 : -1;
+    const target = matches[this.findRelativeSearchMatch(matches, step)];
+    this.setFocusedPath(target);
+    return target;
   }
 
   // --- Status decorations --------------------------------------------------------------------
@@ -1024,6 +1222,7 @@ export class AccountTreeController {
     if (this.searchSession != null) {
       this.searchSession = {
         query: this.searchSession.query,
+        mode: this.searchSession.mode,
         priorExpandedGroups: this.searchSession.priorExpandedGroups.map(remap),
       };
       const remappedMatches = new Set<string>();
@@ -1031,6 +1230,19 @@ export class AccountTreeController {
         remappedMatches.add(remap(match));
       }
       this.searchMatches = remappedMatches;
+      if (this.searchVisibleFilter != null) {
+        // Rebuild (not just remap) the hide filter: a moved match sits
+        // under new ancestors, which must join the allowed set for the
+        // match to keep its visible row.
+        const filter = new Set<string>();
+        for (const match of this.searchMatches) {
+          filter.add(match);
+          for (const ancestor of getAncestorAccountPaths(match)) {
+            filter.add(ancestor);
+          }
+        }
+        this.searchVisibleFilter = filter;
+      }
     }
 
     this.store = this.buildStore(this.entries, this.accounts);
@@ -1045,6 +1257,9 @@ export class AccountTreeController {
       statusChanged: this.ownStatus.size > 0,
       selectionChanged,
       focusChanged,
+      // Remaps rewrite match/session paths, so search consumers (match
+      // decorations, {index,total} readouts) must re-read.
+      searchChanged: this.searchSession != null,
       ...extra,
     });
   }
@@ -1139,6 +1354,16 @@ export class AccountTreeController {
    * expansion states are deliberately ignored (the chain acts as one node,
    * toggled via its deepest path), which is exactly what makes the feature
    * projection-level: turning it off restores the store-truth tree.
+   *
+   * With a `hide-non-matches` search filter active, siblings outside the
+   * precomputed match/ancestor set are dropped before frames are pushed.
+   * Anything outside that set has no match anywhere in its subtree (an
+   * ancestor of a match is in the set by construction), so skipping the
+   * node skips its whole subtree with a single O(1) set lookup — the walk
+   * stays O(visible + filtered siblings), never a per-row subtree scan.
+   * posInSet/setSize are assigned from the FILTERED sibling list: the
+   * canonical sibling counts describe the unfiltered tree and would lie to
+   * assistive tech about rows that are not in the projection at all.
    */
   private ensureProjection(): ProjectionRow[] {
     if (this.projectionCache != null) {
@@ -1147,6 +1372,7 @@ export class AccountTreeController {
     const projection: ProjectionRow[] = [];
     const paths: string[] = [];
     this.visibleIndexByPath = new Map();
+    const filter = this.searchVisibleFilter;
 
     interface Frame {
       path: string;
@@ -1155,15 +1381,21 @@ export class AccountTreeController {
       setSize: number;
     }
     const stack: Frame[] = [];
-    const roots = this.childrenByParent.get('') ?? [];
-    for (let index = roots.length - 1; index >= 0; index -= 1) {
-      stack.push({
-        path: roots[index],
-        depth: 0,
-        posInSet: index + 1,
-        setSize: roots.length,
-      });
-    }
+    const pushChildren = (children: readonly string[], depth: number): void => {
+      const admitted =
+        filter == null
+          ? children
+          : children.filter((child) => filter.has(child));
+      for (let index = admitted.length - 1; index >= 0; index -= 1) {
+        stack.push({
+          path: admitted[index],
+          depth,
+          posInSet: index + 1,
+          setSize: admitted.length,
+        });
+      }
+    };
+    pushChildren(this.childrenByParent.get('') ?? [], 0);
 
     while (stack.length > 0) {
       const frame = stack.pop();
@@ -1171,7 +1403,9 @@ export class AccountTreeController {
         break;
       }
       // Flatten single-child group chains: follow the chain while the
-      // current group has exactly one child and that child is a group.
+      // current group has exactly one child and that child is a group. The
+      // hide filter gates each hop — a match with no matching descendants
+      // must stay the chain's terminal row, not merge into hidden children.
       let rowPath = frame.path;
       let flattenedNames: string[] | null = null;
       if (this.flattenEmptyGroups) {
@@ -1181,7 +1415,8 @@ export class AccountTreeController {
           if (
             children == null ||
             children.length !== 1 ||
-            !this.groupPaths.has(children[0])
+            !this.groupPaths.has(children[0]) ||
+            (filter != null && !filter.has(children[0]))
           ) {
             break;
           }
@@ -1207,15 +1442,7 @@ export class AccountTreeController {
       this.visibleIndexByPath.set(rowPath, rowIndex);
 
       if (isGroup && this.store.isExpanded(rowPath)) {
-        const children = this.childrenByParent.get(rowPath) ?? [];
-        for (let index = children.length - 1; index >= 0; index -= 1) {
-          stack.push({
-            path: children[index],
-            depth: frame.depth + 1,
-            posInSet: index + 1,
-            setSize: children.length,
-          });
-        }
+        pushChildren(this.childrenByParent.get(rowPath) ?? [], frame.depth + 1);
       }
     }
 
@@ -1258,7 +1485,8 @@ export class AccountTreeController {
       !change.selectionChanged &&
       !change.statusChanged &&
       !change.focusChanged &&
-      !change.renameChanged
+      !change.renameChanged &&
+      !change.searchChanged
     ) {
       return;
     }
