@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, IBM_Plex_Mono } from 'next/font/google';
+import { Geist } from 'next/font/google';
+import localFont from 'next/font/local';
 
 import './globals.css';
 
@@ -11,13 +12,13 @@ const geistSans = Geist({
   preload: false,
 });
 
-// The brand monospace (stats-style type). Berkeley Mono is listed first in
-// the CSS stack for users who have it installed; Plex Mono is the webfont
-// everyone else gets. 400/500/600 cover every weight the site uses.
-const plexMono = IBM_Plex_Mono({
-  variable: '--font-plex-mono',
-  weight: ['400', '500', '600'],
-  subsets: ['latin'],
+// The brand monospace: Paper Mono by Paper (OFL 1.1, self-hosted — license
+// alongside the file in fonts/). One variable file covers every weight the
+// site uses (wght 100-800).
+const paperMono = localFont({
+  src: '../fonts/PaperMonoVariable.woff2',
+  variable: '--font-paper-mono',
+  weight: '100 800',
 });
 
 export const viewport: Viewport = {
@@ -92,7 +93,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${plexMono.variable}`}
+      className={`${geistSans.variable} ${paperMono.variable}`}
     >
       <head>
         <script

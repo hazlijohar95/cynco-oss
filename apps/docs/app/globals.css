@@ -6,12 +6,12 @@
 
 @theme {
   --font-geist: var(--font-geist-sans);
-  /* Everything type-brand is monospace, opencode style: Berkeley Mono for
-   * those who have it locally, IBM Plex Mono as the loaded webfont, Geist
-   * Mono and system monos as fallbacks. Overrides Tailwind's font-mono. */
+  /* Everything type-brand is monospace: Paper Mono (self-hosted variable
+   * webfont) with system monos as fallbacks. Overrides Tailwind's
+   * font-mono. */
   --font-mono:
-    'Berkeley Mono', var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo,
-    Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    var(--font-paper-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, 'Liberation Mono', 'Courier New', monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
