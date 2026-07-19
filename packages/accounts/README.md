@@ -55,6 +55,130 @@ tree.setAccountStatus([
 ]);
 ```
 
+## Account icons
+
+Rows can render an icon between the chevron and the name, resolved per row from
+a **built-in, closed icon set** — `bank`, `cash`, `wallet`, `receivable`,
+`payable`, `income`, `expense`, `equity`, `folder`, `chart`:
+
+```ts
+import { AccountTree, createDefaultAccountIconResolver } from '@cynco/accounts';
+
+const tree = new AccountTree({
+  entries,
+  icons: { resolver: createDefaultAccountIconResolver() },
+});
+
+// Or your own resolver:
+const custom = new AccountTree({
+  entries,
+  icons: {
+    resolver({ path, name, isGroup, depth }) {
+      if (isGroup) return 'folder';
+      return path.startsWith('Assets:') ? 'wallet' : null; // null = no icon
+    },
+  },
+});
+```
+
+- The resolver returns an `AccountIconName` or `null` (no icon — with the option
+  absent, row markup is byte-identical to a tree without icons).
+- **The closed union is the XSS boundary**: resolvers never return markup; the
+  renderer only interpolates its own built-in SVG path data and validates the
+  returned name at runtime, so untyped hosts cannot inject HTML through the icon
+  lane.
+- **Hot path contract**: the resolver runs once per rendered row per window
+  commit (never per selection/focus patch). Keep it cheap and pure.
+- Icons are decorative (`aria-hidden`), colored by `currentColor`, and sized by
+  the density scale (`--accounts-icon-size`, override with
+  `--accounts-icon-size-override`). Sticky mirror rows and renaming rows keep
+  their icon.
+
+`createDefaultAccountIconResolver()` is a pragmatic default over top-level
+segment heuristics — replace it when you have real account-type metadata: groups
+→ `folder`; Assets leaves → `cash` (name contains "cash"/"petty", checked first
+so "Cash-Maybank" reads as cash), `bank`, `receivable` ("receivable"/"debtor"),
+else `wallet`; Liabilities → `payable`; Income/Revenue → `income`; Expenses →
+`expense`; Equity/Capital → `equity`; anything else → no icon.
+
+## Row decorations
+
+`renderDecorations` adds a host-driven trailing lane between the name and the
+balance — small text badges and colored dots:
+
+```ts
+const tree = new AccountTree({
+  entries,
+  renderDecorations({ path, name, isGroup, depth, visibleChildCount }) {
+    const count = postingCounts.get(path);
+    return [
+      ...(count ? [{ kind: 'text' as const, text: `${count}×` }] : []),
+      ...(isStale(path)
+        ? [{ kind: 'dot' as const, tone: 'warn' as const }]
+        : []),
+    ];
+  },
+});
+```
+
+- Decorations are **host-driven** and recomputed per window commit;
+  controller-driven status dots (`setAccountStatus`, with ancestor roll-up) stay
+  a separate lane right before them. Same hot-path contract as icon resolvers:
+  cheap and pure.
+- Tones (`neutral | info | success | warn | danger`) map onto the theme state
+  colors (`--accounts-tone-*`, resolving through `--accounts-theme-states-*`;
+  `neutral` uses the muted foreground).
+- **At most 3 decorations render per row** — rows are fixed-height by contract
+  (all virtualization math is `index * rowHeight`), and an unbounded lane would
+  break that.
+- Text decorations are escaped and contribute to the row's accessible name as
+  ordinary text content; dots are `aria-hidden` (a bare colored circle has no
+  announceable meaning).
+- `visibleChildCount` is the number of child rows an expanded group currently
+  contributes to the projection (0 for leaves and collapsed groups).
+
+## Drop collision strategies & drop callbacks
+
+`dropCollision` decides what happens when a dragged account's leaf name already
+exists under the drop target:
+
+```ts
+const tree = new AccountTree({
+  entries,
+  dropCollision: 'skip', // 'reject' (default) | 'skip' | 'replace'
+  onMove(moves) {
+    /* fires first — the original event, unchanged */
+  },
+  onDropComplete({ moves, skipped, replaced }) {
+    /* fires second — the richer superset */
+  },
+  onDropError({ reason, attempted }) {
+    // reason: 'collision' | 'invalid-target' | 'self-drop'
+  },
+});
+```
+
+- **`reject`** (default): any collision blocks the whole drop — nothing moves,
+  `onDropError` fires with `reason: 'collision'` and the full attempted batch.
+  The colliding target still accepts the drop gesture so the error is surfaced
+  instead of the cursor being silently refused.
+- **`skip`**: colliding moves drop out of the plan; the rest proceed and
+  `onDropComplete.skipped` lists what stayed put. When every candidate collides,
+  the drop is a silent no-op (no event).
+- **`replace`**: the existing account at each colliding destination — and its
+  whole subtree — is removed, then the move proceeds. `onDropComplete.replaced`
+  lists the removed roots. Removal runs through the same remap rebuild as the
+  move itself: exactly one change event, selection/focus/status/search state on
+  removed paths is dropped (never remapped), and **ledger entries with any
+  posting inside a replaced subtree are dropped whole** (a partial entry would
+  not balance) — sync your own store from the `replaced` list.
+
+Ordering: `onMove` (back-compat, applied moves only) always fires before
+`onDropComplete`. `onDropError` fires alone — an erroring drop applies nothing.
+Programmatic movers can share the exact same path via the controller:
+`applyMovePlan(planMovePaths(sources, target, collision))`;
+`getMovePlan`/`movePaths` keep their original skip-shaped behavior.
+
 ## Context menu composition
 
 The tree never renders a context menu itself — it owns triggering, target
@@ -168,6 +292,69 @@ should call `focusNextSearchMatch` / `focusPreviousSearchMatch` on the
 controller directly and render `getSearchMatchState()` as the `{index}/{total}`
 readout. Search mutations report an honest `searchChanged` facet on `onChange`
 events.
+
+## Lazy child loading
+
+Huge charts (or remote ones) don't need every subtree up front. Mark groups as
+_unloaded_ and give the tree an async loader; expanding an unloaded group
+fetches its children on demand:
+
+```ts
+const tree = new AccountTree({
+  accounts: ['Assets:Current:Cash', 'Archive'],
+  initiallyUnloaded: ['Archive'],
+  loadChildren: async (path) => {
+    const response = await fetch(`/api/accounts?parent=${path}`);
+    return response.json(); // canonical child paths, e.g. ['Archive:2024']
+  },
+  onChildLoadError(path, error) {
+    console.warn(`loading ${path} failed`, error);
+  },
+});
+```
+
+**Contract.** An unloaded group renders as a collapsed, expandable group even
+with zero children in the store — the chevron affordance is truthful because
+"unloaded" _means_ "children exist but are unfetched". Expanding it (chevron
+click, ArrowRight, programmatic `setExpanded`) starts exactly one load:
+`loadChildren(path)` resolves to the group's canonical child paths (nested
+descendants allowed; ancestors auto-create; invalid paths are skipped, the same
+graceful semantics as every other path input). Loaded children then flow through
+the normal projection/window pipeline. The controller surface is
+`markUnloaded(paths)`, `getChildLoadState(path)`, `requestChildLoad(path)`, and
+`cancelChildLoads()`.
+
+**Loading & error UX.** While a fetch is in flight the group row carries
+`aria-busy="true"` and an expanded group shows one fixed-height _loading row_
+(CSS-animated dots honoring `prefers-reduced-motion`; `aria-hidden`, since the
+group's `aria-busy` already tells assistive tech and no child rows exist yet to
+fake `aria-setsize` for). A rejection swaps it for an _error row_ with the
+failure message and a real, labelled **Retry** `<button>`. Placeholder rows are
+projection-level view rows, not store rows: never selectable, never drag sources
+or drop targets, and keyboard navigation / type-ahead skip them — with one
+deliberate exception to the roving-tabindex pattern: the Retry button keeps
+`tabindex="0"`, because the row is not a treeitem (aria-activedescendant can
+never reach it) and the only recovery control must stay keyboard-reachable.
+Collapsing and re-expanding an error group does **not** auto-retry; Retry (or
+`requestChildLoad`) is the explicit gesture, so a failing endpoint is never
+hammered by browsing.
+
+**Expand-all never loads.** `expandAll()` skips unloaded groups by design: it is
+ONE gesture, and fanning it out into N network fetches (one per unloaded group)
+would be surprising, slow, and unbounded. Expand the specific group you want
+fetched.
+
+**Stale responses.** Each attempt carries a token (the same session-token idiom
+as context-menu sessions): a load that settles after `cleanUp()`, after the
+group was removed or moved (rename / drag & drop), or after a newer attempt for
+the same path, is discarded instead of resurrecting rows the tree moved on from.
+The store double-guards this — a completion for a machine no longer in `loading`
+is refused with reason `not-loading`.
+
+**Search & flatten.** Search cannot see unfetched children: under
+`hide-non-matches` an unloaded group stays visible only when the group itself
+matches. `flattenEmptyGroups` never flattens into or through a group with a
+pending load — the placeholder needs an honest anchor row.
 
 ## Middle name truncation
 

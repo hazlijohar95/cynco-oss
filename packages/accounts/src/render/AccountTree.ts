@@ -14,9 +14,14 @@ import {
   STICKY_ANCESTOR_STACK_MAX,
 } from '../constants';
 import { AccountTreeController } from '../model/AccountTreeController';
+import { getChildLoadPlaceholderParent } from '../model/childLoadPlaceholder';
 import type {
+  AccountDropCollision,
+  AccountDropCompleteEvent,
+  AccountDropErrorEvent,
   AccountMoveListener,
   AccountRenameListener,
+  AccountRowDecorationsRenderer,
   AccountStatusEntry,
   AccountTreeChange,
   AccountTreeContextMenuAnchor,
@@ -24,6 +29,7 @@ import type {
   AccountTreeContextMenuOptions,
   AccountTreeContextMenuSource,
   AccountTreeControllerOptions,
+  AccountTreeIconOptions,
   AccountTreeNameTruncation,
   AccountTreeStickyAncestors,
   ColorScheme,
@@ -80,10 +86,51 @@ export interface AccountTreeOptions extends AccountTreeControllerOptions {
   /** Fired after a drag & drop re-parenting, with the applied moves. */
   onMove?: AccountMoveListener;
   /**
+   * How drops resolve leaf-name collisions at the target group. Default
+   * `reject` (any collision blocks the whole drop); see
+   * `AccountDropCollision` for `skip` and `replace`.
+   */
+  dropCollision?: AccountDropCollision;
+  /**
+   * Fired after every applied drop with the full breakdown (applied moves,
+   * strategy-skipped candidates, replaced subtree roots). Ordering contract:
+   * `onMove` fires FIRST with the same applied moves (the back-compat
+   * event), then `onDropComplete` — the richer superset.
+   */
+  onDropComplete?: (result: AccountDropCompleteEvent) => void;
+  /**
+   * Fired when a drop lands but applies nothing for an error-shaped reason:
+   * a collision under `dropCollision: 'reject'`, a drop on a row that is not
+   * a group target, or a drop of a path onto itself / its own subtree.
+   * Silent non-errors (drop onto the current parent, a `skip` drop where
+   * every candidate collides) fire nothing.
+   */
+  onDropError?: (error: AccountDropErrorEvent) => void;
+  /**
    * Spring-loaded expansion delay in ms: how long a drag must hover a
    * collapsed group before it auto-expands. Default 700.
    */
   dragExpandDelayMs?: number;
+  /**
+   * Per-row icon between the chevron and the name, resolved from the
+   * BUILT-IN closed icon set (`AccountIconName`) by `icons.resolver`.
+   * Returning null renders no icon — with the option absent, row markup is
+   * byte-identical to a tree without icons. The resolver runs once per
+   * rendered row per window commit (the row HTML build hot path, never
+   * per attribute patch), so it must be cheap and pure. See
+   * `createDefaultAccountIconResolver()` for a pragmatic default.
+   */
+  icons?: AccountTreeIconOptions;
+  /**
+   * Host-driven trailing decoration lane between the name and the balance
+   * (rendered after the controller-driven status dot, which it deliberately
+   * does not replace). At most 3 decorations render per row — the fixed-
+   * height row contract tolerates no unbounded lanes. Text decorations are
+   * escaped and join the row's accessible name; dots are aria-hidden. Same
+   * hot-path contract as `icons.resolver`: cheap and pure, called once per
+   * rendered row per window commit.
+   */
+  renderDecorations?: AccountRowDecorationsRenderer;
   /**
    * How row names handle horizontal overflow. Default `end` (plain CSS
    * ellipsis, the original behavior). `middle` runs a measured truncation
@@ -297,6 +344,9 @@ export class AccountTree {
   }
 
   cleanUp(): void {
+    // Invalidate in-flight child loads first: a fetch resolving after
+    // teardown must be discarded, not mutate a tree nobody renders.
+    this.controller.cancelChildLoads();
     this.nameResizeObserver?.disconnect();
     this.nameResizeObserver = undefined;
     this.stickyRowCount = 0;
@@ -511,6 +561,8 @@ export class AccountTree {
       renameDraft: this.controller.getRenameDraft(),
       contextMenu: this.options.contextMenu != null,
       contextMenuRowButton: this.options.contextMenu?.rowButton === true,
+      iconResolver: this.options.icons?.resolver,
+      renderDecorations: this.options.renderDecorations,
     };
   }
 
@@ -752,6 +804,10 @@ export class AccountTree {
       if (!(element instanceof HTMLElement)) {
         continue;
       }
+      // Placeholder rows carry no selection/focus state to patch.
+      if (element.hasAttribute('data-load-placeholder')) {
+        continue;
+      }
       const raw = element.getAttribute('data-row-index');
       if (raw == null) {
         continue;
@@ -827,15 +883,24 @@ export class AccountTree {
     if (topIndex > 0 && count > 0) {
       const visible = this.controller.getVisiblePaths();
       const topPath = visible[Math.min(topIndex, count - 1)];
+      // A child-load placeholder at the top of the viewport is anchored by
+      // its (scrolled-off) loading/error group: mirror that group as the
+      // nearest ancestor, since the marker itself names no account.
+      const placeholderParent = getChildLoadPlaceholderParent(topPath);
       // Ancestors that own visible rows: under flattening (and the
       // hide-non-matches filter) a plain parent walk could land on a
       // mid-chain group with no row to mirror or forward to.
       if (stackMode) {
-        ancestorPaths = this.controller
-          .getVisibleAncestorPaths(topPath)
-          .slice(-STICKY_ANCESTOR_STACK_MAX);
+        ancestorPaths = this.controller.getVisibleAncestorPaths(
+          placeholderParent ?? topPath
+        );
+        if (placeholderParent != null) {
+          ancestorPaths.push(placeholderParent);
+        }
+        ancestorPaths = ancestorPaths.slice(-STICKY_ANCESTOR_STACK_MAX);
       } else {
-        const nearest = this.controller.getVisibleParentPath(topPath);
+        const nearest =
+          placeholderParent ?? this.controller.getVisibleParentPath(topPath);
         ancestorPaths = nearest != null ? [nearest] : [];
       }
     }
@@ -954,6 +1019,21 @@ export class AccountTree {
     }
     if (row.getAttribute('data-sticky-row') === 'true') {
       this.forwardStickyRowClick(row);
+      return;
+    }
+    // Child-load placeholder rows: only the error row's Retry button does
+    // anything (re-running the load); the rest of the row is inert — it is
+    // not selectable and names no account.
+    if (row.hasAttribute('data-load-placeholder')) {
+      const retry =
+        target instanceof Element ? target.closest('[data-load-retry]') : null;
+      if (retry instanceof HTMLElement) {
+        event.preventDefault();
+        const parent = retry.getAttribute('data-load-parent');
+        if (parent != null) {
+          this.controller.requestChildLoad(parent);
+        }
+      }
       return;
     }
     const path = this.getRowPath(row);
@@ -1400,7 +1480,12 @@ export class AccountTree {
 
   private handleDragStart = (event: Event): void => {
     const row = getRowFromEvent(event);
-    if (row == null || row.getAttribute('data-sticky-row') === 'true') {
+    if (
+      row == null ||
+      row.getAttribute('data-sticky-row') === 'true' ||
+      // Placeholder rows name no account; they are never drag sources.
+      row.hasAttribute('data-load-placeholder')
+    ) {
       return;
     }
     const path = this.getRowPath(row);
@@ -1430,9 +1515,23 @@ export class AccountTree {
       this.setDropTarget(null);
       return;
     }
-    // Only allow the drop when at least one dragged path survives the guard
-    // set (self/descendant/parent/collision) — invalid targets show nothing.
-    if (this.controller.getMovePlan(this.dragPaths, targetPath).length === 0) {
+    // Only allow the drop when it would do something observable: apply
+    // moves, or — under `reject` — surface a collision through onDropError
+    // (the drop must be able to land for the error to be reportable; a
+    // target that mysteriously refuses the cursor is the feedback failure
+    // the strategy exists to fix). A `skip` drop where EVERY candidate
+    // collides is a silent no-op by contract, so it shows nothing, exactly
+    // like guard-rejected (self/descendant/parent) targets.
+    const collision = this.getDropCollision();
+    const plan = this.controller.planMovePaths(
+      this.dragPaths,
+      targetPath,
+      collision
+    );
+    const allowed =
+      plan.moves.length > 0 ||
+      (collision === 'reject' && plan.skipped.length > 0);
+    if (!allowed) {
       this.setDropTarget(null);
       return;
     }
@@ -1452,19 +1551,73 @@ export class AccountTree {
   };
 
   private handleDrop = (event: Event): void => {
-    if (this.dragPaths == null) {
+    const dragPaths = this.dragPaths;
+    if (dragPaths == null) {
       return;
     }
     const row = getRowFromEvent(event);
     const targetPath = this.getRowDropTargetPath(row);
-    if (targetPath != null) {
+    if (targetPath == null) {
+      // Landed on a real row that is no group target (leaf/sticky mirror):
+      // an error-shaped outcome. Drops outside any row are plain cancels.
+      if (row != null) {
+        this.options.onDropError?.({ reason: 'invalid-target', attempted: [] });
+      }
+      this.endDragSession();
+      return;
+    }
+    const plan = this.controller.planMovePaths(
+      dragPaths,
+      targetPath,
+      this.getDropCollision()
+    );
+    if (plan.moves.length > 0) {
       event.preventDefault();
-      // movePaths fires the controller's onMove, which startListening
-      // forwards to the view's onMove option.
-      this.controller.movePaths(this.dragPaths, targetPath);
+      // applyMovePlan fires the controller's onMove (which startListening
+      // forwards to the view's onMove option) BEFORE onDropComplete fires
+      // below — the documented ordering: back-compat event first, richer
+      // superset second.
+      this.controller.applyMovePlan(plan);
+      this.options.onDropComplete?.({
+        moves: plan.moves,
+        skipped: plan.skipped,
+        replaced: plan.replaced,
+      });
+    } else if (plan.skipped.length > 0) {
+      // Under `reject` a non-empty skipped set with no moves means a
+      // collision blocked the whole drop. Under `skip` it means every
+      // candidate collided — a silent no-op by contract (no event).
+      if (this.getDropCollision() === 'reject') {
+        event.preventDefault();
+        this.options.onDropError?.({
+          reason: 'collision',
+          attempted: plan.skipped,
+        });
+      }
+    } else if (
+      dragPaths.some(
+        (path) => targetPath === path || targetPath.startsWith(`${path}:`)
+      )
+    ) {
+      // Every candidate was guarded and the target sits inside a dragged
+      // subtree: the canonical self-drop. The attempted moves are the naive
+      // candidates so the host can show what was asked for. (A drop onto
+      // the current parent stays a silent no-op — it is not an error.)
+      this.options.onDropError?.({
+        reason: 'self-drop',
+        attempted: dragPaths.map((path) => ({
+          from: path,
+          to: `${targetPath}:${path.slice(path.lastIndexOf(':') + 1)}`,
+        })),
+      });
     }
     this.endDragSession();
   };
+
+  /** Effective drop collision strategy (default `reject`). */
+  private getDropCollision(): AccountDropCollision {
+    return this.options.dropCollision ?? 'reject';
+  }
 
   private handleDragEnd = (): void => {
     this.endDragSession();

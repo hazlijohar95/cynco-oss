@@ -63,6 +63,39 @@ export type AccountTreeInitialExpansion = 'all' | 'top-level' | string[];
  */
 export type AccountStatusKind = 'unreconciled' | 'flagged' | 'pending';
 
+/**
+ * Where a group sits in the child-loading state machine (structurally
+ * identical to the engine's union — see the file-level comment on why
+ * domain shapes are declared locally):
+ *
+ * - `loaded` (default): all children are known. Every row is `loaded`
+ *   unless the tree was told otherwise.
+ * - `unloaded`: the group claims children that have not been fetched yet;
+ *   expanding it triggers `loadChildren`.
+ * - `loading`: a fetch is in flight; the group carries `aria-busy` and an
+ *   expanded group shows a loading placeholder row.
+ * - `error`: the last fetch failed; an expanded group shows an error row
+ *   with a Retry button.
+ */
+export type AccountChildLoadState = 'loaded' | 'unloaded' | 'loading' | 'error';
+
+/**
+ * View data for one child-load placeholder row — the synthetic loading /
+ * error row rendered as the first child of an expanded group whose fetch is
+ * in flight or failed. Placeholder rows are projection-level only (never
+ * store rows): one fixed-height row, not selectable, skipped by keyboard
+ * navigation and type-ahead. The error row's Retry button is the deliberate
+ * exception to the roving-tabindex pattern (see the renderer).
+ */
+export interface AccountChildLoadPlaceholder {
+  /** Canonical path of the loading/error group the row belongs to. */
+  parentPath: string;
+  /** Which placeholder shape to render. */
+  state: 'loading' | 'error';
+  /** Failure message remembered by the store; null when none was given. */
+  error: string | null;
+}
+
 /** One status decoration entry passed to `setAccountStatus`. */
 export interface AccountStatusEntry {
   /** Canonical colon-delimited account path the status applies to. */
@@ -120,6 +153,26 @@ export interface AccountTreeRowData {
    * chain's deepest group — the node expansion toggles operate on.
    */
   flattenedNames: readonly string[] | null;
+  /**
+   * Number of child rows this row currently contributes to the visible
+   * projection: the (filter-admitted) direct children of an EXPANDED group,
+   * 0 for leaves and collapsed groups (synthetic placeholder rows are not
+   * counted — they are view rows, not children). Feeds `renderDecorations`
+   * context.
+   */
+  visibleChildCount: number;
+  /**
+   * Child-load state of a group row; `'loaded'` (or absent — the fields are
+   * optional so hand-built row literals and SSR snapshots stay valid) for
+   * leaves and ordinary groups. A `loading` group renders `aria-busy`.
+   */
+  childLoadState?: AccountChildLoadState;
+  /**
+   * Present only on synthetic child-load placeholder rows (see
+   * {@link AccountChildLoadPlaceholder}); every account field above is
+   * inert on such rows (`path` carries a non-path projection marker).
+   */
+  loadPlaceholder?: AccountChildLoadPlaceholder | null;
 }
 
 /** Half-open `[start, end)` row index range. */
@@ -218,6 +271,148 @@ export interface AccountSearchResult {
    * search session so every match is visible.
    */
   expandedAncestors: readonly string[];
+}
+
+/**
+ * Names of the built-in account icons. A CLOSED union: the renderer only
+ * ever interpolates path data looked up from this set, so a resolver can
+ * never inject markup — the union is the XSS boundary (see accountIcons.ts).
+ */
+export type AccountIconName =
+  | 'bank'
+  | 'cash'
+  | 'wallet'
+  | 'receivable'
+  | 'payable'
+  | 'income'
+  | 'expense'
+  | 'equity'
+  | 'folder'
+  | 'chart';
+
+/**
+ * Per-row context handed to icon resolvers (and, extended with
+ * `visibleChildCount`, to decoration renderers). Deliberately small and
+ * value-shaped: both callbacks run on the row HTML build hot path.
+ */
+export interface AccountIconContext {
+  /** Canonical colon-delimited account path. */
+  path: string;
+  /** Leaf segment of the path. */
+  name: string;
+  /** True when the account has child accounts. */
+  isGroup: boolean;
+  /** Zero-based tree depth of the rendered row. */
+  depth: number;
+}
+
+/**
+ * Maps a row to a built-in icon name, or null for no icon (the exact
+ * markup rendered when the `icons` option is absent). Called once per
+ * rendered row per window commit — never per attribute patch — so it sits
+ * on the rendering hot path: resolvers must be cheap and pure (same input →
+ * same output, no I/O, no allocation-heavy work).
+ */
+export type AccountIconResolver = (
+  context: AccountIconContext
+) => AccountIconName | null;
+
+/** Icon configuration for `AccountTree`. */
+export interface AccountTreeIconOptions {
+  /** Resolver mapping rows to built-in icon names (null = no icon). */
+  resolver: AccountIconResolver;
+}
+
+/**
+ * Tone of a row decoration. Tones map onto the theme state colors
+ * (`--accounts-theme-states-*`); `neutral` uses the muted foreground.
+ */
+export type AccountDecorationTone =
+  | 'neutral'
+  | 'info'
+  | 'success'
+  | 'warn'
+  | 'danger';
+
+/**
+ * One host-driven decoration in a row's trailing lane: a short text badge
+ * (escaped; contributes to the row's accessible name) or a colored dot
+ * (decorative; hidden from assistive tech).
+ */
+export type AccountRowDecoration =
+  | { kind: 'text'; text: string; tone?: AccountDecorationTone }
+  | { kind: 'dot'; tone: AccountDecorationTone };
+
+/** Context handed to `renderDecorations`: the icon context plus the number
+ * of child rows the row currently contributes to the visible projection
+ * (0 for leaves and collapsed groups). */
+export interface AccountRowDecorationContext extends AccountIconContext {
+  visibleChildCount: number;
+}
+
+/**
+ * Host callback producing a row's decorations. Runs on the row HTML build
+ * hot path (once per rendered row per window commit), so it must be cheap
+ * and pure. At most 3 decorations render per row — see the renderer.
+ */
+export type AccountRowDecorationsRenderer = (
+  context: AccountRowDecorationContext
+) => readonly AccountRowDecoration[];
+
+/**
+ * How a drop resolves leaf-name collisions at the target group:
+ *
+ * - `reject` (default): ANY collision blocks the whole drop — nothing moves
+ *   and `onDropError` fires with reason `collision`.
+ * - `skip`: colliding moves are dropped from the plan; the rest proceed.
+ *   When every candidate collides the drop is a silent no-op (no event).
+ * - `replace`: the existing account at each colliding destination (and its
+ *   whole subtree) is removed, then the move proceeds. Ledger entries
+ *   touching a replaced subtree are dropped whole (a partial entry would
+ *   not balance); the removed paths are reported in `onDropComplete`'s
+ *   `replaced` list so hosts can sync their own stores.
+ */
+export type AccountDropCollision = 'reject' | 'skip' | 'replace';
+
+/**
+ * Full breakdown of a planned (or applied) drop: the moves that proceed,
+ * the candidates dropped by the collision strategy, and — under `replace` —
+ * the existing account paths whose subtrees are removed to make way.
+ * Under `reject` a collision empties `moves` and every candidate (clean and
+ * colliding alike) lands in `skipped`, so error reporters can show the
+ * whole attempted batch.
+ */
+export interface AccountMovePlan {
+  moves: AccountMove[];
+  skipped: AccountMove[];
+  replaced: string[];
+}
+
+/** Payload of `onDropComplete`: the applied plan's breakdown. */
+export interface AccountDropCompleteEvent {
+  /** Moves actually applied (what `onMove` also received). */
+  moves: AccountMove[];
+  /** Candidate moves dropped by the collision strategy. */
+  skipped: AccountMove[];
+  /** Existing account paths removed under `dropCollision: 'replace'`. */
+  replaced: string[];
+}
+
+/** Why a drop produced `onDropError` instead of applying. */
+export type AccountDropErrorReason =
+  /** `dropCollision: 'reject'` and at least one leaf-name collision. */
+  | 'collision'
+  /** The drop landed on a row that is not a valid group target. */
+  | 'invalid-target'
+  /** The target group is one of the dragged paths or inside one. */
+  | 'self-drop';
+
+/** Payload of `onDropError`. */
+export interface AccountDropErrorEvent {
+  reason: AccountDropErrorReason;
+  /** The candidate moves the drop attempted (empty when none were
+   * computable, e.g. a drop on a leaf row). */
+  attempted: AccountMove[];
 }
 
 /** One re-parenting move applied by rename or drag & drop. */
@@ -366,4 +561,29 @@ export interface AccountTreeControllerOptions {
    * expansion toggles that node. Default false.
    */
   flattenEmptyGroups?: boolean;
+  /**
+   * Async child loader for lazy subtrees. When configured, expanding a group
+   * marked unloaded (via `initiallyUnloaded` or `markUnloaded`) calls this
+   * with the group's canonical path; the returned promise resolves to the
+   * canonical paths of the group's children (full paths — nested descendants
+   * allowed, ancestors auto-created, invalid paths skipped). While in flight
+   * the group shows a loading placeholder row; a rejection shows an error
+   * row with a Retry button. Stale settlements (a newer load for the same
+   * path, the path moved/removed, or `cancelChildLoads` ran) are discarded.
+   */
+  loadChildren?: (path: string) => Promise<readonly string[]>;
+  /**
+   * Paths whose children are not yet fetched at construction. Marked paths
+   * render as collapsed, expandable groups even with zero children; unknown
+   * paths are ignored. Only meaningful together with `loadChildren` (without
+   * a loader the groups simply expand to nothing).
+   */
+  initiallyUnloaded?: readonly string[];
+  /**
+   * Fired when a `loadChildren` call rejects (with the ORIGINAL rejection
+   * value — the store only remembers the derived message). Fires once per
+   * failed attempt, before the error row renders; stale rejections are
+   * discarded without firing.
+   */
+  onChildLoadError?: (path: string, error: unknown) => void;
 }

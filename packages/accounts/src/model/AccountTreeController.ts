@@ -19,8 +19,12 @@ import {
   DENSITY_ROW_HEIGHTS,
 } from '../constants';
 import type {
+  AccountChildLoadPlaceholder,
+  AccountChildLoadState,
+  AccountDropCollision,
   AccountMove,
   AccountMoveListener,
+  AccountMovePlan,
   AccountRenameListener,
   AccountSearchMatchState,
   AccountSearchResult,
@@ -39,6 +43,10 @@ import type {
   RowRange,
   SelectPathOptions,
 } from '../types';
+import {
+  isChildLoadPlaceholderPath,
+  makeChildLoadPlaceholderPath,
+} from './childLoadPlaceholder';
 
 // Severity order for status roll-up onto ancestors: a group containing both
 // pending and flagged descendants shows the flagged (danger) dot.
@@ -86,6 +94,20 @@ interface ProjectionRow {
   posInSet: number;
   setSize: number;
   flattenedNames: readonly string[] | null;
+  /**
+   * Present only on synthetic child-load placeholder rows (the loading /
+   * error row under an expanded pending group); `path` then carries the
+   * non-path projection marker from makeChildLoadPlaceholderPath.
+   */
+  loadPlaceholder?: AccountChildLoadPlaceholder;
+}
+
+/** One snapshotted child-load machine entry carried across store rebuilds. */
+interface ChildLoadSnapshotEntry {
+  path: string;
+  state: AccountChildLoadState;
+  error: string | null;
+  expanded: boolean;
 }
 
 export class AccountTreeController {
@@ -132,6 +154,24 @@ export class AccountTreeController {
    */
   private searchVisibleFilter: Set<string> | null = null;
 
+  /** Async child loader (lazy subtrees), or null when not configured. */
+  private readonly loadChildren:
+    | ((path: string) => Promise<readonly string[]>)
+    | null;
+  private readonly onChildLoadError:
+    | ((path: string, error: unknown) => void)
+    | null;
+  /**
+   * Stale-response gate for in-flight child loads: one token per attempt,
+   * keyed by path — the same identity-token idiom as the view's context-menu
+   * session. A settlement only applies while its token is still the path's
+   * CURRENT token; retries, remaps of the path, removals, and
+   * cancelChildLoads all invalidate it, so late responses are discarded
+   * instead of resurrecting rows for a tree that moved on.
+   */
+  private readonly childLoadTokens = new Map<string, number>();
+  private childLoadTokenCounter = 0;
+
   /** Path currently being renamed inline, or null. */
   private renamingPath: string | null = null;
   /**
@@ -165,14 +205,23 @@ export class AccountTreeController {
       currency = DEFAULT_CURRENCY,
       showBalances = true,
       flattenEmptyGroups = false,
+      loadChildren = null,
+      initiallyUnloaded = [],
+      onChildLoadError = null,
     } = options;
     this.density = density;
     this.currency = currency;
     this.showBalances = showBalances;
     this.flattenEmptyGroups = flattenEmptyGroups;
+    this.loadChildren = loadChildren;
+    this.onChildLoadError = onChildLoadError;
     this.accounts = accounts;
     this.entries = entries;
     this.store = this.buildStore(entries, accounts);
+    // Mark BEFORE initial expansion: marking collapses the paths (children
+    // unknown), and the expansion modes leave zero-child groups alone —
+    // initial expansion never triggers loads, only expand gestures do.
+    this.store.markUnloaded([...initiallyUnloaded]);
     this.applyInitialExpansion(initialExpansion);
   }
 
@@ -191,12 +240,19 @@ export class AccountTreeController {
         collapsedGroups.push(path);
       }
     }
+    const childLoadSnapshot = this.snapshotChildLoadStates();
 
     this.entries = entries;
     this.store = this.buildStore(entries, this.accounts);
     for (const path of collapsedGroups) {
       this.store.setExpanded(path, false);
     }
+    // Load state lives in the store, which was just replaced: re-apply it
+    // for surviving paths (identity map — setEntries moves nothing), so
+    // in-flight loads stay valid and pending groups keep their affordance.
+    this.restoreChildLoadStates(childLoadSnapshot, (path) =>
+      this.store.hasAccount(path) ? path : null
+    );
 
     let selectionChanged = false;
     for (const path of [...this.selection]) {
@@ -304,6 +360,30 @@ export class AccountTreeController {
     const decorated: AccountTreeRowData[] = [];
     for (let index = clampedStart; index < clampedEnd; index += 1) {
       const row = projection[index];
+      // Placeholder rows carry no account state: every decoration facet is
+      // inert, only depth (indent) and the placeholder payload matter.
+      if (row.loadPlaceholder != null) {
+        decorated.push({
+          path: row.path,
+          name: '',
+          depth: row.depth,
+          kind: 'leaf',
+          expanded: false,
+          setSize: 0,
+          posInSet: 0,
+          balance: null,
+          selected: false,
+          focused: false,
+          searchMatch: false,
+          status: null,
+          statusCount: 0,
+          flattenedNames: null,
+          visibleChildCount: 0,
+          childLoadState: 'loaded',
+          loadPlaceholder: row.loadPlaceholder,
+        });
+        continue;
+      }
       const isGroup = row.kind === 'group';
       const expanded = isGroup && this.store.isExpanded(row.path);
       const status = this.getEffectiveStatus(row.path, isGroup, expanded);
@@ -324,9 +404,38 @@ export class AccountTreeController {
         status: status?.status ?? null,
         statusCount: status?.count ?? 0,
         flattenedNames: row.flattenedNames,
+        visibleChildCount: expanded ? this.getAdmittedChildCount(row.path) : 0,
+        childLoadState: isGroup
+          ? this.store.getChildLoadState(row.path).state
+          : 'loaded',
+        loadPlaceholder: null,
       });
     }
     return decorated;
+  }
+
+  /**
+   * Direct children of a path that the visible projection admits: all of
+   * them normally, only the match/ancestor set under a `hide-non-matches`
+   * filter. O(1) without a filter, O(children) with one — a per-row cost the
+   * projection walk itself already pays, never a subtree scan.
+   */
+  private getAdmittedChildCount(path: string): number {
+    const children = this.childrenByParent.get(path);
+    if (children == null) {
+      return 0;
+    }
+    const filter = this.searchVisibleFilter;
+    if (filter == null) {
+      return children.length;
+    }
+    let count = 0;
+    for (const child of children) {
+      if (filter.has(child)) {
+        count += 1;
+      }
+    }
+    return count;
   }
 
   /**
@@ -343,7 +452,13 @@ export class AccountTreeController {
     return rows.length > 0 ? rows[0] : null;
   }
 
-  /** Visible paths in render order (cached; do not mutate). */
+  /**
+   * Visible paths in render order (cached; do not mutate). Child-load
+   * placeholder rows occupy their index with a synthetic non-path marker
+   * (see childLoadPlaceholder.ts) so row indexes stay aligned with the
+   * rendered grid; `isChildLoadPlaceholderPath` identifies them, and every
+   * account API treats the marker as an unknown path (graceful no-op).
+   */
   getVisiblePaths(): readonly string[] {
     this.ensureProjection();
     return this.visiblePathsCache ?? [];
@@ -422,8 +537,25 @@ export class AccountTreeController {
     this.store.setExpanded(path, expanded);
     this.invalidateVisibleCache();
     this.emit({ ...NO_CHANGE, expansionChanged: true });
+    // Expanding an unloaded group IS the fetch gesture (chevron click,
+    // ArrowRight, programmatic reveal all funnel through here). Error groups
+    // deliberately do NOT auto-retry on re-expand — retry is the explicit
+    // button, so collapsing/expanding never hammers a failing endpoint.
+    if (
+      expanded &&
+      this.loadChildren != null &&
+      this.store.getChildLoadState(path).state === 'unloaded'
+    ) {
+      this.requestChildLoad(path);
+    }
   }
 
+  /**
+   * Expands every group with known children. Unloaded groups are skipped by
+   * design: expand-all is ONE gesture, and letting it fan out N network
+   * fetches (one per unloaded group) would be surprising, slow, and
+   * unbounded — the user expands the specific group they want fetched.
+   */
   expandAll(): void {
     this.store.expandAll();
     this.invalidateVisibleCache();
@@ -452,6 +584,214 @@ export class AccountTreeController {
     if (changed) {
       this.invalidateVisibleCache();
       this.emit({ ...NO_CHANGE, expansionChanged: true });
+    }
+  }
+
+  // --- Child loading (lazy subtrees) ---------------------------------------------------
+
+  /**
+   * Declares the paths' children as not yet fetched. Marked paths render as
+   * collapsed, expandable groups; the next expand gesture triggers
+   * `loadChildren`. Unknown paths are ignored. Re-marking a path with a
+   * load in flight cancels that load (its settlement is discarded).
+   */
+  markUnloaded(paths: readonly string[]): void {
+    this.store.markUnloaded(paths);
+    for (const path of paths) {
+      // Any in-flight attempt for a re-marked path is stale by definition.
+      this.childLoadTokens.delete(path);
+    }
+    this.invalidateVisibleCache();
+    this.emit({ ...NO_CHANGE, expansionChanged: true });
+  }
+
+  /** Where the path sits in the child-loading machine (`loaded` default). */
+  getChildLoadState(path: string): {
+    state: AccountChildLoadState;
+    error?: string;
+  } {
+    return this.store.getChildLoadState(path);
+  }
+
+  /**
+   * Starts (or retries) the async child load for a path: transitions the
+   * store machine to `loading`, renders the placeholder row (the group is
+   * usually already expanded by the triggering gesture), and awaits
+   * `loadChildren`. Returns false as a no-op when no loader is configured
+   * or the path is not in a loadable state (`unloaded`/`error`) — exactly
+   * one load runs per path at a time, so one gesture means one fetch.
+   */
+  requestChildLoad(path: string): boolean {
+    const loader = this.loadChildren;
+    if (loader == null || !this.store.beginChildLoad(path)) {
+      return false;
+    }
+    const token = (this.childLoadTokenCounter += 1);
+    this.childLoadTokens.set(path, token);
+    this.invalidateVisibleCache();
+    this.emit({ ...NO_CHANGE, expansionChanged: true });
+    // The loader is invoked synchronously (one gesture = one observable
+    // fetch, no microtask indirection); a synchronously-throwing loader
+    // folds into the rejection path, so a buggy host callback degrades to
+    // the error row instead of blowing up the expand gesture.
+    let pending: Promise<readonly string[]>;
+    try {
+      pending = Promise.resolve(loader(path));
+    } catch (error) {
+      pending = Promise.reject(error);
+    }
+    void pending.then(
+      (children) => {
+        this.settleChildLoad(path, token, [...(children ?? [])]);
+      },
+      (error: unknown) => {
+        this.settleChildLoadFailure(path, token, error);
+      }
+    );
+    return true;
+  }
+
+  /**
+   * Invalidates every in-flight child load and resets their machines to
+   * `unloaded` (a later mount can re-trigger them with a fresh gesture).
+   * The view calls this from `cleanUp` so a load resolving after teardown
+   * is discarded instead of mutating a tree nobody renders.
+   */
+  cancelChildLoads(): void {
+    if (this.childLoadTokens.size === 0) {
+      return;
+    }
+    // markUnloaded is the store's force-reset: the machine leaves `loading`,
+    // so even the store refuses the stale completion independently of the
+    // token gate.
+    this.store.markUnloaded([...this.childLoadTokens.keys()]);
+    this.childLoadTokens.clear();
+    this.invalidateVisibleCache();
+    this.emit({ ...NO_CHANGE, expansionChanged: true });
+  }
+
+  /** Applies a resolved load, unless a newer attempt superseded it. */
+  private settleChildLoad(
+    path: string,
+    token: number,
+    children: string[]
+  ): void {
+    if (this.childLoadTokens.get(path) !== token) {
+      return; // Stale: retried, remapped, removed, or cancelled meanwhile.
+    }
+    this.childLoadTokens.delete(path);
+    const result = this.store.completeChildLoad(path, children);
+    if (!result.ok) {
+      return; // The store machine refused (e.g. force-reset raced us).
+    }
+    this.absorbLoadedPaths(result.added);
+    this.invalidateVisibleCache();
+    this.emit({ ...NO_CHANGE, expansionChanged: true });
+  }
+
+  /** Applies a rejected load, unless a newer attempt superseded it. */
+  private settleChildLoadFailure(
+    path: string,
+    token: number,
+    error: unknown
+  ): void {
+    if (this.childLoadTokens.get(path) !== token) {
+      return;
+    }
+    this.childLoadTokens.delete(path);
+    this.store.failChildLoad(
+      path,
+      error instanceof Error ? error.message : String(error)
+    );
+    this.onChildLoadError?.(path, error);
+    this.invalidateVisibleCache();
+    this.emit({ ...NO_CHANGE, expansionChanged: true });
+  }
+
+  /**
+   * Folds paths created by a completed child load into the controller's own
+   * topology mirrors (allPaths / groupPaths / childrenByParent) AND into
+   * `this.accounts`, so the next full rebuild (rename, drop, setEntries)
+   * reconstructs the loaded subtree instead of silently dropping it.
+   * O(added × siblings log siblings) — a per-load cost, never per-render.
+   */
+  private absorbLoadedPaths(added: readonly string[]): void {
+    if (added.length === 0) {
+      return;
+    }
+    for (const path of added) {
+      this.allPaths.push(path);
+      const parent = getParentAccountPath(path) ?? '';
+      if (parent !== '') {
+        this.groupPaths.add(parent);
+      }
+      const siblings = this.childrenByParent.get(parent);
+      if (siblings == null) {
+        this.childrenByParent.set(parent, [path]);
+      } else {
+        siblings.push(path);
+        // Keep the store's sibling order (code-point order on leaf names).
+        siblings.sort((a, b) => {
+          const leafA = getAccountLeafName(a);
+          const leafB = getAccountLeafName(b);
+          return leafA < leafB ? -1 : leafA > leafB ? 1 : 0;
+        });
+      }
+    }
+    this.accounts = [...this.accounts, ...added];
+  }
+
+  /**
+   * Snapshot half of the rebuild carry: every path with a pending load
+   * state, plus its expansion (markUnloaded collapses on re-apply, which
+   * must not lose an expanded loading group's placeholder). O(paths) — the
+   * rebuilds that need it are already O(paths).
+   */
+  private snapshotChildLoadStates(): ChildLoadSnapshotEntry[] {
+    const snapshot: ChildLoadSnapshotEntry[] = [];
+    for (const path of this.allPaths) {
+      const { state, error } = this.store.getChildLoadState(path);
+      if (state !== 'loaded') {
+        snapshot.push({
+          path,
+          state,
+          error: error ?? null,
+          expanded: this.store.isExpanded(path),
+        });
+      }
+    }
+    return snapshot;
+  }
+
+  /**
+   * Restore half of the rebuild carry, applied to the FRESH store. `remap`
+   * maps each old path to its new home (identity for setEntries) or null
+   * for removed paths. Unmoved paths re-apply their exact state — including
+   * `loading`, so an in-flight fetch stays valid across an unrelated
+   * rebuild. Moved paths reset to `unloaded` and removed paths drop out;
+   * both invalidate the old path's token, so the in-flight settlement is
+   * discarded (the spec'd stale-response rule for moves/removals).
+   */
+  private restoreChildLoadStates(
+    snapshot: readonly ChildLoadSnapshotEntry[],
+    remap: (path: string) => string | null
+  ): void {
+    for (const entry of snapshot) {
+      const target = remap(entry.path);
+      if (target == null || !this.store.hasAccount(target)) {
+        this.childLoadTokens.delete(entry.path);
+        continue;
+      }
+      this.store.markUnloaded([target]);
+      if (target !== entry.path) {
+        this.childLoadTokens.delete(entry.path);
+      } else if (entry.state === 'loading') {
+        this.store.beginChildLoad(target);
+      } else if (entry.state === 'error') {
+        this.store.beginChildLoad(target);
+        this.store.failChildLoad(target, entry.error ?? undefined);
+      }
+      this.store.setExpanded(target, entry.expanded);
     }
   }
 
@@ -484,7 +824,11 @@ export class AccountTreeController {
         this.selection.clear();
       }
       for (let index = start; index <= end; index += 1) {
-        this.selection.add(visible[index]);
+        // Placeholder rows are not selectable: a shift-range spanning a
+        // loading group's spinner must not smuggle the marker into the set.
+        if (!isChildLoadPlaceholderPath(visible[index])) {
+          this.selection.add(visible[index]);
+        }
       }
       // The anchor is intentionally preserved so successive shift-clicks
       // re-pivot around the same origin, like every desktop file tree.
@@ -557,7 +901,9 @@ export class AccountTreeController {
    * Moves focus by `delta` rows over the visible projection (collapsed
    * subtrees are naturally skipped — they have no visible rows). With no
    * current focus, ArrowDown lands on the first row and ArrowUp on the last.
-   * Returns the newly focused path, or null when the tree is empty.
+   * Child-load placeholder rows are not focus targets: focus continues past
+   * them in the travel direction, staying put when only placeholders remain
+   * that way. Returns the newly focused path, or null when the tree is empty.
    */
   moveFocus(delta: number): string | null {
     const visible = this.ensureVisibleCache();
@@ -566,25 +912,53 @@ export class AccountTreeController {
     }
     const currentIndex =
       this.focusedPath != null ? this.getPathIndex(this.focusedPath) : -1;
-    const nextIndex =
+    let nextIndex =
       currentIndex < 0
         ? delta >= 0
           ? 0
           : visible.length - 1
         : Math.max(0, Math.min(visible.length - 1, currentIndex + delta));
+    const direction = delta >= 0 ? 1 : -1;
+    while (
+      nextIndex >= 0 &&
+      nextIndex < visible.length &&
+      isChildLoadPlaceholderPath(visible[nextIndex])
+    ) {
+      nextIndex += direction;
+    }
+    if (nextIndex < 0 || nextIndex >= visible.length) {
+      return this.focusedPath; // Only placeholders that way: stay put.
+    }
     this.setFocusedPath(visible[nextIndex]);
     return visible[nextIndex];
   }
 
-  /** Focuses the visible row at `index` (clamped). Null when empty. */
+  /** Focuses the visible row at `index` (clamped; placeholder rows resolve
+   * to the nearest real row after, then before). Null when empty. */
   focusIndex(index: number): string | null {
     const visible = this.ensureVisibleCache();
     if (visible.length === 0) {
       return null;
     }
     const clamped = Math.max(0, Math.min(visible.length - 1, index));
-    this.setFocusedPath(visible[clamped]);
-    return visible[clamped];
+    let target = clamped;
+    while (
+      target < visible.length &&
+      isChildLoadPlaceholderPath(visible[target])
+    ) {
+      target += 1;
+    }
+    if (target >= visible.length) {
+      target = clamped;
+      while (target >= 0 && isChildLoadPlaceholderPath(visible[target])) {
+        target -= 1;
+      }
+    }
+    if (target < 0) {
+      return null; // Degenerate: the projection holds only placeholders.
+    }
+    this.setFocusedPath(visible[target]);
+    return visible[target];
   }
 
   /**
@@ -606,6 +980,11 @@ export class AccountTreeController {
       this.focusedPath != null ? this.getPathIndex(this.focusedPath) : -1;
     for (let step = 1; step <= visible.length; step += 1) {
       const index = (startIndex + step) % visible.length;
+      // Placeholder rows are never type-ahead targets (their marker string
+      // would even leak the parent's leaf name into the match otherwise).
+      if (isChildLoadPlaceholderPath(visible[index])) {
+        continue;
+      }
       const name = getAccountLeafName(visible[index]);
       if (name.length > 0 && name[0].toLowerCase() === needle) {
         this.setFocusedPath(visible[index]);
@@ -1005,22 +1384,51 @@ export class AccountTreeController {
   // --- Drag & drop moves ---------------------------------------------------------------------------
 
   /**
-   * Computes the moves a drop would perform, applying the Pierre guard set
-   * without mutating anything. Sources are normalized first (duplicates and
-   * descendants of other sources dropped, so each subtree moves once); then
-   * per source: unknown paths, self-drops, drops into the source's own
-   * subtree, drops onto the current parent (no-op), and leaf-name collisions
-   * at the target are all skipped. Returns [] when the target is not an
-   * existing group.
+   * Computes the moves a drop would perform under the SKIP collision
+   * strategy (the original behavior — colliding candidates drop out, the
+   * rest survive), applying the Pierre guard set without mutating anything.
+   * Kept as the back-compat surface; strategy-aware callers use
+   * `planMovePaths` for the full moves/skipped/replaced breakdown.
    */
   getMovePlan(
     sourcePaths: readonly string[],
     targetGroupPath: string
   ): AccountMove[] {
+    return this.planMovePaths(sourcePaths, targetGroupPath, 'skip').moves;
+  }
+
+  /**
+   * Strategy-aware move planning: the full breakdown a drop would apply,
+   * without mutating anything. Sources are normalized first (duplicates and
+   * descendants of other sources dropped, so each subtree moves once); then
+   * per source: unknown paths, self-drops, drops into the source's own
+   * subtree, and drops onto the current parent (no-op) are guarded away
+   * silently, exactly as before. Leaf-name collisions at the target are the
+   * strategy's territory:
+   *
+   * - `reject`: any collision empties `moves` and pushes EVERY candidate
+   *   (clean and colliding) into `skipped`, so callers can report the whole
+   *   attempted batch.
+   * - `skip`: colliding candidates land in `skipped`; the rest proceed.
+   * - `replace`: the existing account at the destination joins `replaced`
+   *   (its subtree will be removed) and the move proceeds.
+   *
+   * Within-batch collisions (two dragged subtrees sharing a leaf name) keep
+   * first-claim-wins under every strategy — `replace` cannot remove a
+   * subtree that only exists once the batch applies. A source that sits
+   * inside a subtree already claimed for replacement is skipped too: it
+   * will not exist once the replacement applies. Returns an empty plan when
+   * the target is not an existing group.
+   */
+  planMovePaths(
+    sourcePaths: readonly string[],
+    targetGroupPath: string,
+    collision: AccountDropCollision = 'reject'
+  ): AccountMovePlan {
+    const plan: AccountMovePlan = { moves: [], skipped: [], replaced: [] };
     if (!this.groupPaths.has(targetGroupPath)) {
-      return [];
+      return plan;
     }
-    const moves: AccountMove[] = [];
     const claimedDestinations = new Set<string>();
     for (const source of normalizeMoveSources(sourcePaths)) {
       if (!this.store.hasAccount(source)) {
@@ -1037,37 +1445,75 @@ export class AccountTreeController {
       }
       const destination = `${targetGroupPath}:${getAccountLeafName(source)}`;
       if (
-        this.store.hasAccount(destination) ||
-        claimedDestinations.has(destination)
+        plan.replaced.some(
+          (removed) => source === removed || source.startsWith(`${removed}:`)
+        )
       ) {
-        continue; // Leaf-name collision at the target.
+        // The source lives inside a subtree an earlier candidate replaces.
+        plan.skipped.push({ from: source, to: destination });
+        continue;
+      }
+      if (claimedDestinations.has(destination)) {
+        // Within-batch collision: first claim wins under every strategy.
+        plan.skipped.push({ from: source, to: destination });
+        continue;
+      }
+      if (this.store.hasAccount(destination)) {
+        if (collision === 'replace') {
+          plan.replaced.push(destination);
+        } else {
+          plan.skipped.push({ from: source, to: destination });
+          continue;
+        }
       }
       claimedDestinations.add(destination);
-      moves.push({ from: source, to: destination });
+      plan.moves.push({ from: source, to: destination });
     }
-    return moves;
+    if (collision === 'reject' && plan.skipped.length > 0) {
+      // Any collision blocks the WHOLE drop; skipped becomes the full
+      // attempted batch (applied-order first, then the colliding ones).
+      plan.skipped = [...plan.moves, ...plan.skipped];
+      plan.moves = [];
+    }
+    return plan;
+  }
+
+  /**
+   * Applies a plan produced by `planMovePaths`: replaced subtrees are
+   * removed and the moves re-parented through the SAME remap rebuild —
+   * expansion, selection, focus, status, and search sessions carry across,
+   * and exactly ONE change event fires for the whole operation. Fires
+   * `onMove` with the applied moves (before any view-level drop callbacks —
+   * see AccountTree's ordering contract). No-op for an empty plan. Returns
+   * the plan for fluent use by callers that report the breakdown.
+   */
+  applyMovePlan(plan: AccountMovePlan): AccountMovePlan {
+    if (plan.moves.length === 0) {
+      return plan;
+    }
+    this.applyRemap(plan.moves, {}, plan.replaced);
+    for (const listener of this.moveListeners) {
+      listener(plan.moves);
+    }
+    return plan;
   }
 
   /**
    * Re-parents the sources under a target group using the same remap
    * machinery as rename (subtrees move whole; balances re-roll under the new
-   * ancestors). Invalid sources are skipped per `getMovePlan`; fires
+   * ancestors). Invalid sources are skipped per `getMovePlan` (SKIP
+   * collision semantics — the original behavior of this method); fires
    * `onMove` with the applied moves and returns them ([] when nothing
-   * applied).
+   * applied). Strategy-aware callers compose `planMovePaths` +
+   * `applyMovePlan` instead.
    */
   movePaths(
     sourcePaths: readonly string[],
     targetGroupPath: string
   ): AccountMove[] {
-    const moves = this.getMovePlan(sourcePaths, targetGroupPath);
-    if (moves.length === 0) {
-      return moves;
-    }
-    this.applyRemap(moves, {});
-    for (const listener of this.moveListeners) {
-      listener(moves);
-    }
-    return moves;
+    return this.applyMovePlan(
+      this.planMovePaths(sourcePaths, targetGroupPath, 'skip')
+    ).moves;
   }
 
   /** Registers a move listener; returns an unsubscribe function. */
@@ -1155,31 +1601,59 @@ export class AccountTreeController {
    * carry expansion, selection, focus, status decorations, and any search
    * session across by remapping their paths too. Emits one honest change
    * event for the whole operation.
+   *
+   * `removedPaths` (the `dropCollision: 'replace'` half) removes whole
+   * subtrees FIRST, inside the same rebuild: the controller's inputs are
+   * entries + explicit accounts, so removal means filtering both before the
+   * remap runs — ledger entries with any posting inside a removed subtree
+   * are dropped whole (a partial entry would not balance), and explicit
+   * account paths under a removed prefix vanish. Selection, focus, anchor,
+   * rename session, status decorations, and search matches on removed paths
+   * are dropped the same way `setEntries` drops vanished paths. Removal
+   * filters test ORIGINAL paths (pre-remap) — the moves that motivated the
+   * removal land ON the removed destinations afterwards.
    */
   private applyRemap(
     moves: readonly AccountMove[],
-    extra: Partial<AccountTreeChange>
+    extra: Partial<AccountTreeChange>,
+    removedPaths: readonly string[] = []
   ): void {
     if (moves.length === 0) {
       return;
     }
     const remap = (path: string): string => remapPathThrough(moves, path);
+    const isRemoved = (path: string): boolean =>
+      removedPaths.some(
+        (prefix) => path === prefix || path.startsWith(`${prefix}:`)
+      );
 
     // Snapshot collapsed groups before the rebuild (the fresh store defaults
-    // to fully expanded), remapped onto their new paths.
+    // to fully expanded), remapped onto their new paths. Removed groups have
+    // no new path to carry state to.
     const collapsedGroups: string[] = [];
     for (const path of this.groupPaths) {
-      if (!this.store.isExpanded(path)) {
+      if (!this.store.isExpanded(path) && !isRemoved(path)) {
         collapsedGroups.push(remap(path));
       }
     }
+    // Child-load states carry across the rebuild the same way (see
+    // restoreChildLoadStates for the moved/removed staleness rules).
+    const childLoadSnapshot = this.snapshotChildLoadStates();
 
-    this.entries = this.entries.map((entry) => remapEntry(entry, moves));
-    this.accounts = this.accounts.map(remap);
+    this.entries = this.entries
+      .filter(
+        (entry) => !entry.postings.some((posting) => isRemoved(posting.account))
+      )
+      .map((entry) => remapEntry(entry, moves));
+    this.accounts = this.accounts.filter((path) => !isRemoved(path)).map(remap);
 
     let selectionChanged = false;
     const remappedSelection: string[] = [];
     for (const path of this.selection) {
+      if (isRemoved(path)) {
+        selectionChanged = true;
+        continue;
+      }
       const next = remap(path);
       if (next !== path) {
         selectionChanged = true;
@@ -1191,23 +1665,39 @@ export class AccountTreeController {
       this.selection.add(path);
     }
     if (this.selectionAnchor != null) {
-      this.selectionAnchor = remap(this.selectionAnchor);
+      this.selectionAnchor = isRemoved(this.selectionAnchor)
+        ? null
+        : remap(this.selectionAnchor);
     }
     let focusChanged = false;
     if (this.focusedPath != null) {
-      const next = remap(this.focusedPath);
+      const next = isRemoved(this.focusedPath) ? null : remap(this.focusedPath);
       focusChanged = next !== this.focusedPath;
       this.focusedPath = next;
     }
+    let renameEnded = false;
     if (this.renamingPath != null) {
-      this.renamingPath = remap(this.renamingPath);
+      if (isRemoved(this.renamingPath)) {
+        // The renamed account was replaced away mid-session: end the session
+        // instead of leaving an editor open on a vanished path.
+        this.renamingPath = null;
+        this.renameDraft = '';
+        renameEnded = true;
+      } else {
+        this.renamingPath = remap(this.renamingPath);
+      }
     }
 
     // Status decorations follow their accounts; distinct old paths can only
     // collide onto one new path through pathological move lists, but merge
     // instead of dropping data if they ever do.
+    let statusDropped = false;
     const remappedStatus = new Map<string, StatusAggregate>();
     for (const [path, aggregate] of this.ownStatus) {
+      if (isRemoved(path)) {
+        statusDropped = true;
+        continue;
+      }
       const next = remap(path);
       const existing = remappedStatus.get(next);
       remappedStatus.set(
@@ -1223,11 +1713,15 @@ export class AccountTreeController {
       this.searchSession = {
         query: this.searchSession.query,
         mode: this.searchSession.mode,
-        priorExpandedGroups: this.searchSession.priorExpandedGroups.map(remap),
+        priorExpandedGroups: this.searchSession.priorExpandedGroups
+          .filter((path) => !isRemoved(path))
+          .map(remap),
       };
       const remappedMatches = new Set<string>();
       for (const match of this.searchMatches) {
-        remappedMatches.add(remap(match));
+        if (!isRemoved(match)) {
+          remappedMatches.add(remap(match));
+        }
       }
       this.searchMatches = remappedMatches;
       if (this.searchVisibleFilter != null) {
@@ -1249,14 +1743,18 @@ export class AccountTreeController {
     for (const path of collapsedGroups) {
       this.store.setExpanded(path, false);
     }
+    this.restoreChildLoadStates(childLoadSnapshot, (path) =>
+      isRemoved(path) ? null : remap(path)
+    );
     this.rebuildStatusRollup();
     this.invalidateVisibleCache();
     this.emit({
       ...NO_CHANGE,
       expansionChanged: true,
-      statusChanged: this.ownStatus.size > 0,
+      statusChanged: this.ownStatus.size > 0 || statusDropped,
       selectionChanged,
       focusChanged,
+      renameChanged: renameEnded,
       // Remaps rewrite match/session paths, so search consumers (match
       // decorations, {index,total} readouts) must re-read.
       searchChanged: this.searchSession != null,
@@ -1379,6 +1877,8 @@ export class AccountTreeController {
       depth: number;
       posInSet: number;
       setSize: number;
+      /** Set on synthetic child-load placeholder frames (see below). */
+      placeholder?: AccountChildLoadPlaceholder;
     }
     const stack: Frame[] = [];
     const pushChildren = (children: readonly string[], depth: number): void => {
@@ -1402,20 +1902,46 @@ export class AccountTreeController {
       if (frame == null) {
         break;
       }
+      // Synthetic child-load placeholder rows (loading dots / error+Retry):
+      // one fixed-height projection row under the pending group, so all the
+      // `index * rowHeight` windowing math holds without special cases. The
+      // marker path joins the paths cache (indexes must stay aligned) but
+      // never the path→index map — it names no account.
+      if (frame.placeholder != null) {
+        projection.push({
+          path: frame.path,
+          name: '',
+          depth: frame.depth,
+          kind: 'leaf',
+          posInSet: frame.posInSet,
+          setSize: frame.setSize,
+          flattenedNames: null,
+          loadPlaceholder: frame.placeholder,
+        });
+        paths.push(frame.path);
+        continue;
+      }
       // Flatten single-child group chains: follow the chain while the
       // current group has exactly one child and that child is a group. The
       // hide filter gates each hop — a match with no matching descendants
       // must stay the chain's terminal row, not merge into hidden children.
+      // Chains never start from or run through a group with a pending child
+      // load: its descendant set is unknown (or mid-fetch), so merging it
+      // into a chain would hide the very row the placeholder attaches to.
       let rowPath = frame.path;
       let flattenedNames: string[] | null = null;
       if (this.flattenEmptyGroups) {
         let chainNames: string[] | null = null;
-        while (this.groupPaths.has(rowPath)) {
+        while (
+          this.groupPaths.has(rowPath) &&
+          this.store.getChildLoadState(rowPath).state === 'loaded'
+        ) {
           const children = this.childrenByParent.get(rowPath);
           if (
             children == null ||
             children.length !== 1 ||
             !this.groupPaths.has(children[0]) ||
+            this.store.getChildLoadState(children[0]).state !== 'loaded' ||
             (filter != null && !filter.has(children[0]))
           ) {
             break;
@@ -1427,7 +1953,10 @@ export class AccountTreeController {
         flattenedNames = chainNames;
       }
 
-      const isGroup = this.groupPaths.has(rowPath);
+      // Pending child-load paths are groups even with zero known children —
+      // the projection-honesty rule, mirrored from the store's group-ness.
+      const loadState = this.store.getChildLoadState(rowPath).state;
+      const isGroup = this.groupPaths.has(rowPath) || loadState !== 'loaded';
       const rowIndex = projection.length;
       projection.push({
         path: rowPath,
@@ -1443,6 +1972,23 @@ export class AccountTreeController {
 
       if (isGroup && this.store.isExpanded(rowPath)) {
         pushChildren(this.childrenByParent.get(rowPath) ?? [], frame.depth + 1);
+        // The placeholder frame is pushed LAST so it pops FIRST — the
+        // loading/error row renders as the group's first child, ahead of
+        // any children the store already knows.
+        if (loadState === 'loading' || loadState === 'error') {
+          const load = this.store.getChildLoadState(rowPath);
+          stack.push({
+            path: makeChildLoadPlaceholderPath(rowPath),
+            depth: frame.depth + 1,
+            posInSet: 0,
+            setSize: 0,
+            placeholder: {
+              parentPath: rowPath,
+              state: loadState,
+              error: load.error ?? null,
+            },
+          });
+        }
       }
     }
 

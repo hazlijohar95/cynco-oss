@@ -29,6 +29,13 @@
     --accounts-status-flagged-override
     --accounts-status-pending-override
 
+    // Decoration lane tone colors (renderDecorations)
+    --accounts-tone-neutral-override
+    --accounts-tone-info-override
+    --accounts-tone-success-override
+    --accounts-tone-warn-override
+    --accounts-tone-danger-override
+
     // Available CSS Layout Overrides
     --accounts-font-family
     --accounts-font-size
@@ -39,6 +46,7 @@
     --accounts-item-margin-x-override
     --accounts-item-row-gap-override
     --accounts-level-gap-override
+    --accounts-icon-size-override
     --accounts-padding-inline-override
     --accounts-focus-ring-width-override
     --accounts-focus-ring-offset-override
@@ -97,6 +105,30 @@
         --accounts-theme-ledger-balance-negative,
         light-dark(#d52c36, #ff6762)
       )
+    );
+
+    /* Decoration tones: host-driven lane colors resolving override → theme
+     * state role → built-in default (same values the status dots use, plus
+     * success; neutral is the muted foreground, not a state). */
+    --accounts-tone-neutral: var(
+      --accounts-tone-neutral-override,
+      var(--accounts-fg3)
+    );
+    --accounts-tone-info: var(
+      --accounts-tone-info-override,
+      var(--accounts-theme-states-info, light-dark(#1ca1c7, #08c0ef))
+    );
+    --accounts-tone-success: var(
+      --accounts-tone-success-override,
+      var(--accounts-theme-states-success, light-dark(#18a46c, #07c480))
+    );
+    --accounts-tone-warn: var(
+      --accounts-tone-warn-override,
+      var(--accounts-theme-states-warn, light-dark(#d5a910, #ffca00))
+    );
+    --accounts-tone-danger: var(
+      --accounts-tone-danger-override,
+      var(--accounts-theme-states-danger, light-dark(#d52c36, #ff2e3f))
     );
 
     /* Status dots: unreconciled = warn, flagged = danger, pending = info. */
@@ -185,6 +217,12 @@
     --accounts-level-gap: var(
       --accounts-level-gap-override,
       calc(8px * var(--accounts-density-scale))
+    );
+    /* Account icon square, scaled with density like every row metric so
+     * icons never outgrow compact rows. */
+    --accounts-icon-size: var(
+      --accounts-icon-size-override,
+      calc(14px * var(--accounts-density-scale))
     );
 
     height: 100%;
@@ -374,6 +412,24 @@
     transform: rotate(-90deg);
   }
 
+  /* Account icon (icons.resolver): decorative glyph between chevron and
+   * name, muted like the chevron so the name keeps visual primacy. */
+  [data-icon] {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--accounts-icon-size);
+    height: var(--accounts-icon-size);
+    color: var(--accounts-fg3);
+  }
+
+  [data-icon] svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
   [data-name] {
     flex: 0 1 auto;
     min-width: 0;
@@ -479,6 +535,57 @@
     color: var(--accounts-status-pending);
   }
 
+  /* Host decoration lane (renderDecorations): trails the status dot, stays
+   * quiet next to the name. Dots mirror the status-dot geometry; text
+   * badges stay small so ≤3 of them fit without pressuring the fixed row
+   * height. Colored purely by [data-tone]. */
+  [data-decorations] {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--accounts-item-row-gap) * 0.75);
+  }
+
+  [data-decoration-dot] {
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+  }
+
+  [data-decoration-text] {
+    flex-shrink: 0;
+    font-size: 0.85em;
+    color: currentColor;
+    opacity: 0.85;
+  }
+
+  [data-decoration-dot][data-tone='neutral'],
+  [data-decoration-text][data-tone='neutral'] {
+    color: var(--accounts-tone-neutral);
+  }
+
+  [data-decoration-dot][data-tone='info'],
+  [data-decoration-text][data-tone='info'] {
+    color: var(--accounts-tone-info);
+  }
+
+  [data-decoration-dot][data-tone='success'],
+  [data-decoration-text][data-tone='success'] {
+    color: var(--accounts-tone-success);
+  }
+
+  [data-decoration-dot][data-tone='warn'],
+  [data-decoration-text][data-tone='warn'] {
+    color: var(--accounts-tone-warn);
+  }
+
+  [data-decoration-dot][data-tone='danger'],
+  [data-decoration-text][data-tone='danger'] {
+    color: var(--accounts-tone-danger);
+  }
+
   /* Row-actions button ("…" lane, `contextMenu.rowButton`): a real control
    * embedded in the treeitem like the rename input. Invisible at rest —
    * revealed on row hover / focus-within (and on the keyboard-focused row)
@@ -541,5 +648,93 @@
 
   [data-balance][data-negative='true'] {
     color: var(--accounts-balance-negative);
+  }
+
+  /* Child-load placeholder rows: the synthetic loading / error row under an
+   * expanded pending group. Same fixed row height as every other row (the
+   * windowing contract), never selectable or hoverable like a treeitem. */
+  [data-row][data-load-placeholder] {
+    cursor: default;
+  }
+
+  /* Loading dots: three pulsing circles in the muted foreground. The pulse
+   * is opacity-only (cheap, no layout) and each dot is phase-shifted for
+   * the classic ellipsis ripple. */
+  [data-load-dots] {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: calc(4px * var(--accounts-density-scale));
+  }
+
+  [data-load-dots] > span {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: var(--accounts-fg3);
+    animation: accounts-load-pulse 900ms ease-in-out infinite;
+  }
+
+  [data-load-dots] > span:nth-child(2) {
+    animation-delay: 150ms;
+  }
+
+  [data-load-dots] > span:nth-child(3) {
+    animation-delay: 300ms;
+  }
+
+  @keyframes accounts-load-pulse {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  /* Reduced motion: the dots hold steady at mid opacity — the row's
+   * presence (and the group's aria-busy) already communicates "loading"
+   * without any animation. */
+  @media (prefers-reduced-motion: reduce) {
+    [data-load-dots] > span {
+      animation: none;
+      opacity: 0.6;
+    }
+  }
+
+  /* Error row: quiet danger-toned message plus a real Retry button. The
+   * button reuses the row-action geometry but stays always visible — it is
+   * the row's only affordance, not a hover lane. */
+  [data-load-error-message] {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--accounts-status-flagged);
+  }
+
+  [data-load-retry] {
+    appearance: none;
+    flex-shrink: 0;
+    padding: calc(1px * var(--accounts-density-scale))
+      calc(8px * var(--accounts-density-scale));
+    border: 1px solid var(--accounts-border);
+    border-radius: var(--accounts-border-radius);
+    background: none;
+    color: var(--accounts-fg);
+    font: inherit;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+
+  [data-load-retry]:hover {
+    background-color: var(--accounts-bg-hover);
+  }
+
+  [data-load-retry]:focus-visible {
+    outline: var(--accounts-focus-ring-width) solid var(--accounts-accent);
+    outline-offset: var(--accounts-focus-ring-offset);
   }
 }

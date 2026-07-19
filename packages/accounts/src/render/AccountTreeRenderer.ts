@@ -2,9 +2,16 @@
 // the same functions drive the client window commits (innerHTML), the SSR
 // preload path, and deterministic string-projection tests.
 
-import type { AccountTreeRowData, RowRange } from '../types';
+import type {
+  AccountDecorationTone,
+  AccountIconResolver,
+  AccountRowDecorationsRenderer,
+  AccountTreeRowData,
+  RowRange,
+} from '../types';
 import { escapeHtml } from '../utils/escapeHtml';
 import { formatMinorUnits } from '../utils/formatMinorUnits';
+import { ACCOUNT_ICON_PATHS } from './accountIcons';
 
 export interface AccountTreeRenderOptions {
   /**
@@ -40,6 +47,17 @@ export interface AccountTreeRenderOptions {
    * the menu with the button's rect as the anchor.
    */
   contextMenuRowButton?: boolean;
+  /**
+   * Icon resolver (the `icons.resolver` option). Called once per rendered
+   * row per window commit while building row HTML — the hot path — so it
+   * must be cheap and pure. Omitted → rows render no icon markup at all.
+   */
+  iconResolver?: AccountIconResolver;
+  /**
+   * Host decoration renderer (the `renderDecorations` option). Same hot-path
+   * contract as `iconResolver`. Omitted → rows render no decoration lane.
+   */
+  renderDecorations?: AccountRowDecorationsRenderer;
 }
 
 // Chevron drawn with an inline SVG path in currentColor; collapsed groups
@@ -60,7 +78,8 @@ const ELLIPSIS_SVG =
 
 /**
  * One tree row. Structure:
- * indent guides | chevron | name | status dot + count | balance.
+ * indent guides | chevron | icon | name | status dot + count | decorations |
+ * balance.
  * State is carried exclusively by data attributes ([data-kind],
  * [data-expanded], [data-selected], ...) plus the WAI-ARIA treeitem
  * contract; the store supplies aria-posinset/aria-setsize so the values stay
@@ -71,12 +90,18 @@ export function renderAccountRowHTML(
   index: number,
   options: AccountTreeRenderOptions
 ): string {
+  if (row.loadPlaceholder != null) {
+    return renderChildLoadPlaceholderHTML(row, index);
+  }
   let html = `<div${rowAttributesHTML(row, index, options)}>`;
   html += renderIndentGuidesHTML(row.depth);
   html +=
     row.kind === 'group'
       ? `<span data-chevron aria-hidden="true">${CHEVRON_SVG}</span>`
       : '<span data-chevron data-chevron-leaf aria-hidden="true"></span>';
+  // The icon renders before the rename branch so the renaming row keeps it —
+  // the account's identity does not vanish while its name is being edited.
+  html += renderIconHTML(row, options);
   if (options.renamingPath != null && options.renamingPath === row.path) {
     // Inline rename: the input replaces the label AND the trailing cells so
     // the editor gets the row's full width. Status/balance return with the
@@ -85,10 +110,63 @@ export function renderAccountRowHTML(
   } else {
     html += renderRowLabelHTML(row);
     html += renderStatusHTML(row);
+    html += renderDecorationsHTML(row, options);
     html += renderBalanceHTML(row, options);
     if (options.contextMenuRowButton === true) {
       html += renderRowActionButtonHTML();
     }
+  }
+  html += '</div>';
+  return html;
+}
+
+/**
+ * Synthetic child-load placeholder row (the loading dots / error+Retry row
+ * under an expanded pending group). NOT a treeitem: it names no account, so
+ * it carries no role/aria-level/posinset and is never selectable, draggable,
+ * or a drop target. `data-row-index` is still present so the row occupies
+ * its projection slot consistently with the window math.
+ *
+ * - Loading: purely visual (three CSS-animated dots honoring
+ *   prefers-reduced-motion), `aria-hidden` — assistive tech hears the state
+ *   from the GROUP row's `aria-busy="true"` instead, and no child rows exist
+ *   yet so there are no aria-setsize semantics to fake.
+ * - Error: visible to AT. The Retry button is a real, labelled `<button>`
+ *   with `tabindex="0"` — the deliberate exception to the roving-tabindex
+ *   pattern (rows and the row-actions button all use -1): the row is not a
+ *   treeitem, so aria-activedescendant navigation can never reach it, and a
+ *   keyboard user must still be able to Tab onto the only recovery control.
+ */
+function renderChildLoadPlaceholderHTML(
+  row: AccountTreeRowData,
+  index: number
+): string {
+  const placeholder = row.loadPlaceholder;
+  if (placeholder == null) {
+    return '';
+  }
+  const parentLeaf = placeholder.parentPath.split(':').at(-1) ?? '';
+  let html =
+    `<div data-row data-load-placeholder="${placeholder.state}"` +
+    ` data-row-index="${index}" data-depth="${row.depth}"` +
+    (placeholder.state === 'loading' ? ' aria-hidden="true"' : '') +
+    '>';
+  html += renderIndentGuidesHTML(row.depth);
+  html += '<span data-chevron data-chevron-leaf aria-hidden="true"></span>';
+  if (placeholder.state === 'loading') {
+    html +=
+      '<span data-load-dots aria-hidden="true">' +
+      '<span></span><span></span><span></span></span>';
+  } else {
+    const message =
+      placeholder.error != null && placeholder.error !== ''
+        ? `Couldn’t load accounts: ${escapeHtml(placeholder.error)}`
+        : 'Couldn’t load accounts';
+    html += `<span data-load-error-message>${message}</span>`;
+    html +=
+      '<button data-load-retry type="button" tabindex="0"' +
+      ` data-load-parent="${escapeHtml(placeholder.parentPath)}"` +
+      ` aria-label="Retry loading ${escapeHtml(parentLeaf)}">Retry</button>`;
   }
   html += '</div>';
   return html;
@@ -151,8 +229,10 @@ export function renderStickyRowHTML(
     row.kind === 'group'
       ? `<span data-chevron aria-hidden="true">${CHEVRON_SVG}</span>`
       : '<span data-chevron data-chevron-leaf aria-hidden="true"></span>';
+  html += renderIconHTML(row, options);
   html += renderRowLabelHTML(row);
   html += renderStatusHTML(row);
+  html += renderDecorationsHTML(row, options);
   html += renderBalanceHTML(row, options);
   html += '</div>';
   return html;
@@ -255,6 +335,11 @@ function rowAttributesHTML(
   }
   if (row.kind === 'group') {
     attributes += ` data-expanded="${row.expanded}" aria-expanded="${row.expanded}"`;
+    // A group with a child fetch in flight announces busy; the loading
+    // placeholder row itself is aria-hidden (see the placeholder renderer).
+    if (row.childLoadState === 'loading') {
+      attributes += ' aria-busy="true"';
+    }
   }
   if (row.selected) {
     attributes += ' data-selected="true"';
@@ -303,6 +388,116 @@ function renderStatusHTML(row: AccountTreeRowData): string {
   if (row.statusCount > 0) {
     html += `<span data-status-count data-status="${row.status}">${row.statusCount}</span>`;
   }
+  return html;
+}
+
+/**
+ * Account icon between the chevron and the name. The resolver runs HERE —
+ * once per rendered row per window commit, never per attribute patch — so
+ * icon changes flow through normal window commits and resolvers must be
+ * cheap and pure. Returning null renders nothing (identical markup to a
+ * tree without the option). SECURITY: the returned name is validated
+ * against the closed built-in record before anything interpolates; only
+ * our own path data ever enters the SVG (see accountIcons.ts).
+ */
+function renderIconHTML(
+  row: AccountTreeRowData,
+  options: AccountTreeRenderOptions
+): string {
+  const resolver = options.iconResolver;
+  if (resolver == null) {
+    return '';
+  }
+  const name = resolver({
+    path: row.path,
+    name: row.name,
+    isGroup: row.kind === 'group',
+    depth: row.depth,
+  });
+  // The `in` check is the runtime half of the closed-union XSS boundary:
+  // untyped JS hosts can return arbitrary strings, which must resolve to
+  // "no icon", never to interpolated markup.
+  if (name == null || !(name in ACCOUNT_ICON_PATHS)) {
+    return '';
+  }
+  // Decorative: the name text already identifies the row to AT. Sized via
+  // --accounts-icon-size (density-scaled) in the stylesheet.
+  return (
+    `<span data-icon data-icon-name="${escapeHtml(name)}" aria-hidden="true">` +
+    '<svg viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd">' +
+    `<path d="${ACCOUNT_ICON_PATHS[name]}"></path></svg></span>`
+  );
+}
+
+// Valid decoration tones, for runtime validation before interpolation
+// (mirrors the AccountDecorationTone union for untyped JS hosts).
+const DECORATION_TONES: ReadonlySet<AccountDecorationTone> = new Set([
+  'neutral',
+  'info',
+  'success',
+  'warn',
+  'danger',
+]);
+
+/**
+ * Cap on rendered decorations per row. Rows are FIXED HEIGHT — the whole
+ * virtualization contract is `index * rowHeight` arithmetic — so an
+ * unbounded lane would either overflow horizontally into the balance column
+ * or pressure rows to wrap/grow, both of which break the row contract.
+ * Three small badges is the most a 30px row wears comfortably.
+ */
+const MAX_ROW_DECORATIONS = 3;
+
+/**
+ * Host-driven decoration lane, rendered AFTER the controller-driven status
+ * dot and before the balance. The two lanes are deliberately distinct:
+ * status dots come from `setAccountStatus` (controller state, rolled up
+ * onto collapsed ancestors); decorations come from the host's
+ * `renderDecorations` callback per commit and roll up nothing.
+ *
+ * Accessibility: the treeitem has no aria-label, so its accessible name is
+ * computed from its text content (name, status count, balance...). Text
+ * decorations deliberately stay visible to AT and join that name naturally;
+ * dots are purely decorative and carry aria-hidden — a bare colored circle
+ * has no announceable meaning.
+ */
+function renderDecorationsHTML(
+  row: AccountTreeRowData,
+  options: AccountTreeRenderOptions
+): string {
+  const render = options.renderDecorations;
+  if (render == null) {
+    return '';
+  }
+  const decorations = render({
+    path: row.path,
+    name: row.name,
+    isGroup: row.kind === 'group',
+    depth: row.depth,
+    visibleChildCount: row.visibleChildCount,
+  });
+  if (decorations == null || decorations.length === 0) {
+    return '';
+  }
+  const count = Math.min(decorations.length, MAX_ROW_DECORATIONS);
+  let html = '<span data-decorations>';
+  for (let index = 0; index < count; index += 1) {
+    const decoration = decorations[index];
+    const tone: AccountDecorationTone = DECORATION_TONES.has(
+      decoration.tone ?? 'neutral'
+    )
+      ? (decoration.tone ?? 'neutral')
+      : 'neutral';
+    if (decoration.kind === 'dot') {
+      html += `<span data-decoration-dot data-tone="${tone}" aria-hidden="true"></span>`;
+    } else {
+      // Host text is untrusted: escaped like every other interpolation.
+      html += `<span data-decoration-text data-tone="${tone}">${escapeHtml(
+        decoration.text
+      )}</span>`;
+    }
+  }
+  html += '</span>';
   return html;
 }
 
