@@ -104,6 +104,36 @@ export type RegisterVirtualRow =
   | RegisterEntryVirtualRow;
 
 /**
+ * Fields a register filter can match against, named after what RegisterRow
+ * data ACTUALLY carries: `description` is the payee/narration pair the
+ * description cell renders (payee and narration are matched as separate
+ * lines, so a query can never match across their boundary), `date` is the
+ * entry's ISO date string, `flag` is the entry flag word (`cleared`,
+ * `pending`, `flagged`, `void` — matched on the word even though the cell
+ * renders only a dot, so `flag` matches carry no visible highlight).
+ */
+export type RegisterFilterField = 'description' | 'date' | 'flag';
+
+/**
+ * Projection-level register filter (the accounts tree's hide-non-matches
+ * philosophy): canonical rows stay untouched, the filter only reshapes which
+ * rows are VISIBLE. Matching is a case-insensitive substring test on the
+ * chosen fields; `fields` defaults to `['description']` (the description
+ * cell is what users scan). An empty query means "no filter" — the register
+ * keeps its unfiltered fast path.
+ */
+export interface RegisterFilter {
+  query: string;
+  fields?: readonly RegisterFilterField[];
+}
+
+/** Payload for `RegisterOptions.onFilterResult`: matched rows out of total. */
+export interface RegisterFilterResult {
+  matched: number;
+  total: number;
+}
+
+/**
  * Row selection behavior. `single` (default) keeps the original one-row
  * selection; `range` adds shift-click contiguous extension and
  * meta/ctrl-click toggling (Pierre line-selection style, pointer-only).

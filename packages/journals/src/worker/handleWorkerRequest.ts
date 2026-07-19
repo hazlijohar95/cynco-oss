@@ -40,7 +40,8 @@ export function handleWorkerRequest(request: WorkerRequest): WorkerResponse {
               ? new Set(request.selectedIndexes)
               : request.selectedIndex,
             request.groupBy,
-            request.idPrefix ?? undefined
+            request.idPrefix ?? undefined,
+            request.filter
           ),
           sentAt: Date.now(),
         };

@@ -4,6 +4,7 @@ import { renderRegisterWindowHTML } from '../renderers/RegisterRenderer';
 import type {
   BookPostingRef,
   ReconciliationMatch,
+  RegisterFilter,
   RegisterGroupBy,
   RegisterRowData,
   RowRange,
@@ -63,6 +64,8 @@ export interface RenderRegisterWindowProps {
   groupBy?: RegisterGroupBy;
   /** Row id prefix for aria-activedescendant; see RegisterWindowRequest. */
   idPrefix?: string | null;
+  /** Projection-level row filter; see RegisterWindowRequest.filter. */
+  filter?: RegisterFilter | null;
   /**
    * Stable identity for this exact input (e.g. `instance:rowsVersion:start:
    * end:selected`). Enables dedupe of in-flight identical requests and the
@@ -127,6 +130,7 @@ export class WorkerPoolManager {
     selectedIndexes,
     groupBy,
     idPrefix,
+    filter,
     cacheKey,
   }: RenderRegisterWindowProps): Promise<string> {
     return this.submit({
@@ -138,6 +142,7 @@ export class WorkerPoolManager {
         selectedIndexes,
         groupBy,
         idPrefix,
+        filter,
       },
       dedupeKey: cacheKey != null ? `register-window:${cacheKey}` : null,
       // Same selection resolution as handleWorkerRequest so worker and
@@ -148,7 +153,8 @@ export class WorkerPoolManager {
           range,
           selectedIndexes != null ? new Set(selectedIndexes) : selectedIndex,
           groupBy,
-          idPrefix ?? undefined
+          idPrefix ?? undefined,
+          filter
         ),
     }) as Promise<string>;
   }

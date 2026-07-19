@@ -134,6 +134,65 @@ grid semantics — updated from the prefix-sum row model in O(log n) per scroll
 frame, with DOM writes only when the period changes. In a `LedgerView` it pins
 below the owning section's sticky header.
 
+## Register filter
+
+`Register` takes a projection-level filter — the same philosophy as the accounts
+tree's hide-non-matches search: canonical rows are never touched, only which
+rows are _visible_ changes.
+
+```ts
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  filter: { query: 'coffee' }, // optional initial filter
+  onFilterResult({ matched, total }) {
+    readout.textContent = `${matched} of ${total}`;
+  },
+});
+// ...later, per keystroke:
+register.setFilter({ query: input.value });
+register.setFilter(null); // clear
+```
+
+- **Matching** is a case-insensitive substring test on `fields` (default
+  `['description']` — the payee/narration pair; `'date'` and `'flag'` opt in). A
+  lazy lowercase corpus is built on the first application and reused across
+  query changes; it drops on `setRows`.
+- **Identity is full-data everywhere public**: selection, focus, callbacks,
+  `scrollToRow`, and row ids keep their original entry indexes. The filter never
+  mutates selection — filtered-out selected rows simply are not rendered until
+  the filter releases them. `aria-rowcount` / `aria-rowindex` describe the
+  presented (filtered) grid.
+- **Grouping**: period headers survive only for periods containing matches, and
+  their count / net-change summaries are recomputed over the matched rows — the
+  summary describes what's shown, not the period's full total.
+- **Highlighting**: matched substrings in text cells wrap in
+  `<mark data-filter-match>` (themed via the match/accent color family, or the
+  `--journals-bg-filter-match` override).
+- **Keyboard** navigation walks matched rows only; if the focused row gets
+  filtered out, focus clears and `aria-activedescendant` is removed.
+- **Parity**: the filter crosses the worker protocol and the SSR preload
+  (`preloadRegisterHTML(rows, { filter })`), so worker, sync, and server HTML
+  stay byte-identical.
+- An empty query or `null` is "no filter" and keeps the unfiltered fast path —
+  no corpus, no model allocation.
+
+## Live-region announcements
+
+Dynamic surfaces announce state changes to screen readers through
+visually-hidden `aria-live="polite"` regions (one per component instance, kept
+OUTSIDE the re-rendered markup so re-renders never re-announce):
+
+- **Reconciliation** announces the per-currency difference after every accept /
+  reject / undo (e.g. `MYR difference 42.00`, or `All currencies reconciled` at
+  zero) — one announcement per discrete state change. Pass
+  `disableAnnouncements: true` when the host narrates reconciliation itself.
+- **EntryStream** announces exactly two moments: stream start
+  (`Streaming entries…`) and completion (`N entries loaded`). The visual footer
+  count keeps ticking but is deliberately not a live region.
+
+Live regions are created empty on both render and hydrate, so SSR output never
+replays a stale announcement.
+
 ## Development
 
 We use pnpm for workspace package management and Bun for tests.

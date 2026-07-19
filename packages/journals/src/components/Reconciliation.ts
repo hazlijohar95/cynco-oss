@@ -13,6 +13,8 @@ import type {
   StatementLine,
 } from '../types';
 import { applyHostColorScheme } from '../utils/applyHostColorScheme';
+import { createLiveRegion, type LiveRegion } from '../utils/createLiveRegion';
+import { formatMinorUnits } from '../utils/formatMinorUnits';
 import { proposeMatches } from '../utils/proposeMatches';
 import type { WorkerPoolManager } from '../worker/WorkerPoolManager';
 import { JournalsContainerLoaded } from './web-components';
@@ -56,6 +58,15 @@ export interface ReconciliationOptions {
    * the OS preference.
    */
   colorScheme?: ColorScheme;
+  /**
+   * Opts out of the built-in screen-reader announcements. By default every
+   * accept / reject / undo announces the resulting per-currency difference
+   * (or "All currencies reconciled") through a visually-hidden polite live
+   * region — the header's difference figures change silently otherwise.
+   * Hosts that narrate reconciliation state themselves flip this on so
+   * users never hear the same change twice.
+   */
+  disableAnnouncements?: boolean;
   /** Fired after a match flips to `accepted` (via button or `acceptMatch`). */
   onAccept?(match: ReconciliationMatch): void;
   /** Fired after a match flips to `rejected`; the pair dissolves visually. */
@@ -104,6 +115,15 @@ export class Reconciliation {
   private matches: ReconciliationMatch[];
   private lastLines: readonly StatementLine[];
   private lastPostings: readonly BookPostingRef[];
+  /**
+   * Polite live region for difference announcements. Lives as a stable
+   * SIBLING of the section inside the shadow root — the section is replaced
+   * wholesale on every state change (innerHTML re-render), and a region
+   * inside it would be destroyed and re-announced per render. Created empty
+   * on both render and hydrate paths, so SSR output never replays a stale
+   * announcement.
+   */
+  private liveRegion: LiveRegion | undefined;
 
   /** Unique per instance, prefixes worker cache keys so instances never collide. */
   private readonly workerInstanceId: string = `recon-${++reconInstanceCount}`;
@@ -162,6 +182,7 @@ export class Reconciliation {
     } else {
       this.rerender();
     }
+    this.ensureLiveRegion(shadowRoot);
   }
 
   // Adopts SSR output: the pre-rendered [data-reconciliation] section is
@@ -178,6 +199,7 @@ export class Reconciliation {
       return;
     }
     this.adoptSection(section);
+    this.ensureLiveRegion(shadowRoot);
   }
 
   acceptMatch(id: string): void {
@@ -199,11 +221,52 @@ export class Reconciliation {
 
   cleanUp(): void {
     this.section?.removeEventListener('click', this.handleClick);
+    this.liveRegion?.cleanUp();
+    this.liveRegion = undefined;
     if (!this.isContainerManaged) {
       this.container?.remove();
     }
     this.container = undefined;
     this.section = undefined;
+  }
+
+  // One live region per component instance, created lazily on first mount
+  // and never recreated: rerender() replaces the section element but leaves
+  // this sibling untouched, so screen readers keep tracking one stable
+  // node. Skipped entirely under disableAnnouncements — no region, no
+  // announcements, nothing for host-owned narration to collide with.
+  private ensureLiveRegion(shadowRoot: ShadowRoot): void {
+    if (this.options.disableAnnouncements === true || this.liveRegion != null) {
+      return;
+    }
+    this.liveRegion = createLiveRegion(shadowRoot);
+  }
+
+  // Concise post-transition status for assistive tech: the per-currency
+  // difference figures the header shows visually (only nonzero currencies —
+  // the point is what still needs work), or the reconciled verdict once
+  // every currency hits zero. Called exactly once per discrete state
+  // change: transitionMatch is the single mutation entry point and each
+  // accept/reject/undo triggers one synchronous re-render, so multi-step
+  // sequences produce one announcement per step, never a storm. Data
+  // replacement (setOptions) and async proposal arrival deliberately stay
+  // silent: they are not user-driven state changes.
+  private announceDifference(): void {
+    if (this.liveRegion == null || this.options.disableAnnouncements === true) {
+      return;
+    }
+    const { difference } = computeReconciliationTotals(this.getRenderState());
+    const parts: string[] = [];
+    for (const [currency, amount] of difference) {
+      if (amount !== 0) {
+        parts.push(
+          `${currency} difference ${formatMinorUnits(amount, currency)}`
+        );
+      }
+    }
+    this.liveRegion.announce(
+      parts.length === 0 ? 'All currencies reconciled' : parts.join('; ')
+    );
   }
 
   private adoptSection(section: HTMLElement): void {
@@ -260,6 +323,7 @@ export class Reconciliation {
       ...this.matches.slice(index + 1),
     ];
     this.rerender();
+    this.announceDifference();
     callback?.(next);
   }
 

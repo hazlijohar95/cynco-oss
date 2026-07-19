@@ -2,6 +2,8 @@ import { DEFAULT_HEADER_HEIGHT } from '../constants';
 import type {
   MinorUnits,
   RegisterDensity,
+  RegisterFilter,
+  RegisterFilterField,
   RegisterGroupBy,
   RegisterGroupSummary,
   RegisterRowData,
@@ -9,10 +11,13 @@ import type {
   RegisterVirtualRow,
   RowRange,
 } from '../types';
+import { buildFilteredRegisterRowModel } from '../utils/buildFilteredRegisterRowModel';
 import { buildRegisterRowModel } from '../utils/buildRegisterRowModel';
+import { computeRegisterFilterMatches } from '../utils/computeRegisterFilterMatches';
 import { escapeHtml } from '../utils/escapeHtml';
 import { formatMinorUnits } from '../utils/formatMinorUnits';
 import { renderAccountPathHTML } from '../utils/renderAccountPathHTML';
+import { renderFilterHighlightHTML } from '../utils/renderFilterHighlightHTML';
 import { renderFlagDotHTML } from './EntryRenderer';
 
 export interface RegisterRenderOptions {
@@ -58,6 +63,14 @@ export interface RegisterRenderOptions {
    */
   disableKeyboardNavigation?: boolean;
   /**
+   * Projection-level row filter (see {@link RegisterFilter}). Lives on the
+   * render options so SSR emits the same filtered rows, recomputed group
+   * summaries, aria-rowcount, and match highlights the hydrated client
+   * would produce — the worker/SSR byte-parity contract extended to
+   * filtering. Empty/absent query keeps today's unfiltered output.
+   */
+  filter?: RegisterFilter;
+  /**
    * Sticky current-period label for grouped registers. Default ON whenever
    * `groupBy !== 'none'` (new surface, so no back-compat concern): a slim
    * aria-hidden mirror strip pinned just below the register's sticky header
@@ -82,6 +95,32 @@ export const REGISTER_COLUMN_COUNT = 5;
  * Always entry-index space — group header rows are never selectable.
  */
 export type RegisterSelectedRows = number | ReadonlySet<number> | null;
+
+/**
+ * Filter normalized once per rendered window (not per row): the query
+ * pre-lowercased for the indexOf highlight walk, plus the resolved field
+ * set gating WHICH text cells receive `<mark data-filter-match>` wraps.
+ */
+export interface PreparedRegisterFilter {
+  lowerQuery: string;
+  fields: ReadonlySet<RegisterFilterField>;
+}
+
+// Normalizes a RegisterFilter for the row renderers; null when the filter is
+// absent or its query empty (no filter → zero highlight work per row). The
+// default field set must match computeRegisterFilterMatches' default so a
+// row can never be kept by a field the renderer refuses to highlight.
+export function prepareRegisterFilter(
+  filter: RegisterFilter | null | undefined
+): PreparedRegisterFilter | null {
+  if (filter == null || filter.query === '') {
+    return null;
+  }
+  return {
+    lowerQuery: filter.query.toLowerCase(),
+    fields: new Set(filter.fields ?? ['description']),
+  };
+}
 
 // Like EntryRenderer, these are pure string builders shared by the client
 // Register component (innerHTML) and the SSR preload path. No DOM APIs.
@@ -117,13 +156,17 @@ export function renderRegisterHeaderHTML(
 // register always has a selection mode, single by default), and a stable
 // `id="{idPrefix}-row-{entryIndex}"` for `aria-activedescendant` when the
 // caller supplies an id prefix. `ariaRowIndex` defaults to `index + 1`,
-// which is correct exactly on the flat (ungrouped) path.
+// which is correct exactly on the flat (ungrouped) path. With a prepared
+// `filter`, matched substrings in the text cells the filter targets wrap in
+// `<mark data-filter-match>` (flag matches have no text cell — the flag
+// renders as a dot — so they carry no visible highlight).
 export function renderRegisterRowHTML(
   row: RegisterRowData,
   index: number,
   selected: boolean,
   ariaRowIndex: number = index + 1,
-  idPrefix?: string
+  idPrefix?: string,
+  filter?: PreparedRegisterFilter | null
 ): string {
   const { entry, posting } = row;
   const direction = posting.amount < 0 ? 'credit' : 'debit';
@@ -137,9 +180,17 @@ export function renderRegisterRowHTML(
     ` aria-rowindex="${ariaRowIndex}" aria-selected="${selected}"${idAttribute}` +
     ` data-amount="${direction}"` +
     ` data-flag="${entry.flag}"${selectedAttribute}>`;
-  html += `<span data-cell="date" role="gridcell">${escapeHtml(entry.date)}</span>`;
+  const dateHTML =
+    filter != null && filter.fields.has('date')
+      ? renderFilterHighlightHTML(entry.date, filter.lowerQuery)
+      : escapeHtml(entry.date);
+  html += `<span data-cell="date" role="gridcell">${dateHTML}</span>`;
   html += `<span data-cell="flag" role="gridcell">${renderFlagDotHTML(entry.flag)}</span>`;
-  html += renderDescriptionCellHTML(entry.payee, entry.narration);
+  html += renderDescriptionCellHTML(
+    entry.payee,
+    entry.narration,
+    filter != null && filter.fields.has('description') ? filter : null
+  );
   html +=
     `<span data-cell="amount" role="gridcell"><span data-amount-sign="${direction}" aria-hidden="true"></span>` +
     '<span data-amount-value>' +
@@ -243,13 +294,19 @@ export function renderRegisterRowsHTML(
 // Grouped-register counterpart of renderRegisterRowsHTML: the `[start, end)`
 // slice of the virtual row model (group headers + entry rows) in one string.
 // Range indexes are MODEL indexes; entry rows still stamp their original
-// entry index into `data-row-index`.
+// entry index into `data-row-index`. When the model was built under a
+// filter, pass that same filter so matched substrings get their marks —
+// aria-rowindex stays the 1-based position within THIS (possibly filtered)
+// model: it describes the presented grid, not the full dataset (the honesty
+// rule from the accounts tree's filtered posinset).
 export function renderRegisterVirtualRowsHTML(
   model: readonly RegisterVirtualRow[],
   range: RowRange,
   selected: RegisterSelectedRows,
-  idPrefix?: string
+  idPrefix?: string,
+  filter?: RegisterFilter | null
 ): string {
+  const prepared = prepareRegisterFilter(filter);
   let html = '';
   for (let index = range.start; index < range.end; index += 1) {
     const item = model[index];
@@ -263,25 +320,44 @@ export function renderRegisterVirtualRowsHTML(
             item.entryIndex,
             isRowIndexSelected(selected, item.entryIndex),
             index + 1,
-            idPrefix
+            idPrefix,
+            prepared
           );
   }
   return html;
 }
 
 // Single window renderer shared by the worker, its main-thread fallback, and
-// SSR: rebuilds the grouped row model deterministically from (rows, groupBy)
-// so every path produces byte-identical HTML to the client's cached-model
-// sync path. The client Register does NOT call this per window — it renders
-// from its precomputed model — but because buildRegisterRowModel is pure,
-// the outputs cannot drift.
+// SSR: rebuilds the (grouped and/or filtered) row model deterministically
+// from (rows, groupBy, filter) so every path produces byte-identical HTML to
+// the client's cached-model sync path. The client Register does NOT call
+// this per window — it renders from its precomputed model — but because the
+// model builders and the match test are pure, the outputs cannot drift. An
+// active filter forces the model path even for groupBy 'none' (the client
+// mirrors this: filtered flat registers window over a model too), and the
+// range is then in FILTERED-model-index space.
 export function renderRegisterWindowHTML(
   rows: readonly RegisterRowData[],
   range: RowRange,
   selected: RegisterSelectedRows,
   groupBy?: RegisterGroupBy,
-  idPrefix?: string
+  idPrefix?: string,
+  filter?: RegisterFilter | null
 ): string {
+  const activeFilter = filter != null && filter.query !== '' ? filter : null;
+  if (activeFilter != null) {
+    return renderRegisterVirtualRowsHTML(
+      buildFilteredRegisterRowModel(
+        rows,
+        groupBy ?? 'none',
+        computeRegisterFilterMatches(rows, activeFilter)
+      ),
+      range,
+      selected,
+      idPrefix,
+      activeFilter
+    );
+  }
   if (groupBy != null && groupBy !== 'none') {
     return renderRegisterVirtualRowsHTML(
       buildRegisterRowModel(rows, groupBy),
@@ -303,9 +379,27 @@ export function renderRegisterHTML(
   options: RegisterRenderOptions
 ): string {
   const { account, density = 'comfortable', groupBy = 'none' } = options;
+  // The header balance stays the FULL register's running balance even under
+  // a filter: it names the account's balance, not a sum of visible rows, so
+  // filtering must not restate it.
   const balance = rows.length > 0 ? rows[rows.length - 1].runningBalance : null;
+  const filter =
+    options.filter != null && options.filter.query !== ''
+      ? options.filter
+      : null;
+  // Active filters use the filtered model (matched rows only, recomputed
+  // group summaries) even for groupBy 'none' — exactly the client's model
+  // selection, so hydration adopts identical structure.
   const model =
-    groupBy !== 'none' ? buildRegisterRowModel(rows, groupBy) : null;
+    filter != null
+      ? buildFilteredRegisterRowModel(
+          rows,
+          groupBy,
+          computeRegisterFilterMatches(rows, filter)
+        )
+      : groupBy !== 'none'
+        ? buildRegisterRowModel(rows, groupBy)
+        : null;
   // ARIA grid decisions, documented once where they are emitted:
   // - The <section> is the grid (not the scroller): LedgerView stacks many
   //   registers in ONE shared scroller, and each section must stay its own
@@ -330,7 +424,9 @@ export function renderRegisterHTML(
   }
   html += '>';
   html += renderRegisterHeaderHTML(account, balance);
-  if (model != null && options.stickyGroupLabels !== false) {
+  // Sticky mirror gates on GROUPING, not on the model existing — a filtered
+  // flat register has a model but no group rows to mirror.
+  if (groupBy !== 'none' && options.stickyGroupLabels !== false) {
     // Sticky mirror container between header and body: emitted hidden and
     // empty (the pre-scroll state — at scrollTop 0 no group header has
     // scrolled off) so hydration adopts it without a rebuild. The inline
@@ -347,7 +443,8 @@ export function renderRegisterHTML(
       model,
       { start: 0, end: model.length },
       null,
-      options.id
+      options.id,
+      filter
     );
   } else {
     html += renderRegisterRowsHTML(
@@ -392,19 +489,27 @@ function isRowIndexSelected(
 
 // Payee is the primary description line when present; narration becomes the
 // secondary line. Payee-less entries promote narration to primary so compact
-// rows never render an empty first line.
+// rows never render an empty first line. A prepared filter (already gated on
+// the 'description' field by the caller) highlights matches within each line
+// independently — matching also treats payee and narration as separate lines
+// (the '\n'-joined corpus), so highlight and match agree by construction.
 function renderDescriptionCellHTML(
   payee: string | null,
-  narration: string
+  narration: string,
+  filter: PreparedRegisterFilter | null = null
 ): string {
+  const renderText = (text: string): string =>
+    filter != null
+      ? renderFilterHighlightHTML(text, filter.lowerQuery)
+      : escapeHtml(text);
   let html = '<span data-cell="description" role="gridcell">';
   if (payee != null && payee !== '') {
-    html += `<span data-payee>${escapeHtml(payee)}</span>`;
+    html += `<span data-payee>${renderText(payee)}</span>`;
     if (narration !== '') {
-      html += `<span data-narration>${escapeHtml(narration)}</span>`;
+      html += `<span data-narration>${renderText(narration)}</span>`;
     }
   } else if (narration !== '') {
-    html += `<span data-payee>${escapeHtml(narration)}</span>`;
+    html += `<span data-payee>${renderText(narration)}</span>`;
   }
   html += '</span>';
   return html;

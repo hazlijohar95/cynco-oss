@@ -6,6 +6,7 @@ import {
 } from '../renderers/EntryRenderer';
 import type { ColorScheme, LedgerEntry } from '../types';
 import { applyHostColorScheme } from '../utils/applyHostColorScheme';
+import { createLiveRegion, type LiveRegion } from '../utils/createLiveRegion';
 import { escapeHtml } from '../utils/escapeHtml';
 import { JournalsContainerLoaded } from './web-components';
 
@@ -61,6 +62,16 @@ export class EntryStream {
   private entriesElement: HTMLElement | undefined;
   private countElement: HTMLElement | undefined;
   private stateElement: HTMLElement | undefined;
+  /**
+   * Polite live region announcing exactly TWO moments: stream start and
+   * completion. The visual footer count updates every flush — dozens of
+   * times per second on a fast feed — and announcing each tick would be an
+   * unusable firehose, so the footer deliberately carries no aria-live (it
+   * stays readable on demand via the virtual cursor) and only these two
+   * discrete transitions reach the region. A stable sibling of the scroller
+   * so appends never touch it.
+   */
+  private liveRegion: LiveRegion | undefined;
 
   private pendingEntries: LedgerEntry[] = [];
   private entryCount = 0;
@@ -116,6 +127,9 @@ export class EntryStream {
       scroller.addEventListener('scroll', this.handleScroll, {
         passive: true,
       });
+      // Created empty (SSR/hydration can never replay a stale message);
+      // the start announcement lands on the next frame from startConsuming.
+      this.liveRegion = createLiveRegion(shadowRoot);
       this.startConsuming();
     }
   }
@@ -137,6 +151,8 @@ export class EntryStream {
     if (this.scroller != null) {
       this.scroller.removeEventListener('scroll', this.handleScroll);
     }
+    this.liveRegion?.cleanUp();
+    this.liveRegion = undefined;
     if (!this.isContainerManaged) {
       this.container?.remove();
     }
@@ -153,6 +169,14 @@ export class EntryStream {
   // console but never thrown into the page.
   private startConsuming(): void {
     const { stream } = this.options;
+    // Start announcement on the next frame, not synchronously: a live
+    // region must exist in the accessibility tree BEFORE its content
+    // changes for screen readers to voice the change.
+    queueRender(() => {
+      if (!this.canceled && !this.done) {
+        this.liveRegion?.announce('Streaming entries\u2026');
+      }
+    });
     void (async () => {
       try {
         if (stream instanceof ReadableStream) {
@@ -188,6 +212,11 @@ export class EntryStream {
         }
         this.done = true;
         queueRender(this.flush);
+        // The second and last announcement: the final count, once. The
+        // intermediate per-flush counts stay visual-only (see liveRegion).
+        this.liveRegion?.announce(
+          `${this.entryCount} ${this.entryCount === 1 ? 'entry' : 'entries'} loaded`
+        );
         this.options.onDone?.(this.entryCount);
       } catch (error) {
         if (!this.canceled) {

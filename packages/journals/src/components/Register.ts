@@ -21,6 +21,8 @@ import {
 } from '../renderers/RegisterRenderer';
 import type {
   ColorScheme,
+  RegisterFilter,
+  RegisterFilterResult,
   RegisterRowData,
   RegisterSelection,
   RegisterSelectionChange,
@@ -32,8 +34,14 @@ import type {
   VirtualWindowSpecs,
 } from '../types';
 import { applyHostColorScheme } from '../utils/applyHostColorScheme';
+import { buildFilteredRegisterRowModel } from '../utils/buildFilteredRegisterRowModel';
+import {
+  buildRegisterFilterCorpus,
+  type RegisterFilterCorpus,
+} from '../utils/buildRegisterFilterCorpus';
 import { buildRegisterRowModel } from '../utils/buildRegisterRowModel';
 import { computeGroupedRowWindow } from '../utils/computeGroupedRowWindow';
+import { computeRegisterFilterMatches } from '../utils/computeRegisterFilterMatches';
 import { computeRowModelOffsets } from '../utils/computeRowModelOffsets';
 import { computeRowWindow } from '../utils/computeRowWindow';
 import { findFirstRowOnOrAfterDate } from '../utils/findFirstRowOnOrAfterDate';
@@ -138,6 +146,15 @@ export interface RegisterOptions extends RegisterRenderOptions {
    */
   onSelectionChange?(selection: RegisterSelectionChange): void;
   /**
+   * Fired after each application of an ACTIVE filter — `setFilter` with a
+   * non-empty query, a filter change through `setOptions`, and `setRows`
+   * while a filter is active — with the matched-row count out of the total
+   * (entry rows only, never group headers). Built for host "n of m"
+   * readouts; clearing the filter fires nothing (hosts reset their readout
+   * when they clear).
+   */
+  onFilterResult?(result: RegisterFilterResult): void;
+  /**
    * Optional worker pool: when present (and healthy), window HTML is
    * produced off the main thread and committed on the next animation frame.
    * Spacer heights still update synchronously, so scroll geometry (and the
@@ -192,13 +209,40 @@ export class Register implements VirtualizedInstance {
 
   private rows: readonly RegisterRowData[] = [];
   /**
-   * Grouped row model + cumulative pixel offsets, both null on the
-   * groupBy:'none' fast path so flat registers never pay for the offsets
-   * array. Rebuilt once per data update (O(n)), consumed by O(log n)
-   * windowing.
+   * Grouped and/or FILTERED row model + cumulative pixel offsets, both null
+   * on the groupBy:'none', no-filter fast path so plain flat registers
+   * never pay for the offsets array. Rebuilt once per data/projection
+   * update (O(n)), consumed by O(log n) windowing. An active filter forces
+   * the model path even when ungrouped — the visible row space is then the
+   * matched rows, not the raw array.
    */
   private rowModel: RegisterVirtualRow[] | null = null;
   private rowOffsets: Float64Array | null = null;
+
+  /**
+   * Active projection filter, normalized: null whenever the query is empty
+   * so every consumer can gate on one nullable field. Seeded from
+   * `options.filter`, replaced by `setFilter` / `setOptions`. The filter is
+   * a projection-level OVERLAY (the accounts tree's hide-non-matches
+   * philosophy): canonical rows, selection, and every public entry index
+   * stay in FULL-data space — only visibility changes.
+   */
+  private activeFilter: RegisterFilter | null = null;
+  /**
+   * Lazy lowercase corpus for filter matching (the EntryStore idiom): built
+   * on the first filter application, reused across query changes, dropped
+   * on setRows (it is positional over the rows array). Null until needed so
+   * unfiltered registers never pay the lowercase pass.
+   */
+  private filterCorpus: RegisterFilterCorpus | null = null;
+  /**
+   * Matched entry indexes (ascending) while a filter is active, plus the
+   * inverse map entryIndex → visible position (-1 = filtered out). Keyboard
+   * navigation walks these; both null without a filter, where visible
+   * position === entry index.
+   */
+  private filteredEntryIndexes: number[] | null = null;
+  private entryToFilteredPosition: Int32Array | null = null;
 
   /** Selected entry indexes (entry-index space, never group rows). */
   private selectedIndexes = new Set<number>();
@@ -262,6 +306,7 @@ export class Register implements VirtualizedInstance {
     private isContainerManaged = false
   ) {
     this.instanceId = options.id ?? this.workerInstanceId;
+    this.activeFilter = normalizeRegisterFilter(options.filter ?? null);
     this.interactionManager = new InteractionManager({
       onRowSelect: this.handleRowSelect,
     });
@@ -270,27 +315,41 @@ export class Register implements VirtualizedInstance {
   setOptions(options: RegisterOptions | undefined): void {
     if (options == null) return;
     const previousGroupBy = this.options.groupBy ?? 'none';
+    const previousFilter = this.options.filter ?? null;
     this.options = options;
     if (this.container != null) {
       applyHostColorScheme(this.container, options.colorScheme);
     }
-    // groupBy changes reshape the virtual row space, so rebuild the model
-    // and re-window in place. Density/lineHeight changes still require a
-    // full re-render (documented on RegisterRenderOptions.density).
-    if (
-      (options.groupBy ?? 'none') !== previousGroupBy &&
-      this.rows.length > 0
-    ) {
-      this.rebuildRowModel();
-      this.renderedRange = undefined;
-      this.applyWindow(this.getRowWindow(this.virtualizer?.getWindowSpecs()));
-      this.virtualizer?.instanceChanged();
+    // groupBy / filter changes reshape the virtual row space, so rebuild
+    // the model and re-window in place (filters compare by reference, the
+    // Reconciliation data-change idiom). Density/lineHeight changes still
+    // require a full re-render (documented on RegisterRenderOptions.density).
+    const groupByChanged = (options.groupBy ?? 'none') !== previousGroupBy;
+    const filterChanged = (options.filter ?? null) !== previousFilter;
+    if (filterChanged) {
+      this.activeFilter = normalizeRegisterFilter(options.filter ?? null);
+    }
+    if ((groupByChanged && this.rows.length > 0) || filterChanged) {
+      this.reprojectRows();
     }
     // groupBy / stickyGroupLabels feed the sticky period mirror.
     this.ensureStickyGroupElement();
     this.updateStickyGroupLabel();
     // label / selectionMode / groupBy all feed grid-level ARIA state.
     this.updateGridAttributes();
+  }
+
+  /**
+   * Applies (or clears, with null / an empty query) the projection-level
+   * row filter in place: the visible row model reshapes to matched rows,
+   * while canonical data, selection, and every public entry index stay in
+   * FULL-data space. Selection is never mutated — filtered-out selected
+   * rows simply are not rendered, and reappear (still selected) once the
+   * filter releases them. Fires `onFilterResult` when the filter is active.
+   */
+  setFilter(filter: RegisterFilter | null): void {
+    this.activeFilter = normalizeRegisterFilter(filter);
+    this.reprojectRows();
   }
 
   // Standalone entry point: builds scroller + section inside the container's
@@ -380,12 +439,25 @@ export class Register implements VirtualizedInstance {
   setRows(rows: readonly RegisterRowData[]): void {
     this.rows = rows;
     this.rowsVersion += 1;
+    // The lazy filter corpus is positional over the rows array, so any data
+    // change invalidates it wholesale; the next match pass rebuilds it.
+    this.filterCorpus = null;
     this.rebuildRowModel();
     this.renderedRange = undefined;
     // Focus must never dangle past the data: clamp silently (no callback —
     // this is a data change, not a navigation event).
     if (this.focusedIndex != null && this.focusedIndex >= rows.length) {
       this.focusedIndex = rows.length > 0 ? rows.length - 1 : null;
+    }
+    // Same silent rule when the new data no longer matches an active filter
+    // for the focused row: focus is presentation state over the visible
+    // grid, and the row is no longer visible.
+    if (
+      this.focusedIndex != null &&
+      this.entryToFilteredPosition != null &&
+      this.entryToFilteredPosition[this.focusedIndex] === -1
+    ) {
+      this.focusedIndex = null;
     }
     this.updateGridAttributes();
     if (this.headerElement != null && this.section != null) {
@@ -407,6 +479,8 @@ export class Register implements VirtualizedInstance {
     this.stickyGroupIndex = null;
     this.updateStickyGroupLabel();
     this.virtualizer?.instanceChanged();
+    // An active filter was re-applied to the new data; report fresh counts.
+    this.emitFilterResult();
   }
 
   // Programmatic selection: replaces the whole selection with one row (or
@@ -465,6 +539,13 @@ export class Register implements VirtualizedInstance {
     if (this.rows[index] == null) {
       return;
     }
+    // A filtered-out row cannot take visible focus (revealing it is
+    // impossible while the filter hides it): graceful no-op, exactly like
+    // out-of-range indexes. The index stays valid full-data space for when
+    // the filter releases the row.
+    if (this.getNavigablePosition(index) === -1) {
+      return;
+    }
     this.setFocusedIndex(index);
     this.section?.focus();
   }
@@ -489,6 +570,12 @@ export class Register implements VirtualizedInstance {
    */
   scrollToRow(entryIndex: number, options: ScrollToRowOptions = {}): void {
     if (this.rows[entryIndex] == null) {
+      return;
+    }
+    // Under an active filter the entry index keeps naming the same row
+    // (FULL-data space), but a filtered-out row has no visible position to
+    // scroll to: graceful no-op, like out-of-range indexes.
+    if (this.getNavigablePosition(entryIndex) === -1) {
       return;
     }
     const scroller = this.scroller ?? this.virtualizer?.getRoot();
@@ -608,6 +695,11 @@ export class Register implements VirtualizedInstance {
     this.rowOffsets = null;
     this.entryToModelIndex = null;
     this.modelToGroupIndex = null;
+    // The active filter survives (it mirrors options), but everything
+    // derived from the rows does not.
+    this.filterCorpus = null;
+    this.filteredEntryIndexes = null;
+    this.entryToFilteredPosition = null;
     this.stickyGroupElement = undefined;
     this.stickyGroupIndex = null;
     this.renderedRange = undefined;
@@ -694,11 +786,45 @@ export class Register implements VirtualizedInstance {
     }
   }
 
-  // (Re)derives the grouped row model + offsets. Null on the 'none' path so
-  // flat registers keep the pure-arithmetic windowing with zero extra
-  // allocation.
+  // (Re)derives the (grouped and/or filtered) row model + offsets. Null on
+  // the 'none'-and-unfiltered path so flat registers keep the
+  // pure-arithmetic windowing with zero extra allocation — the empty-query /
+  // null-filter fast path is byte-for-byte today's code path.
   private rebuildRowModel(): void {
     const groupBy = this.options.groupBy ?? 'none';
+    const filter = this.activeFilter;
+    if (filter != null && this.rows.length > 0) {
+      // Filtered projection: match against the lazy corpus (built once per
+      // data version, reused across query changes), then reshape the model
+      // to matched rows only — with recomputed per-period summaries when
+      // grouped. Both builders keep ORIGINAL entry indexes on every row.
+      this.filterCorpus ??= buildRegisterFilterCorpus(this.rows);
+      const matches = computeRegisterFilterMatches(
+        this.rows,
+        filter,
+        this.filterCorpus
+      );
+      this.filteredEntryIndexes = matches;
+      const entryToFilteredPosition = new Int32Array(this.rows.length).fill(-1);
+      for (const [position, entryIndex] of matches.entries()) {
+        entryToFilteredPosition[entryIndex] = position;
+      }
+      this.entryToFilteredPosition = entryToFilteredPosition;
+      this.rowModel = buildFilteredRegisterRowModel(
+        this.rows,
+        groupBy,
+        matches
+      );
+      this.rowOffsets = computeRowModelOffsets(
+        this.rowModel,
+        this.getRowHeight(),
+        this.getGroupRowHeight()
+      );
+      this.rebuildModelIndexes();
+      return;
+    }
+    this.filteredEntryIndexes = null;
+    this.entryToFilteredPosition = null;
     if (groupBy === 'none' || this.rows.length === 0) {
       this.rowModel = null;
       this.rowOffsets = null;
@@ -712,11 +838,19 @@ export class Register implements VirtualizedInstance {
       this.getRowHeight(),
       this.getGroupRowHeight()
     );
-    // Inverse index for focus reveal: entryIndex → model index, one O(n)
-    // pass per data update instead of a scan per keystroke. The sibling
-    // modelToGroupIndex maps every model row to its governing group header
-    // for the sticky-label lookup.
-    const entryToModelIndex = new Int32Array(this.rows.length);
+    this.rebuildModelIndexes();
+  }
+
+  // Inverse index for focus reveal: entryIndex → model index, one O(n)
+  // pass per data update instead of a scan per keystroke (-1 marks entries
+  // absent from the model, i.e. filtered out). The sibling modelToGroupIndex
+  // maps every model row to its governing group header for the sticky-label
+  // lookup.
+  private rebuildModelIndexes(): void {
+    if (this.rowModel == null) {
+      return;
+    }
+    const entryToModelIndex = new Int32Array(this.rows.length).fill(-1);
     const modelToGroupIndex = new Int32Array(this.rowModel.length);
     let currentGroupIndex = 0;
     for (const [modelIndex, item] of this.rowModel.entries()) {
@@ -729,6 +863,68 @@ export class Register implements VirtualizedInstance {
     }
     this.entryToModelIndex = entryToModelIndex;
     this.modelToGroupIndex = modelToGroupIndex;
+  }
+
+  // Rebuilds the visible projection in place after a filter (or grouped
+  // reshape) change: new model, fresh window, honest ARIA counts, sticky
+  // label re-derive — and the filter's contract on focus/selection. The
+  // filter never mutates selection (hidden selected rows simply are not
+  // rendered), but a focused row that got filtered out clears SILENTLY
+  // (aria-activedescendant is removed by the window commit): this is a
+  // projection change, not a navigation event, so onFocusChange stays quiet
+  // — the setRows clamping precedent.
+  private reprojectRows(): void {
+    this.rebuildRowModel();
+    this.renderedRange = undefined;
+    if (
+      this.focusedIndex != null &&
+      this.getNavigablePosition(this.focusedIndex) === -1
+    ) {
+      this.getRowElement(this.focusedIndex)?.removeAttribute('data-focused');
+      this.focusedIndex = null;
+    }
+    this.updateGridAttributes();
+    this.applyWindow(this.getRowWindow(this.virtualizer?.getWindowSpecs()));
+    this.stickyGroupIndex = null;
+    this.updateStickyGroupLabel();
+    this.virtualizer?.instanceChanged();
+    this.emitFilterResult();
+  }
+
+  // Fires onFilterResult for the current ACTIVE filter application; clears
+  // fire nothing (documented on the option).
+  private emitFilterResult(): void {
+    const { onFilterResult } = this.options;
+    if (onFilterResult == null || this.activeFilter == null) {
+      return;
+    }
+    onFilterResult({
+      matched: this.filteredEntryIndexes?.length ?? 0,
+      total: this.rows.length,
+    });
+  }
+
+  /** Rows keyboard navigation can land on: matched rows under a filter,
+   * every entry row otherwise. */
+  private getNavigableRowCount(): number {
+    return this.filteredEntryIndexes != null
+      ? this.filteredEntryIndexes.length
+      : this.rows.length;
+  }
+
+  // Visible position → entry index: identity without a filter (the original
+  // flat arithmetic), one array lookup with one.
+  private getEntryIndexAtNavigablePosition(position: number): number {
+    return this.filteredEntryIndexes != null
+      ? this.filteredEntryIndexes[position]
+      : position;
+  }
+
+  // Entry index → visible position; -1 when an active filter hides the row.
+  private getNavigablePosition(entryIndex: number): number {
+    return this.entryToFilteredPosition != null
+      ? this.entryToFilteredPosition[entryIndex]
+      : entryIndex;
   }
 
   private getRowWindow(windowSpecs: VirtualWindowSpecs | undefined): RowRange {
@@ -795,9 +991,16 @@ export class Register implements VirtualizedInstance {
     // applied on the next animation frame. A version stamp drops responses
     // for windows the user has already scrolled past.
     const version = ++this.windowRenderVersion;
-    const { rows } = this;
+    const { rows, activeFilter } = this;
     const groupBy = this.options.groupBy ?? 'none';
     const selectedIndexes = this.getSortedSelection();
+    // The filter segment sits LAST in the cache key: the query is raw user
+    // text and may contain ':', so trailing position keeps it from forging
+    // any other key segment.
+    const filterKey =
+      activeFilter != null
+        ? `${(activeFilter.fields ?? ['description']).join('_')}|${activeFilter.query}`
+        : 'nofilter';
     void pool
       .renderRegisterWindow({
         rows,
@@ -808,10 +1011,14 @@ export class Register implements VirtualizedInstance {
         // Focus is NOT baked into window HTML (it is patched post-commit),
         // but row ids are — thread the prefix so worker bytes match sync.
         idPrefix: this.instanceId,
+        // The filter crosses the protocol too: the worker rebuilds the
+        // same filtered model so its bytes match the sync path.
+        filter: activeFilter,
         cacheKey:
           `${this.workerInstanceId}:${this.rowsVersion}:${groupBy}:` +
           `${range.start}:${range.end}:` +
-          `${selectedIndexes.length > 0 ? selectedIndexes.join('_') : 'none'}`,
+          `${selectedIndexes.length > 0 ? selectedIndexes.join('_') : 'none'}:` +
+          filterKey,
       })
       .then((html) => {
         if (version !== this.windowRenderVersion || this.rowsElement == null) {
@@ -839,9 +1046,9 @@ export class Register implements VirtualizedInstance {
       });
   }
 
-  // Sync window HTML from the cached row model (grouped) or the flat rows.
-  // Byte-identical to the worker output: the worker rebuilds the same model
-  // from the same rows with the same pure functions.
+  // Sync window HTML from the cached row model (grouped and/or filtered) or
+  // the flat rows. Byte-identical to the worker output: the worker rebuilds
+  // the same model from the same rows/filter with the same pure functions.
   private renderWindowHTMLSync(range: RowRange): string {
     const selected =
       this.selectedIndexes.size > 0 ? this.selectedIndexes : null;
@@ -850,7 +1057,8 @@ export class Register implements VirtualizedInstance {
         this.rowModel,
         range,
         selected,
-        this.instanceId
+        this.instanceId,
+        this.activeFilter
       );
     }
     return renderRegisterRowsHTML(this.rows, range, selected, this.instanceId);
@@ -988,7 +1196,11 @@ export class Register implements VirtualizedInstance {
     if (isComposingEvent(keyboard)) {
       return;
     }
-    const rowCount = this.rows.length;
+    // All movement math runs in VISIBLE-position space: matched rows under
+    // an active filter (keyboard navigation walks filtered rows only),
+    // every entry row otherwise — where position === entry index and this
+    // is exactly the original arithmetic.
+    const rowCount = this.getNavigableRowCount();
     if (rowCount === 0) {
       return;
     }
@@ -1039,8 +1251,13 @@ export class Register implements VirtualizedInstance {
 
     // Movement keys. `base` is where movement starts: the focused row,
     // falling back to the primary selection so keyboard picks up from a
-    // pre-existing pointer selection, then to "before the first row".
-    const base = this.focusedIndex ?? this.selectionPrimary;
+    // pre-existing pointer selection, then to "before the first row". A
+    // base row hidden by the filter resolves to no position, so movement
+    // restarts from the grid edge — same as having no focus at all.
+    const baseEntry = this.focusedIndex ?? this.selectionPrimary;
+    const basePosition =
+      baseEntry != null ? this.getNavigablePosition(baseEntry) : -1;
+    const base = basePosition >= 0 ? basePosition : null;
     let target: number;
     switch (key) {
       case 'ArrowDown': {
@@ -1083,15 +1300,20 @@ export class Register implements VirtualizedInstance {
         return;
     }
     keyboard.preventDefault(); // Arrows/paging must never scroll the page.
-    this.setFocusedIndex(target);
+    // Translate the visible position back into the entry index — the only
+    // space focus, selection, and callbacks ever speak.
+    const targetEntryIndex = this.getEntryIndexAtNavigablePosition(target);
+    this.setFocusedIndex(targetEntryIndex);
     if (
       keyboard.shiftKey &&
       mode === 'range' &&
       (key === 'ArrowDown' || key === 'ArrowUp')
     ) {
       // Shift+Arrow IS a shift-click on the new row: the shared pointer
-      // path guarantees identical RegisterSelection states.
-      this.handleRowSelect(target, {
+      // path guarantees identical RegisterSelection states. (Under a
+      // filter the anchor→target range stays contiguous in ENTRY-index
+      // space — selection identity never depends on the projection.)
+      this.handleRowSelect(targetEntryIndex, {
         shiftKey: true,
         metaKey: false,
         ctrlKey: false,
@@ -1099,16 +1321,21 @@ export class Register implements VirtualizedInstance {
     }
   };
 
-  // Meta/Ctrl+A (range mode): every entry row. The anchor is preserved (or
-  // seeded at 0) so a following Shift+Arrow still has an origin.
+  // Meta/Ctrl+A (range mode): every VISIBLE entry row — all rows without a
+  // filter, matched rows with one ("select all" acts on what the grid
+  // presents; silently selecting hidden rows would be a trap). The anchor
+  // is preserved (or seeded at the first visible row) so a following
+  // Shift+Arrow still has an origin.
   private selectAllRows(): void {
     const previous = this.selectedIndexes;
     const next = new Set<number>();
-    for (let index = 0; index < this.rows.length; index += 1) {
-      next.add(index);
+    const count = this.getNavigableRowCount();
+    for (let position = 0; position < count; position += 1) {
+      next.add(this.getEntryIndexAtNavigablePosition(position));
     }
     this.selectedIndexes = next;
-    this.selectionAnchor ??= 0;
+    this.selectionAnchor ??=
+      count > 0 ? this.getEntryIndexAtNavigablePosition(0) : 0;
     this.patchSelectionAttributes(previous);
     this.emitSelectionChange();
   }
@@ -1315,6 +1542,14 @@ export class Register implements VirtualizedInstance {
     const { headerHeight = DEFAULT_HEADER_HEIGHT, getOffsetTop } = this.options;
     const bodyTop = (getOffsetTop?.() ?? 0) + headerHeight;
     const rowHeight = this.getRowHeight();
+    // -1 marks entries absent from the model (filtered out); callers guard
+    // already, but a scroll target of NaN must never be computable.
+    if (
+      this.entryToModelIndex != null &&
+      this.entryToModelIndex[entryIndex] < 0
+    ) {
+      return null;
+    }
     const rowTop =
       this.rowOffsets != null && this.entryToModelIndex != null
         ? bodyTop + this.rowOffsets[this.entryToModelIndex[entryIndex]]
@@ -1394,4 +1629,17 @@ export class Register implements VirtualizedInstance {
       rows: indexes.map((index) => this.rows[index]),
     });
   }
+}
+
+// An empty query IS "no filter": normalizing to null here lets every
+// consumer (model rebuild, keyboard nav, worker requests) gate on a single
+// nullable field, and guarantees the empty-query path is byte-for-byte the
+// unfiltered fast path — no corpus, no filtered-model allocation.
+function normalizeRegisterFilter(
+  filter: RegisterFilter | null | undefined
+): RegisterFilter | null {
+  if (filter == null || filter.query === '') {
+    return null;
+  }
+  return filter;
 }

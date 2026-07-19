@@ -5,6 +5,7 @@ import type {
   RegisterVirtualRow,
 } from '../types';
 import { formatPeriodLabel } from './formatPeriodLabel';
+import { getRegisterPeriodKey } from './getRegisterPeriodKey';
 
 // Group summaries are mutated while the single pass scans their rows; the
 // public RegisterGroupSummary shape they satisfy is read-only to consumers.
@@ -32,7 +33,7 @@ export function buildRegisterRowModel(
   let currentGroup: MutableGroupSummary | null = null;
   let currentEntryIds: Set<string> | null = null;
   for (const [entryIndex, row] of rows.entries()) {
-    const key = getPeriodKey(row.entry.date, groupBy);
+    const key = getRegisterPeriodKey(row.entry.date, groupBy);
     if (key !== currentKey || currentGroup == null) {
       currentKey = key;
       currentGroup = {
@@ -58,25 +59,4 @@ export function buildRegisterRowModel(
     model.push({ kind: 'entry', row, entryIndex });
   }
   return model;
-}
-
-// Period key from an ISO `YYYY-MM-DD` date via string slicing — no Date
-// parsing, so grouping is timezone-proof and allocation-light. Malformed
-// month digits fall back to the month-style substring key so bad input still
-// groups deterministically instead of throwing.
-function getPeriodKey(
-  date: string,
-  groupBy: Exclude<RegisterGroupBy, 'none'>
-): string {
-  if (groupBy === 'year') {
-    return date.slice(0, 4);
-  }
-  if (groupBy === 'month') {
-    return date.slice(0, 7);
-  }
-  const month = Number(date.slice(5, 7));
-  if (!Number.isInteger(month) || month < 1 || month > 12) {
-    return date.slice(0, 7);
-  }
-  return `${date.slice(0, 4)}-Q${Math.floor((month - 1) / 3) + 1}`;
 }

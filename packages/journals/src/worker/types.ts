@@ -1,6 +1,7 @@
 import type {
   BookPostingRef,
   ReconciliationMatch,
+  RegisterFilter,
   RegisterGroupBy,
   RegisterRowData,
   RowRange,
@@ -48,6 +49,15 @@ export interface RegisterWindowRequest {
    * renderer receives so worker HTML stays byte-identical to the sync path.
    */
   idPrefix?: string | null;
+  /**
+   * Projection-level row filter. When set (with a non-empty query) the
+   * worker rebuilds the FILTERED row model from `rows` with the same pure
+   * matcher/builder the client uses — matched rows only, recomputed group
+   * summaries, `<mark data-filter-match>` highlights — so the returned HTML
+   * stays byte-identical to the sync path. The range is then in
+   * FILTERED-model-index space. Plain data: survives structured clone.
+   */
+  filter?: RegisterFilter | null;
 }
 
 /** Run the deterministic reconciliation proposal engine off the main thread. */

@@ -3,8 +3,12 @@ import { describe, expect, test } from 'bun:test';
 import {
   renderRegisterRowsHTML,
   renderRegisterVirtualRowsHTML,
+  renderRegisterWindowHTML,
 } from '../src/renderers/RegisterRenderer';
+import type { RegisterFilter } from '../src/types';
+import { buildFilteredRegisterRowModel } from '../src/utils/buildFilteredRegisterRowModel';
 import { buildRegisterRowModel } from '../src/utils/buildRegisterRowModel';
+import { computeRegisterFilterMatches } from '../src/utils/computeRegisterFilterMatches';
 import { proposeMatches } from '../src/utils/proposeMatches';
 import { handleWorkerRequest } from '../src/worker/handleWorkerRequest';
 import type { WorkerRequest } from '../src/worker/types';
@@ -104,6 +108,110 @@ describe('worker protocol', () => {
     expect(response.html).toContain('id="wp-instance-row-0"');
     expect(response.html).toContain('role="row"');
     expect(response.html).toContain('aria-rowindex="1"');
+  });
+
+  test('filtered register-window HTML is byte-identical to the sync filtered renderer', () => {
+    const rows = makeRows(30);
+    const filter: RegisterFilter = { query: 'payee 1' }; // 1, 10..19.
+    const model = buildFilteredRegisterRowModel(
+      rows,
+      'none',
+      computeRegisterFilterMatches(rows, filter)
+    );
+    const range = { start: 0, end: model.length };
+    const response = handleWorkerRequest({
+      type: 'register-window',
+      id: 't2f',
+      rows,
+      range,
+      selectedIndex: 10,
+      idPrefix: 'wp-filter',
+      filter,
+    });
+    if (
+      response.type !== 'success' ||
+      response.requestType !== 'register-window'
+    ) {
+      throw new Error('expected register-window success');
+    }
+    // Byte parity against both sync entry points: the shared window
+    // renderer AND the model+virtual-rows path the client uses.
+    expect(response.html).toBe(
+      renderRegisterWindowHTML(rows, range, 10, 'none', 'wp-filter', filter)
+    );
+    expect(response.html).toBe(
+      renderRegisterVirtualRowsHTML(model, range, 10, 'wp-filter', filter)
+    );
+    // Matched rows only (11 of 30), full-data indexes, filtered aria
+    // positions, and highlight marks — all across the protocol.
+    expect(response.html).not.toContain('data-row-index="0"');
+    expect(response.html).toContain('data-row-index="10"');
+    expect(response.html).toContain('aria-rowindex="1"');
+    expect(response.html).toContain('<mark data-filter-match>Payee 1</mark>');
+    expect(response.html).toContain("data-row-selected='true'");
+  });
+
+  test('grouped + filtered register-window stays byte-identical and recomputes group summaries', () => {
+    const rows = makeRows(60).map((row, index) => ({
+      ...row,
+      entry: {
+        ...row.entry,
+        date: `2026-${String(Math.floor(index / 20) + 1).padStart(2, '0')}-10`,
+        // Matches land in months 1 and 3 only; month 2's header must drop.
+        payee: index % 20 < 2 && index < 20 ? 'needle a' : row.entry.payee,
+        narration: index >= 40 && index < 42 ? 'needle b' : row.entry.narration,
+      },
+    }));
+    const filter: RegisterFilter = { query: 'needle' };
+    const model = buildFilteredRegisterRowModel(
+      rows,
+      'month',
+      computeRegisterFilterMatches(rows, filter)
+    );
+    const range = { start: 0, end: model.length };
+    const response = handleWorkerRequest({
+      type: 'register-window',
+      id: 't2gf',
+      rows,
+      range,
+      selectedIndex: null,
+      groupBy: 'month',
+      filter,
+    });
+    if (
+      response.type !== 'success' ||
+      response.requestType !== 'register-window'
+    ) {
+      throw new Error('expected register-window success');
+    }
+    expect(response.html).toBe(
+      renderRegisterVirtualRowsHTML(model, range, null, undefined, filter)
+    );
+    expect(response.html).toContain('data-group-key="2026-01"');
+    expect(response.html).not.toContain('data-group-key="2026-02"');
+    expect(response.html).toContain('data-group-key="2026-03"');
+    // Recomputed over matches: 2 entries per surviving month.
+    expect(response.html).toContain('2 entries');
+  });
+
+  test('empty-query filters take the unfiltered path byte for byte', () => {
+    const rows = makeRows(20);
+    const range = { start: 0, end: 20 };
+    const response = handleWorkerRequest({
+      type: 'register-window',
+      id: 't2e',
+      rows,
+      range,
+      selectedIndex: null,
+      filter: { query: '' },
+    });
+    if (
+      response.type !== 'success' ||
+      response.requestType !== 'register-window'
+    ) {
+      throw new Error('expected register-window success');
+    }
+    expect(response.html).toBe(renderRegisterRowsHTML(rows, range, null));
   });
 
   test('propose-matches returns the same matches as a direct engine call', () => {

@@ -220,6 +220,13 @@
       color-mix(in lab, var(--journals-bg) 80%, var(--journals-credit)),
       color-mix(in lab, var(--journals-bg) 68%, var(--journals-credit))
     );
+    /* Register filter-match highlight: the match (indigo) family at the
+     * stronger word-span mix, so filter marks read like the diff word
+     * highlights rather than the browser's default yellow <mark>. */
+    --journals-bg-filter-match: light-dark(
+      color-mix(in lab, var(--journals-bg) 78%, var(--journals-match)),
+      color-mix(in lab, var(--journals-bg) 66%, var(--journals-match))
+    );
 
     color-scheme: light dark;
     display: block;
@@ -234,6 +241,21 @@
   *::before,
   *::after {
     box-sizing: border-box;
+  }
+
+  /* Screen-reader-only content (live regions): the classic clip pattern
+   * keeps the element in the accessibility tree — display:none or
+   * visibility:hidden would mute aria-live announcements entirely. */
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   [data-journals-content] {
@@ -829,6 +851,15 @@
     [data-cell='balance'][data-balance-negative='true']
     [data-balance-value] {
     color: var(--journals-balance-negative);
+  }
+
+  /* Filter match highlight: matched substrings in text cells wrap in
+   * <mark data-filter-match>. Inherit color (the cell already colors payee /
+   * narration / date); only the background marks the hit. */
+  [data-row] mark[data-filter-match] {
+    background-color: var(--journals-bg-filter-match);
+    color: inherit;
+    border-radius: 2px;
   }
 
   /* Period group header rows (groupBy): muted separator rows interleaved
