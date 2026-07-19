@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>register keyboard fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      journals-container {
+        /* Custom elements default to inline; without block the height would
+           not constrain the scroller and the virtualized focus-reveal path
+           this fixture exists to exercise would never engage. */
+        display: block;
+        height: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="mount"></div>
+
+    <script type="module">
+      import { Register } from '/dist/index.js';
+
+      const account = 'Assets:Current:Cash-Maybank';
+      const ROW_COUNT = 200;
+
+      // Deterministic register in range-selection mode with a fixed id so
+      // the suite can assert exact aria-activedescendant values.
+      const rows = [];
+      let balance = 0;
+      for (let index = 0; index < ROW_COUNT; index += 1) {
+        const amount = (index % 2 === 0 ? 1 : -1) * (1000 + (index % 7) * 25);
+        balance += amount;
+        const posting = { account, amount, currency: 'MYR' };
+        rows.push({
+          entry: {
+            id: `e-${index}`,
+            date: `2026-07-${String((index % 28) + 1).padStart(2, '0')}`,
+            flag: 'cleared',
+            payee: `Payee ${index}`,
+            narration: `Narration ${index}`,
+            tags: [],
+            links: [],
+            postings: [
+              posting,
+              { account: 'Income:Sales', amount: -amount, currency: 'MYR' },
+            ],
+          },
+          posting,
+          runningBalance: new Map([['MYR', balance]]),
+        });
+      }
+
+      const register = new Register({
+        account,
+        id: 'e2e-reg',
+        selectionMode: 'range',
+      });
+      register.render({ rows, parentNode: document.getElementById('mount') });
+
+      const host = document.querySelector('journals-container');
+      const shadowRoot = host.shadowRoot;
+      const section = shadowRoot.querySelector('[data-register]');
+      const scroller = shadowRoot.querySelector('[data-scroller]');
+
+      window.__register = register;
+      window.__section = section;
+      window.__scroller = scroller;
+      window.__shadowRoot = shadowRoot;
+
+      // One readout for the keyboard assertions: DOM focus target,
+      // aria-activedescendant, the focused row's index and computed outline
+      // (the :focus-visible-gated visual treatment), and selection state.
+      window.__keyboardReadout = () => {
+        const focused = section.querySelector('[data-focused="true"]');
+        return {
+          gridHasFocus: shadowRoot.activeElement === section,
+          activeDescendant: section.getAttribute('aria-activedescendant'),
+          focusedIndex:
+            focused == null
+              ? null
+              : Number(focused.getAttribute('data-row-index')),
+          focusedOutline:
+            focused == null ? null : getComputedStyle(focused).outlineStyle,
+          selectedIndexes: Array.from(
+            section.querySelectorAll('[data-row-selected="true"]')
+          ).map((row) => Number(row.getAttribute('data-row-index'))),
+        };
+      };
+
+      window.__registerKeyboardReady = true;
+    </script>
+  </body>
+</html>

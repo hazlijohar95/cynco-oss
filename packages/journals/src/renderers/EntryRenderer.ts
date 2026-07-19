@@ -98,8 +98,10 @@ function renderPostingHTML(
 // Balanced entries get no footer at all. Unbalanced entries get one row per
 // offending currency: the checker-gradient bar plus the signed imbalance in
 // danger color. Rendering (not repairing) bad data is deliberate — the data
-// layer owns correctness, the renderer owns visibility.
-function renderEntryFooterHTML(entry: LedgerEntry): string {
+// layer owns correctness, the renderer owns visibility. Exported so
+// EntryDiffRenderer can give an unbalanced AFTER version the identical
+// treatment.
+export function renderEntryFooterHTML(entry: LedgerEntry): string {
   const imbalances = getEntryImbalances(entry);
   if (imbalances.size === 0) {
     return '';

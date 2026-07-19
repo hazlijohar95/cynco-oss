@@ -2,6 +2,7 @@
 /// <reference path="./jsx.d.ts" />
 
 export * from '../types';
+export * from './EntryDiff';
 export * from './EntryStream';
 export * from './JournalEntry';
 export * from './LedgerView';

@@ -1,4 +1,4 @@
-import { renderRegisterRowsHTML } from '../renderers/RegisterRenderer';
+import { renderRegisterWindowHTML } from '../renderers/RegisterRenderer';
 import { proposeMatches } from '../utils/proposeMatches';
 import type { WorkerRequest, WorkerResponse } from './types';
 
@@ -29,10 +29,18 @@ export function handleWorkerRequest(request: WorkerRequest): WorkerResponse {
           type: 'success',
           requestType: 'register-window',
           id: request.id,
-          html: renderRegisterRowsHTML(
+          // Selection: the sorted index array (range selection) wins over
+          // the legacy single index. The shared window renderer rebuilds the
+          // grouped row model deterministically, so this HTML is
+          // byte-identical to the client's sync path.
+          html: renderRegisterWindowHTML(
             request.rows,
             request.range,
-            request.selectedIndex
+            request.selectedIndexes != null
+              ? new Set(request.selectedIndexes)
+              : request.selectedIndex,
+            request.groupBy,
+            request.idPrefix ?? undefined
           ),
           sentAt: Date.now(),
         };

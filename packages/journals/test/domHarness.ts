@@ -235,6 +235,24 @@ export function dispatchScroll(element: HTMLElement): void {
   element.dispatchEvent(new window.Event('scroll'));
 }
 
+// Dispatches a keydown the way browsers deliver it to the grid element:
+// bubbling and cancelable, with any modifier/composition flags the test
+// declares (jsdom KeyboardEvent honors isComposing via the init dict).
+export function dispatchKey(
+  element: HTMLElement,
+  key: string,
+  init: KeyboardEventInit = {}
+): void {
+  element.dispatchEvent(
+    new window.KeyboardEvent('keydown', {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    })
+  );
+}
+
 export function wait(ms = 0): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

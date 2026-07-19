@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ledger view scroll fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      journals-container {
+        display: block;
+        height: 480px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ledger-mount"></div>
+    <div id="register-mount"></div>
+
+    <script type="module">
+      import { LedgerView, Register } from '/dist/index.js';
+
+      // Deterministic rows: payee/narration derive from the index; the date
+      // is fixed per section (flat ledger sections) or spread across months
+      // (grouped register) so sticky labels have real period boundaries.
+      function makeRows(account, count, dateForIndex) {
+        const rows = [];
+        let balance = 0;
+        for (let index = 0; index < count; index += 1) {
+          const amount = (index % 2 === 0 ? 1 : -1) * (1000 + (index % 7) * 25);
+          balance += amount;
+          const posting = { account, amount, currency: 'MYR' };
+          rows.push({
+            entry: {
+              id: `${account}-${index}`,
+              date: dateForIndex(index),
+              flag: 'cleared',
+              payee: `Payee ${index}`,
+              narration: `Narration ${index}`,
+              tags: [],
+              links: [],
+              postings: [
+                posting,
+                { account: 'Income:Sales', amount: -amount, currency: 'MYR' },
+              ],
+            },
+            posting,
+            runningBalance: new Map([['MYR', balance]]),
+          });
+        }
+        return rows;
+      }
+
+      // --- LedgerView: three 500-row sections (comfortable, 40px rows) ---
+      const ACCOUNTS = ['Assets:A', 'Assets:B', 'Assets:C'];
+      const SECTION_ROWS = 500;
+      const ledgerView = new LedgerView({});
+      ledgerView.render({
+        sections: ACCOUNTS.map((account) => ({
+          account,
+          rows: makeRows(account, SECTION_ROWS, () => '2026-07-15'),
+        })),
+        parentNode: document.getElementById('ledger-mount'),
+      });
+      const ledgerHost = document.querySelector(
+        '#ledger-mount journals-container'
+      );
+      const ledgerScroller =
+        ledgerHost.shadowRoot.querySelector('[data-scroller]');
+
+      // --- Grouped register: 1200 rows across Jan..Jun 2026 -------------
+      const groupedRegister = new Register({
+        account: 'Assets:Grouped',
+        groupBy: 'month',
+      });
+      groupedRegister.render({
+        rows: makeRows('Assets:Grouped', 1200, (index) => {
+          const month = String(Math.floor(index / 200) + 1).padStart(2, '0');
+          return `2026-${month}-15`;
+        }),
+        parentNode: document.getElementById('register-mount'),
+      });
+      const registerHost = document.querySelector(
+        '#register-mount journals-container'
+      );
+      const groupedScroller =
+        registerHost.shadowRoot.querySelector('[data-scroller]');
+      const groupedSection =
+        registerHost.shadowRoot.querySelector('[data-register]');
+
+      window.__ledgerView = ledgerView;
+      window.__ledgerScroller = ledgerScroller;
+      // Section B top offset: header 44 + 500 comfortable rows at 40px.
+      window.__sectionBTop = 44 + SECTION_ROWS * 40;
+      window.__groupedRegister = groupedRegister;
+      window.__groupedScroller = groupedScroller;
+      window.__stickyReadout = () => {
+        const sticky = groupedSection.querySelector('[data-group-sticky]');
+        return {
+          hidden: sticky == null ? null : sticky.hidden,
+          label:
+            sticky?.querySelector('[data-group-label]')?.textContent ?? null,
+        };
+      };
+      window.__ledgerViewScrollReady = true;
+    </script>
+  </body>
+</html>

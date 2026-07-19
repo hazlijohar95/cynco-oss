@@ -1,9 +1,10 @@
 import LRUMapPkg from 'lru_map';
 
-import { renderRegisterRowsHTML } from '../renderers/RegisterRenderer';
+import { renderRegisterWindowHTML } from '../renderers/RegisterRenderer';
 import type {
   BookPostingRef,
   ReconciliationMatch,
+  RegisterGroupBy,
   RegisterRowData,
   RowRange,
   StatementLine,
@@ -56,6 +57,12 @@ export interface RenderRegisterWindowProps {
   rows: readonly RegisterRowData[];
   range: RowRange;
   selectedIndex: number | null;
+  /** Sorted selected entry indexes (range selection); wins over selectedIndex. */
+  selectedIndexes?: readonly number[] | null;
+  /** Period grouping; the worker rebuilds the row model deterministically. */
+  groupBy?: RegisterGroupBy;
+  /** Row id prefix for aria-activedescendant; see RegisterWindowRequest. */
+  idPrefix?: string | null;
   /**
    * Stable identity for this exact input (e.g. `instance:rowsVersion:start:
    * end:selected`). Enables dedupe of in-flight identical requests and the
@@ -117,6 +124,9 @@ export class WorkerPoolManager {
     rows,
     range,
     selectedIndex,
+    selectedIndexes,
+    groupBy,
+    idPrefix,
     cacheKey,
   }: RenderRegisterWindowProps): Promise<string> {
     return this.submit({
@@ -125,9 +135,21 @@ export class WorkerPoolManager {
         rows,
         range,
         selectedIndex,
+        selectedIndexes,
+        groupBy,
+        idPrefix,
       },
       dedupeKey: cacheKey != null ? `register-window:${cacheKey}` : null,
-      fallback: () => renderRegisterRowsHTML(rows, range, selectedIndex),
+      // Same selection resolution as handleWorkerRequest so worker and
+      // fallback bytes can never diverge.
+      fallback: () =>
+        renderRegisterWindowHTML(
+          rows,
+          range,
+          selectedIndexes != null ? new Set(selectedIndexes) : selectedIndex,
+          groupBy,
+          idPrefix ?? undefined
+        ),
     }) as Promise<string>;
   }
 

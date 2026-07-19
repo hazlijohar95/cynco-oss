@@ -1,9 +1,20 @@
+/**
+ * Keyboard modifiers held during a row click, forwarded so the owning
+ * component can implement shift-range / meta-toggle selection without the
+ * manager knowing any selection semantics.
+ */
+export interface RowSelectModifiers {
+  shiftKey: boolean;
+  metaKey: boolean;
+  ctrlKey: boolean;
+}
+
 export interface InteractionManagerOptions {
   /**
    * Fired when a row is clicked. The index is the value of the row's
    * `data-row-index` attribute; the owning component maps it back to data.
    */
-  onRowSelect?(index: number): void;
+  onRowSelect?(index: number, modifiers: RowSelectModifiers): void;
   /** Fired when the hovered row changes; `null` when the pointer leaves. */
   onRowHover?(index: number | null): void;
 }
@@ -71,8 +82,20 @@ export class InteractionManager {
     }
     const index = getRowIndex(row);
     if (index != null) {
-      this.options.onRowSelect?.(index);
+      this.options.onRowSelect?.(index, getModifiers(event));
     }
+  };
+}
+
+// Delegated click events are MouseEvents in browsers; read the modifier
+// flags defensively so synthetic Events (tests, exotic dispatchers) degrade
+// to "no modifiers" instead of throwing.
+function getModifiers(event: Event): RowSelectModifiers {
+  const mouse = event as Partial<MouseEvent>;
+  return {
+    shiftKey: mouse.shiftKey === true,
+    metaKey: mouse.metaKey === true,
+    ctrlKey: mouse.ctrlKey === true,
   };
 }
 

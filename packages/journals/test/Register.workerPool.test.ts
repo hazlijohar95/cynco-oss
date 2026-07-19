@@ -25,8 +25,22 @@ afterAll(() => {
 
 const GEOMETRY = { height: 400, scrollHeight: 44 + 500 * 20 };
 
+// Rows spread across months so grouped runs exercise real group boundaries.
+function makeMonthSpreadRows(): ReturnType<typeof makeRows> {
+  return makeRows(500).map((row, index) => ({
+    ...row,
+    entry: {
+      ...row.entry,
+      date: `2026-${String(Math.floor(index / 50) + 1).padStart(2, '0')}-10`,
+    },
+  }));
+}
+
 // Renders a register (worker-pooled or sync) over identical data/geometry
-// and returns the settled rows innerHTML plus spacer heights.
+// and returns the settled rows innerHTML plus spacer heights. A fixed `id`
+// makes the baked row ids (aria-activedescendant targets) comparable across
+// instances — the same contract SSR/client agreement relies on; without it
+// each instance auto-generates a unique prefix and bytes can never match.
 async function renderRegister(
   options: Partial<RegisterOptions>
 ): Promise<{ rowsHTML: string; before: string; after: string }> {
@@ -34,11 +48,12 @@ async function renderRegister(
   const register = new Register({
     account: 'Assets:Current:Cash-Maybank',
     density: 'compact',
+    id: 'worker-parity',
     virtualizer: new Virtualizer({ overscrollSize: 0 }),
     ...options,
   });
   register.render({
-    rows: makeRows(500),
+    rows: options.groupBy != null ? makeMonthSpreadRows() : makeRows(500),
     container,
     parentNode: document.body,
   });
@@ -66,6 +81,10 @@ async function renderRegister(
 describe('Register worker pool integration', () => {
   test('worker-pooled windows render identical HTML to the sync path', async () => {
     const sync = await renderRegister({});
+    // Renderer-visible ARIA additions must survive the worker round-trip:
+    // roles and the id prefix are baked into the window HTML itself.
+    expect(sync.rowsHTML).toContain('role="row"');
+    expect(sync.rowsHTML).toContain('id="worker-parity-row-0"');
 
     const mock = createMockWorkerFactory();
     const pool = new WorkerPoolManager({
@@ -73,6 +92,23 @@ describe('Register worker pool integration', () => {
       poolSize: 1,
     });
     const pooled = await renderRegister({ workerPool: pool });
+    expect(pooled.rowsHTML).toBe(sync.rowsHTML);
+    expect(pooled.before).toBe(sync.before);
+    expect(pooled.after).toBe(sync.after);
+    expect(mock.totalTaskPosts()).toBeGreaterThanOrEqual(1);
+    pool.terminate();
+  });
+
+  test('grouped windows render byte-identical HTML sync vs worker', async () => {
+    const sync = await renderRegister({ groupBy: 'month' });
+    expect(sync.rowsHTML).toContain('data-group-row');
+
+    const mock = createMockWorkerFactory();
+    const pool = new WorkerPoolManager({
+      workerFactory: mock.factory,
+      poolSize: 1,
+    });
+    const pooled = await renderRegister({ groupBy: 'month', workerPool: pool });
     expect(pooled.rowsHTML).toBe(sync.rowsHTML);
     expect(pooled.before).toBe(sync.before);
     expect(pooled.after).toBe(sync.after);

@@ -1,6 +1,7 @@
 import type {
   BookPostingRef,
   ReconciliationMatch,
+  RegisterGroupBy,
   RegisterRowData,
   RowRange,
   StatementLine,
@@ -28,6 +29,25 @@ export interface RegisterWindowRequest {
   rows: readonly RegisterRowData[];
   range: RowRange;
   selectedIndex: number | null;
+  /**
+   * Selected entry indexes for range selection. When present it wins over
+   * `selectedIndex` (which stays for protocol back-compat / single mode).
+   * Plain array: structured-clone friendly and deterministic when sorted.
+   */
+  selectedIndexes?: readonly number[] | null;
+  /**
+   * Period grouping. When set (and not 'none') the worker rebuilds the
+   * grouped row model from `rows` with the same pure builder the client
+   * uses, so the returned HTML is byte-identical to the sync path. The range
+   * is then in MODEL-index space.
+   */
+  groupBy?: RegisterGroupBy;
+  /**
+   * Stable row id prefix (the Register instance id) baked into row `id`
+   * attributes for aria-activedescendant. Must match what the client's sync
+   * renderer receives so worker HTML stays byte-identical to the sync path.
+   */
+  idPrefix?: string | null;
 }
 
 /** Run the deterministic reconciliation proposal engine off the main thread. */

@@ -200,6 +200,26 @@
       color-mix(in lab, var(--journals-bg) 93%, var(--journals-reconciled)),
       color-mix(in lab, var(--journals-bg) 86%, var(--journals-reconciled))
     );
+    /* Entry diff tints: added material mixes the ledger debit color, removed
+     * mixes the credit color — reusing the existing debit/credit theme roles
+     * instead of introducing new entrydiff tokens. The -word variants are the
+     * stronger mixes for word-level highlight spans. */
+    --journals-bg-added: light-dark(
+      color-mix(in lab, var(--journals-bg) 92%, var(--journals-debit)),
+      color-mix(in lab, var(--journals-bg) 84%, var(--journals-debit))
+    );
+    --journals-bg-removed: light-dark(
+      color-mix(in lab, var(--journals-bg) 92%, var(--journals-credit)),
+      color-mix(in lab, var(--journals-bg) 84%, var(--journals-credit))
+    );
+    --journals-bg-added-word: light-dark(
+      color-mix(in lab, var(--journals-bg) 80%, var(--journals-debit)),
+      color-mix(in lab, var(--journals-bg) 68%, var(--journals-debit))
+    );
+    --journals-bg-removed-word: light-dark(
+      color-mix(in lab, var(--journals-bg) 80%, var(--journals-credit)),
+      color-mix(in lab, var(--journals-bg) 68%, var(--journals-credit))
+    );
 
     color-scheme: light dark;
     display: block;
@@ -511,8 +531,157 @@
     color: var(--journals-danger);
   }
 
+  /* Entry diff card (audit trail) */
+  /* ----------------------------- */
+  /* Same card shell as [data-entry] so diffs read as entries. */
+  [data-entry-diff] {
+    border: 1px solid var(--journals-hairline);
+    border-radius: 6px;
+    background-color: var(--journals-bg);
+    overflow: hidden;
+  }
+
+  [data-entry-diff-header] {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 2ch;
+    border-bottom: 1px solid var(--journals-hairline);
+  }
+
+  [data-diff-field] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 1ch;
+    min-height: 1lh;
+  }
+
+  [data-field-label] {
+    color: var(--journals-fg3);
+    font-size: 0.85em;
+    min-width: 9ch;
+    user-select: none;
+  }
+
+  [data-diff-field] [data-date] {
+    color: var(--journals-date);
+  }
+
+  [data-diff-field] [data-payee] {
+    color: var(--journals-payee);
+    font-weight: 600;
+  }
+
+  [data-diff-field] [data-narration] {
+    color: var(--journals-fg2);
+  }
+
+  /* Old → new: removed material takes the credit family (struck through),
+   * added the debit family — matching how the posting grid colors sides. */
+  [data-diff-old] {
+    background-color: var(--journals-bg-removed);
+    text-decoration: line-through;
+    text-decoration-color: color-mix(
+      in lab,
+      var(--journals-credit) 60%,
+      transparent
+    );
+  }
+
+  [data-diff-new] {
+    background-color: var(--journals-bg-added);
+  }
+
+  /* Word-level highlight spans get the stronger mix on top of the line
+   * tint, the Pierre word-alt treatment. */
+  [data-diff-old] [data-diff-word] {
+    background-color: var(--journals-bg-removed-word);
+  }
+
+  [data-diff-new] [data-diff-word] {
+    background-color: var(--journals-bg-added-word);
+  }
+
+  [data-diff-arrow] {
+    color: var(--journals-fg3);
+    user-select: none;
+  }
+
+  [data-diff-field] [data-tag][data-diff-item='added'],
+  [data-diff-field] [data-link][data-diff-item='added'] {
+    background-color: var(--journals-bg-added);
+    color: var(--journals-debit);
+  }
+
+  [data-diff-field] [data-tag][data-diff-item='removed'],
+  [data-diff-field] [data-link][data-diff-item='removed'] {
+    background-color: var(--journals-bg-removed);
+    color: var(--journals-credit);
+    text-decoration: line-through;
+  }
+
+  [data-diff-field] [data-field-value] {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0 1ch;
+    min-width: 0;
+  }
+
+  /* Aligned postings: added/removed rows tint the whole grid row with the
+   * debit/credit families; amount-changed shows the old amount struck
+   * through before the new one. */
+  [data-posting][data-posting-diff='added'] {
+    background-color: var(--journals-bg-added);
+  }
+
+  [data-posting][data-posting-diff='removed'] {
+    background-color: var(--journals-bg-removed);
+    text-decoration: line-through;
+    text-decoration-color: color-mix(
+      in lab,
+      var(--journals-credit) 45%,
+      transparent
+    );
+  }
+
+  [data-amount-old] {
+    color: var(--journals-credit);
+    text-decoration: line-through;
+    opacity: 0.8;
+    margin-right: 1ch;
+  }
+
+  [data-posting] [data-cell='amount'] [data-diff-arrow] {
+    margin-right: 1ch;
+  }
+
   /* Register */
   /* -------- */
+  /* The section is an ARIA grid and a tab stop; keyboard focus lives on it
+   * while rows are only *virtually* focused via aria-activedescendant. The
+   * native outline is replaced by :focus-visible treatments below so pointer
+   * clicks never paint a ring. */
+  [data-register] {
+    outline: none;
+  }
+
+  /* Keyboard-focus ring on the grid itself, but only until a row takes
+   * virtual focus — once [data-focused] exists the row ring below is the
+   * sole indicator (both at once would be noise). */
+  [data-register]:focus-visible:not(:has([data-row][data-focused='true'])) {
+    outline: 2px solid var(--journals-accent);
+    outline-offset: -2px;
+  }
+
+  /* Virtually focused row: an inset accent ring, gated on the grid's
+   * :focus-visible so it appears for keyboard interaction only (the
+   * accounts-tree focus treatment adapted to full-bleed rows). */
+  [data-register]:focus-visible [data-row][data-focused='true'] {
+    outline: 2px solid var(--journals-accent);
+    outline-offset: -2px;
+  }
+
   [data-register-header] {
     position: sticky;
     top: 0;
@@ -660,6 +829,79 @@
     [data-cell='balance'][data-balance-negative='true']
     [data-balance-value] {
     color: var(--journals-balance-negative);
+  }
+
+  /* Period group header rows (groupBy): muted separator rows interleaved
+   * into the virtualized row space. Height MUST stay 1lh + 8px — the JS
+   * window math mirrors it via GROUP_HEADER_EXTRA_HEIGHT, and like the
+   * register header it does not scale with density (only entry rows do).
+   * Deliberately not sticky in v1: sticky group headers inside a virtualized
+   * body need per-group offset bookkeeping that is out of scope here. */
+  [data-group-row] {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    height: calc(var(--journals-line-height, 20px) + 8px);
+    padding-inline: 2ch;
+    overflow: hidden;
+    background-color: var(--journals-bg-elevated);
+    border-block: 1px solid var(--journals-hairline);
+    user-select: none;
+  }
+
+  /* The group row's single full-width gridcell (aria-colspan spans every
+   * entry column); it owns the label/meta layout the row itself used to. */
+  [data-group-cell] {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1ch;
+  }
+
+  [data-group-label] {
+    color: var(--journals-fg2);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  [data-group-meta] {
+    display: flex;
+    gap: 2ch;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-group-count] {
+    color: var(--journals-fg3);
+    font-size: 0.85em;
+  }
+
+  [data-group-net] {
+    color: var(--journals-balance);
+  }
+
+  [data-group-net][data-net-negative='true'] {
+    color: var(--journals-balance-negative);
+  }
+
+  /* Sticky current-period mirror (grouped registers). A zero-height sticky
+   * container pinned just below the register's sticky header (inline `top`
+   * set from the JS headerHeight option, default 44px) whose overflowing
+   * child strip mirrors the current group row. Mirror-based because the
+   * real group rows live inside the virtualized window and are evicted and
+   * recreated as it moves — position:sticky on them cannot work. Height 0
+   * keeps it out of flow so spacer/window math is untouched; z-index sits
+   * below the register header (2) so it slides beneath it, and the strip is
+   * pointer-inert + aria-hidden (the real group row owns the semantics). */
+  [data-group-sticky] {
+    position: sticky;
+    z-index: 1;
+    height: 0;
+    overflow: visible;
+    pointer-events: none;
+    user-select: none;
   }
 
   /* Virtualization buffers: 45° pinstripes on an 8px tile mark space where

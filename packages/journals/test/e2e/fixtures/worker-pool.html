@@ -75,8 +75,14 @@
       window.__stats = pool.getStats();
 
       // Integration proof: a Register driven by the pool must commit the
-      // identical window HTML the sync renderer would produce.
-      const register = new Register({ account, workerPool: pool });
+      // identical window HTML the sync renderer would produce. The fixed
+      // `id` is threaded into the comparison render below because row ids
+      // (aria-activedescendant targets) are baked into window HTML.
+      const register = new Register({
+        account,
+        id: 'wp-e2e',
+        workerPool: pool,
+      });
       register.render({ rows, parentNode: document.getElementById('mount') });
       const host = document.querySelector('journals-container');
       window.__registerWindowMatchesSync = () => {
@@ -94,7 +100,12 @@
         // style, empty attributes), so the sync render string is normalized
         // through the same serializer before comparing.
         const template = document.createElement('div');
-        template.innerHTML = renderRegisterRowsHTML(rows, rendered, null);
+        template.innerHTML = renderRegisterRowsHTML(
+          rows,
+          rendered,
+          null,
+          'wp-e2e'
+        );
         return rowsElement.innerHTML === template.innerHTML;
       };
 

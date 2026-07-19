@@ -129,6 +129,15 @@ export class Virtualizer {
     queueRender(this.computeRenderRangeAndEmit);
   }
 
+  /**
+   * Scroll container this virtualizer drives. Exposed so Registers mounted
+   * into a shared scroller (LedgerView sections) can adjust scrollTop for
+   * keyboard focus reveal without owning the scroller themselves.
+   */
+  getRoot(): HTMLElement | undefined {
+    return this.root;
+  }
+
   /** Current pixel window; computed lazily on first read. */
   getWindowSpecs(): VirtualWindowSpecs {
     if (this.windowSpecs.top === 0 && this.windowSpecs.bottom === 0) {
