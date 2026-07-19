@@ -51,9 +51,38 @@
           One account&rsquo;s virtualized <code>Register</code> built from
           <code>EntryStore.getRegisterRows</code> over the generated workload.
           Scroll the fixed 600px window; click a row to select it.
+          <strong>Group by</strong> interleaves period header rows into the
+          virtual row space; <strong>Range selection</strong> enables
+          shift-click ranges and meta/ctrl-click toggling.
         </p>
+        <div class="tree-controls">
+          <label class="toolbar-control">
+            Group by
+            <select id="register-groupby">
+              <option value="none">None</option>
+              <option value="month">Month</option>
+              <option value="quarter">Quarter</option>
+              <option value="year">Year</option>
+            </select>
+          </label>
+          <label class="toolbar-control">
+            <input type="checkbox" id="register-range-toggle" />
+            Range selection
+          </label>
+        </div>
         <div id="register-host"></div>
         <p id="register-readout" class="readout">No row selected.</p>
+      </section>
+
+      <section>
+        <h2>Entry diff</h2>
+        <p class="section-note">
+          <code>EntryDiff</code> compares two versions of a journal entry — the
+          audit-trail view. This handcrafted pair changes the cash amount (old
+          struck through &rarr; new), rewords the narration (word-level
+          highlights), and adds a bank-fee posting (debit/added family).
+        </p>
+        <div id="entrydiff-host" class="entry-gallery"></div>
       </section>
 
       <section>
@@ -100,6 +129,29 @@
             Flatten empty groups
           </label>
           <button id="tree-reset" type="button">Reset tree</button>
+          <input
+            type="search"
+            id="tree-search"
+            placeholder="Search accounts…"
+            autocomplete="off"
+            aria-label="Search accounts"
+          />
+          <select id="tree-search-mode" aria-label="Search mode">
+            <option value="expand-matches">Expand matches</option>
+            <option value="collapse-non-matches">Collapse non-matches</option>
+            <option value="hide-non-matches">Hide non-matches</option>
+          </select>
+          <button
+            id="tree-search-prev"
+            type="button"
+            aria-label="Previous match"
+          >
+            ↑
+          </button>
+          <button id="tree-search-next" type="button" aria-label="Next match">
+            ↓
+          </button>
+          <span id="tree-search-state" class="readout">–</span>
         </div>
         <div id="accounts-host"></div>
         <p id="accounts-readout" class="readout">No account selected.</p>
@@ -110,8 +162,15 @@
         <p class="section-note">
           <code>LedgerView</code> stacking five account registers behind one
           shared virtualizer with sticky section headers. Selection is a single
-          focused row across all sections.
+          focused row across all sections. The scroll-to buttons run the
+          critically-damped smooth-scroll engine (wheel/touch/keys cancel it);
+          <strong>Shuffle sections</strong> exercises incremental
+          <code>setSections</code> — instances and DOM are reused, and the
+          scroll position stays anchored to what you were looking at.
         </p>
+        <div class="tree-controls" id="ledger-controls">
+          <button id="ledger-shuffle" type="button">Shuffle sections</button>
+        </div>
         <div id="ledger-host"></div>
         <p id="ledger-readout" class="readout">No row selected.</p>
       </section>

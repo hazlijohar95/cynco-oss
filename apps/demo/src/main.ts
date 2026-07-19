@@ -1,18 +1,22 @@
 import {
   type AccountMove,
-  accountsThemeVariables,
   AccountTree,
+  type AccountTreeContextMenuRequest,
+  type AccountTreeSearchMode,
 } from '@cynco/accounts';
 import {
   createEntryStreamFromArray,
+  EntryDiff,
   EntryStream,
   formatMinorUnits,
   JournalEntry,
-  journalsThemeVariables,
+  type LedgerEntry as JournalsLedgerEntry,
+  type LedgerSection,
   LedgerView,
   Reconciliation,
   Register,
   type RegisterDensity,
+  type RegisterGroupBy,
   type RegisterRowData,
 } from '@cynco/journals';
 import {
@@ -32,7 +36,11 @@ import {
   type WorkloadName,
   workloads,
 } from '@cynco/ledger-test-data';
-import { dark, darkSoft, light, lightSoft, type Roles } from '@cynco/theme';
+import {
+  connectThemeController,
+  createThemeController,
+  defaultCatalog,
+} from '@cynco/theming';
 
 import { buildRegisterRows } from './buildRegisterRows';
 import {
@@ -57,7 +65,6 @@ const CRAZY_LEDGER = false;
 const USE_WORKER_POOL = true;
 
 const DEFAULT_WORKLOAD: WorkloadName = CRAZY_LEDGER ? 'large' : 'medium';
-const DEFAULT_THEME: ThemeName = 'dark';
 const REGISTER_ACCOUNT = 'Assets:Current:Cash-Maybank';
 const LEDGER_VIEW_ACCOUNTS: readonly string[] = [
   'Assets:Current:Cash-Maybank',
@@ -66,26 +73,6 @@ const LEDGER_VIEW_ACCOUNTS: readonly string[] = [
   'Expenses:Payroll:Salaries',
   'Liabilities:Current:SST-Payable',
 ];
-
-// --- Themes ------------------------------------------------------------------
-
-type ThemeName = 'dark' | 'light' | 'darkSoft' | 'lightSoft';
-
-interface ThemeSpec {
-  roles: Roles;
-  scheme: 'dark' | 'light';
-}
-
-const THEMES: Record<ThemeName, ThemeSpec> = {
-  dark: { roles: dark, scheme: 'dark' },
-  light: { roles: light, scheme: 'light' },
-  darkSoft: { roles: darkSoft, scheme: 'dark' },
-  lightSoft: { roles: lightSoft, scheme: 'light' },
-};
-
-function isThemeName(value: string): value is ThemeName {
-  return Object.hasOwn(THEMES, value);
-}
 
 function isWorkloadName(value: string): value is WorkloadName {
   return Object.hasOwn(WORKLOAD_ENTRY_COUNTS, value);
@@ -115,8 +102,19 @@ const workloadStats = mustGetElement('workload-stats', HTMLElement);
 const entryGallery = mustGetElement('entry-gallery', HTMLElement);
 const registerHost = mustGetElement('register-host', HTMLElement);
 const registerReadout = mustGetElement('register-readout', HTMLElement);
+const registerGroupBySelect = mustGetElement(
+  'register-groupby',
+  HTMLSelectElement
+);
+const registerRangeToggle = mustGetElement(
+  'register-range-toggle',
+  HTMLInputElement
+);
+const entryDiffHost = mustGetElement('entrydiff-host', HTMLElement);
 const ledgerHost = mustGetElement('ledger-host', HTMLElement);
 const ledgerReadout = mustGetElement('ledger-readout', HTMLElement);
+const ledgerControls = mustGetElement('ledger-controls', HTMLElement);
+const ledgerShuffle = mustGetElement('ledger-shuffle', HTMLButtonElement);
 const reconciliationHost = mustGetElement('reconciliation-host', HTMLElement);
 const reconciliationReadout = mustGetElement(
   'reconciliation-readout',
@@ -126,40 +124,64 @@ const accountsHost = mustGetElement('accounts-host', HTMLElement);
 const accountsReadout = mustGetElement('accounts-readout', HTMLElement);
 const flattenToggle = mustGetElement('flatten-toggle', HTMLInputElement);
 const treeReset = mustGetElement('tree-reset', HTMLButtonElement);
+const treeSearchInput = mustGetElement('tree-search', HTMLInputElement);
+const treeSearchMode = mustGetElement('tree-search-mode', HTMLSelectElement);
+const treeSearchPrev = mustGetElement('tree-search-prev', HTMLButtonElement);
+const treeSearchNext = mustGetElement('tree-search-next', HTMLButtonElement);
+const treeSearchState = mustGetElement('tree-search-state', HTMLElement);
 const streamHost = mustGetElement('stream-host', HTMLElement);
 const streamRestart = mustGetElement('stream-restart', HTMLButtonElement);
 
 // --- Theme / chrome controls -------------------------------------------------
 
-let appliedThemeVariables: readonly string[] = [];
+// @cynco/theming replaces the demo's previous hand-rolled variable
+// bookkeeping: the controller owns the mode + per-scheme theme choice, and
+// connectThemeController keeps the stage wrapper's `--journals-theme-*` /
+// `--accounts-theme-*` inline variables and `color-scheme` pin in sync
+// (every <journals-container> / accounts host beneath reads them).
+const themeController = createThemeController({
+  catalog: defaultCatalog,
+  initialMode: 'dark',
+});
+connectThemeController(themeController, stage);
 
-// Applies a theme to the stage wrapper: @cynco/theme roles become
-// `--journals-theme-*` inline variables (every <journals-container> beneath
-// reads them), and `color-scheme` pins light-dark() resolution inside the
-// components. The page chrome class follows along so the two start in sync.
-function applyTheme(name: ThemeName): void {
-  const { roles, scheme } = THEMES[name];
-  for (const property of appliedThemeVariables) {
-    stage.style.removeProperty(property);
+// Demo-specific reactions the generic connector doesn't cover: the toolbar
+// select mirrors the active theme, the page chrome class follows the
+// resolved scheme, and the account tree rebuilds on scheme changes because
+// it pins light-dark() resolution per instance (colorScheme option).
+themeController.subscribe(() => {
+  const { resolvedScheme, themeName } = themeController.getSnapshot();
+  themeSelect.value = themeName;
+  setChromeScheme(resolvedScheme);
+  if (resolvedScheme !== currentScheme) {
+    currentScheme = resolvedScheme;
+    if (accountTree != null) {
+      renderAccountTree();
+    }
   }
-  const variables = {
-    ...journalsThemeVariables(roles),
-    ...accountsThemeVariables(roles),
-  };
-  for (const [property, value] of Object.entries(variables)) {
-    stage.style.setProperty(property, value);
+});
+
+// The toolbar select offers every catalog theme (including the
+// colorblind-safe variants). Picking one assigns it to its scheme slot and
+// pins the mode to that scheme, so e.g. choosing "Light (soft)" while dark
+// flips the demo to light — matching the old single-select behavior.
+function populateThemeSelect(): void {
+  themeSelect.replaceChildren();
+  for (const entry of defaultCatalog.list()) {
+    const option = document.createElement('option');
+    option.value = entry.name;
+    option.textContent = entry.label;
+    themeSelect.appendChild(option);
   }
-  appliedThemeVariables = Object.keys(variables);
-  stage.style.setProperty('color-scheme', scheme);
-  currentScheme = scheme;
-  // The tree pins light-dark() resolution per instance (colorScheme
-  // option), so theme changes rebuild it; boot builds it via
-  // rebuildDataViews instead.
-  if (accountTree != null) {
-    renderAccountTree();
-  }
-  setChromeScheme(scheme);
+  themeSelect.value = themeController.getSnapshot().themeName;
 }
+
+themeSelect.addEventListener('change', () => {
+  const entry = defaultCatalog.get(themeSelect.value);
+  if (entry == null) return;
+  themeController.setTheme(entry.name);
+  themeController.setMode(entry.scheme);
+});
 
 // Flips the page chrome (html class drives page colors and light-dark()
 // fallbacks) independently of the component theme, to demonstrate that the
@@ -168,13 +190,6 @@ function setChromeScheme(scheme: 'dark' | 'light'): void {
   document.documentElement.className = scheme;
   chromeToggle.textContent = `Chrome: ${scheme}`;
 }
-
-themeSelect.value = DEFAULT_THEME;
-themeSelect.addEventListener('change', () => {
-  if (isThemeName(themeSelect.value)) {
-    applyTheme(themeSelect.value);
-  }
-});
 
 chromeToggle.addEventListener('click', () => {
   const next = document.documentElement.className === 'dark' ? 'light' : 'dark';
@@ -270,28 +285,56 @@ function describeRow(row: RegisterRowData, index: number): string {
   return `#${index} ${entry.date} ${description} ${amount} ${posting.currency}${balanceText}`;
 }
 
+function isGroupByName(value: string): value is RegisterGroupBy {
+  return (
+    value === 'none' ||
+    value === 'month' ||
+    value === 'quarter' ||
+    value === 'year'
+  );
+}
+
 // (Re)creates the standalone Register. Density affects both CSS row height
 // and the JS window math, so density changes rebuild the instance instead of
-// mutating options in place.
+// mutating options in place; the groupBy/selection controls rebuild too so
+// every toggle exercises a cold construction path.
 function renderRegister(
   rows: RegisterRowData[],
   density: RegisterDensity
 ): void {
   register?.cleanUp();
+  const groupBy = isGroupByName(registerGroupBySelect.value)
+    ? registerGroupBySelect.value
+    : 'none';
   register = new Register({
     account: REGISTER_ACCOUNT,
     density,
+    groupBy,
+    selectionMode: registerRangeToggle.checked ? 'range' : 'single',
     workerPool,
     onRowSelect(row, index) {
       console.log('register row selected', index, row);
       registerReadout.textContent = describeRow(row, index);
     },
+    onSelectionChange({ indexes, rows: selectedRows }) {
+      console.log('register selection changed', indexes, selectedRows);
+      if (indexes.length > 1) {
+        registerReadout.textContent =
+          `${indexes.length} rows selected ` +
+          `(#${indexes[0]}…#${indexes[indexes.length - 1]})`;
+      }
+    },
   });
   register.render({ rows, parentNode: registerHost });
 }
 
+// Current LedgerView sections in display order; the shuffle button mutates
+// this order and pushes it through incremental setSections.
+let ledgerSections: LedgerSection[] = [];
+
 // (Re)creates the multi-account LedgerView over a handful of accounts from
-// the generated chart, all behind one shared virtualizer.
+// the generated chart, all behind one shared virtualizer, plus the smooth
+// scroll-to-section buttons for each account.
 function renderLedgerView(store: EntryStore, density: RegisterDensity): void {
   ledgerView?.cleanUp();
   ledgerView = new LedgerView({
@@ -301,11 +344,119 @@ function renderLedgerView(store: EntryStore, density: RegisterDensity): void {
       ledgerReadout.textContent = `${account} · ${describeRow(row, index)}`;
     },
   });
-  const sections = LEDGER_VIEW_ACCOUNTS.map((account) => ({
+  ledgerSections = LEDGER_VIEW_ACCOUNTS.map((account) => ({
     account,
     rows: buildRegisterRows(store, account),
   }));
-  ledgerView.render({ sections, parentNode: ledgerHost });
+  ledgerView.render({ sections: ledgerSections, parentNode: ledgerHost });
+  renderLedgerScrollButtons();
+}
+
+// One "scroll to section" button per account, exercising the shared
+// critically-damped spring (behavior: 'smooth'); rebuilt with the view so
+// the buttons always target live sections.
+function renderLedgerScrollButtons(): void {
+  for (const button of ledgerControls.querySelectorAll(
+    '[data-ledger-scroll]'
+  )) {
+    button.remove();
+  }
+  for (const account of LEDGER_VIEW_ACCOUNTS) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('data-ledger-scroll', account);
+    const leaf = account.split(':').pop() ?? account;
+    button.textContent = `→ ${leaf}`;
+    button.title = `Smooth scroll to ${account}`;
+    button.addEventListener('click', () => {
+      ledgerView?.scrollToSection(account, { behavior: 'smooth' });
+    });
+    ledgerControls.appendChild(button);
+  }
+}
+
+// Deterministic reorder (rotate by one, then swap the new head pair) so
+// every click visibly reorders sections while the scroll anchor keeps the
+// content you were reading in place — the incremental setSections path.
+ledgerShuffle.addEventListener('click', () => {
+  if (ledgerView == null || ledgerSections.length < 2) {
+    return;
+  }
+  const rotated = [...ledgerSections.slice(1), ledgerSections[0]];
+  [rotated[0], rotated[1]] = [rotated[1], rotated[0]];
+  ledgerSections = rotated;
+  ledgerView.setSections(ledgerSections);
+});
+
+// Rebuilds just the standalone register for the groupBy / selection-mode
+// controls, without paying for the ledger view and account tree rebuilds.
+function rebuildRegisterOnly(): void {
+  const workload = isWorkloadName(workloadSelect.value)
+    ? workloadSelect.value
+    : DEFAULT_WORKLOAD;
+  const density: RegisterDensity =
+    densitySelect.value === 'compact' ? 'compact' : 'comfortable';
+  renderRegister(
+    buildRegisterRows(getStore(workload), REGISTER_ACCOUNT),
+    density
+  );
+  registerReadout.textContent = 'No row selected.';
+}
+
+registerGroupBySelect.addEventListener('change', rebuildRegisterOnly);
+registerRangeToggle.addEventListener('change', rebuildRegisterOnly);
+
+// --- Entry diff ----------------------------------------------------------------
+
+// Handcrafted before/after pair: cash amount changed, narration reworded
+// (word-level diff), a bank-fee posting added. Static fixture — renders once
+// and themes through CSS variables like the entry gallery.
+function renderEntryDiff(): void {
+  const before: JournalsLedgerEntry = {
+    id: 'audit-entry-1',
+    date: '2026-03-14',
+    flag: 'pending',
+    payee: 'Acme Sdn Bhd',
+    narration: 'Monthly consulting invoice for March',
+    tags: ['ops'],
+    links: ['inv-1042'],
+    postings: [
+      {
+        account: 'Assets:Current:Cash-Maybank',
+        amount: 150_000,
+        currency: 'MYR',
+      },
+      {
+        account: 'Income:Sales:Services-Consulting',
+        amount: -150_000,
+        currency: 'MYR',
+      },
+    ],
+  };
+  const after: JournalsLedgerEntry = {
+    id: 'audit-entry-1',
+    date: '2026-03-14',
+    flag: 'cleared',
+    payee: 'Acme Sdn Bhd',
+    narration: 'Monthly retainer invoice for March',
+    tags: ['ops'],
+    links: ['inv-1042'],
+    postings: [
+      {
+        account: 'Assets:Current:Cash-Maybank',
+        amount: 149_000,
+        currency: 'MYR',
+      },
+      {
+        account: 'Income:Sales:Services-Consulting',
+        amount: -150_000,
+        currency: 'MYR',
+      },
+      { account: 'Expenses:Bank:Fees', amount: 1_000, currency: 'MYR' },
+    ],
+  };
+  const instance = new EntryDiff({});
+  instance.render({ before, after, parentNode: entryDiffHost });
 }
 
 // --- Worker pool ---------------------------------------------------------------
@@ -344,7 +495,8 @@ streamRestart.addEventListener('click', renderEntryStream);
 // --- Chart of accounts --------------------------------------------------------
 
 let accountTree: AccountTree | undefined;
-let currentScheme: 'dark' | 'light' = 'dark';
+let currentScheme: 'dark' | 'light' =
+  themeController.getSnapshot().resolvedScheme;
 
 // The tree needs raw entries (its controller owns balances and the rename /
 // drag&drop remap machinery), so workload entry lists are cached separately
@@ -362,6 +514,85 @@ function getEntries(name: WorkloadName): LedgerEntry[] {
 
 function describeMoves(moves: readonly AccountMove[]): string {
   return moves.map((move) => `${move.from} → ${move.to}`).join(' · ');
+}
+
+// Minimal native menu proving the context-menu composition contract: the
+// tree emits requests (right-click / Shift+F10 / row "…" button); the host
+// renders the menu and calls request.close() — default restores focus to
+// the row, `restoreFocus: false` is the rename handoff.
+let accountMenu: HTMLElement | undefined;
+let accountMenuOutsideHandler: ((event: PointerEvent) => void) | undefined;
+
+// Single teardown path for every dismissal (Escape, Rename handoff, outside
+// click, superseding open): removes the menu AND its document-level outside
+// listener, so a stale handler can never dismiss a newer menu.
+function destroyAccountMenu(): void {
+  if (accountMenuOutsideHandler != null) {
+    document.removeEventListener(
+      'pointerdown',
+      accountMenuOutsideHandler,
+      true
+    );
+    accountMenuOutsideHandler = undefined;
+  }
+  accountMenu?.remove();
+  accountMenu = undefined;
+}
+
+function openAccountContextMenu(request: AccountTreeContextMenuRequest): void {
+  destroyAccountMenu(); // A newer session supersedes the previous menu.
+  const point =
+    'rect' in request.anchor
+      ? { x: request.anchor.rect.left, y: request.anchor.rect.bottom }
+      : request.anchor;
+  const menu = document.createElement('div');
+  menu.setAttribute('role', 'menu');
+  menu.tabIndex = -1;
+  menu.style.cssText =
+    `position: fixed; left: ${point.x}px; top: ${point.y}px; z-index: 30;` +
+    'min-width: 160px; padding: 4px; border-radius: 8px;' +
+    'background: light-dark(#fff, #171717);' +
+    'border: 1px solid light-dark(#d4d4d4, #333); font-size: 13px;';
+
+  const rename = document.createElement('button');
+  rename.type = 'button';
+  rename.setAttribute('role', 'menuitem');
+  rename.textContent = `Rename ${request.path.split(':').at(-1)}`;
+  rename.style.cssText =
+    'display: block; width: 100%; padding: 5px 8px; border: 0;' +
+    'background: none; color: inherit; text-align: left; cursor: pointer;';
+  rename.addEventListener('click', () => {
+    const path = request.path;
+    request.close({ restoreFocus: false }); // The rename handoff.
+    destroyAccountMenu();
+    accountTree?.beginRename(path);
+  });
+  menu.appendChild(rename);
+
+  menu.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      request.close(); // Focus returns to the originating row.
+      destroyAccountMenu();
+    }
+  });
+  // Any outside pointerdown dismisses the menu (and restores tree focus).
+  // Registered in shared state so destroyAccountMenu removes it on EVERY
+  // dismissal path, not just this one.
+  const onOutside = (event: PointerEvent) => {
+    if (event.target instanceof Node && menu.contains(event.target)) {
+      return;
+    }
+    request.close();
+    destroyAccountMenu();
+  };
+  accountMenuOutsideHandler = onOutside;
+  document.addEventListener('pointerdown', onOutside, true);
+
+  document.body.appendChild(menu);
+  menu.focus();
+  accountMenu = menu;
+  accountsReadout.textContent = `menu on ${request.paths.join(', ')} (${request.source})`;
 }
 
 // (Re)creates the account tree for the current workload/density/flatten
@@ -393,8 +624,17 @@ function renderAccountTree(): void {
       console.log('accounts moved', moves);
       accountsReadout.textContent = `moved ${describeMoves(moves)}`;
     },
+    contextMenu: {
+      rowButton: true,
+      onOpen: openAccountContextMenu,
+    },
+    // v2 view features: stacked sticky ancestor breadcrumb and measured
+    // middle truncation for deep names (full name lands in `title`).
+    stickyAncestors: 'stack',
+    nameTruncation: 'middle',
   });
   accountTree.render(accountsHost);
+  syncTreeSearch();
 }
 
 // Flatten is a live projection toggle on the existing instance — no rebuild.
@@ -406,6 +646,65 @@ treeReset.addEventListener('click', () => {
   renderAccountTree();
   accountsReadout.textContent = 'Tree reset. No account selected.';
 });
+
+// --- Chart of accounts: search session ---------------------------------------
+
+function isSearchMode(value: string): value is AccountTreeSearchMode {
+  return (
+    value === 'expand-matches' ||
+    value === 'collapse-non-matches' ||
+    value === 'hide-non-matches'
+  );
+}
+
+function updateTreeSearchReadout(): void {
+  const state = accountTree?.getController().getSearchMatchState() ?? null;
+  treeSearchState.textContent =
+    state == null ? '–' : `${state.index}/${state.total}`;
+}
+
+// (Re)applies the input + mode select onto the controller's search session:
+// a non-empty query begins/refines the session, an emptied input ends it and
+// restores the pre-search expansion. Rebuilding the tree (workload/reset)
+// re-applies whatever the input still holds.
+function syncTreeSearch(): void {
+  const controller = accountTree?.getController();
+  if (controller == null) {
+    return;
+  }
+  const query = treeSearchInput.value.trim();
+  const mode = isSearchMode(treeSearchMode.value)
+    ? treeSearchMode.value
+    : 'expand-matches';
+  if (query === '') {
+    controller.endSearch();
+  } else {
+    controller.beginSearch(query, { mode });
+  }
+  updateTreeSearchReadout();
+}
+
+// Steps the focused match and reveals it — the same controller calls a host
+// search input is expected to make (F3/Shift+F3 do this from the tree).
+function stepTreeSearchMatch(direction: 1 | -1): void {
+  const controller = accountTree?.getController();
+  if (controller == null) {
+    return;
+  }
+  const path =
+    direction === 1
+      ? controller.focusNextSearchMatch()
+      : controller.focusPreviousSearchMatch();
+  if (path != null) {
+    accountTree?.scrollToPath(path, { focus: true });
+  }
+  updateTreeSearchReadout();
+}
+
+treeSearchInput.addEventListener('input', syncTreeSearch);
+treeSearchMode.addEventListener('change', syncTreeSearch);
+treeSearchNext.addEventListener('click', () => stepTreeSearchMatch(1));
+treeSearchPrev.addEventListener('click', () => stepTreeSearchMatch(-1));
 
 // --- Reconciliation ----------------------------------------------------------
 
@@ -502,8 +801,12 @@ densitySelect.addEventListener('change', rebuildDataViews);
 
 // --- Boot ----------------------------------------------------------------------
 
-applyTheme(DEFAULT_THEME);
+// connectThemeController already themed the stage at creation; boot only
+// syncs the pieces the subscriber handles on later changes.
+populateThemeSelect();
+setChromeScheme(currentScheme);
 renderEntryGallery();
+renderEntryDiff();
 renderEntryStream();
 renderReconciliation();
 populateWorkloadSelect();
