@@ -90,11 +90,22 @@ export function Footer() {
       <div className="pixel-pattern h-4" aria-hidden="true" />
 
       <div className="flex flex-wrap items-center justify-between gap-6 text-[11px] leading-none">
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center gap-6">
           <span>&copy; {new Date().getFullYear()} Cynco</span>
           <span className="flex items-center gap-2.5">
             <i aria-hidden="true" className="bg-success block h-1.5 w-1.5" />v
             {journalsPackageJson.version}
+          </span>
+          <span className="text-muted-foreground">
+            type:{' '}
+            <Link
+              href="https://github.com/paper-design/paper-mono"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground underline decoration-1 underline-offset-2"
+            >
+              Paper Mono
+            </Link>
           </span>
         </div>
         <div className="flex min-w-0 items-center justify-end gap-3">

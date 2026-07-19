@@ -518,6 +518,20 @@ export default async function JournalsDocsPage() {
               <code>--journals-line-height</code> (default 20px). Amounts always
               render with <code>tabular-nums</code>.
             </p>
+            <p>
+              Every demo on this site renders in{' '}
+              <a
+                href="https://github.com/paper-design/paper-mono"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-link"
+              >
+                Paper Mono
+              </a>{' '}
+              (SIL OFL 1.1) via <code>--journals-font-family</code>. The package
+              bundles no font — download Paper Mono from its repo and set the
+              hook to match this look, or point it at your own mono stack.
+            </p>
 
             <h2 id="virtualization">Virtualization</h2>
             <p>

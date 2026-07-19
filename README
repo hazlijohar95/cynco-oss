@@ -29,4 +29,7 @@ flagged. Vanilla core, React adapters, SSR built in.
 
 Setup for contributors lives in CONTRIBUTING.md.
 Licensed MIT. Palette ramps derived from @pierre/theme (MIT) by
-The Pierre Computer Company.
+The Pierre Computer Company. Site and demos are set in Paper Mono
+(SIL OFL 1.1) by Paper — github.com/paper-design/paper-mono. The
+packages bundle no font; set --journals-font-family /
+--accounts-font-family to match.
