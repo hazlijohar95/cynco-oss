@@ -53,7 +53,10 @@
           Scroll the fixed 600px window; click a row to select it.
           <strong>Group by</strong> interleaves period header rows into the
           virtual row space; <strong>Range selection</strong> enables
-          shift-click ranges and meta/ctrl-click toggling.
+          shift-click ranges and meta/ctrl-click toggling;
+          <strong>Filter</strong> is a projection-level search over
+          payee/narration with match highlighting and an &ldquo;n of m&rdquo;
+          readout.
         </p>
         <div class="tree-controls">
           <label class="toolbar-control">
@@ -69,6 +72,15 @@
             <input type="checkbox" id="register-range-toggle" />
             Range selection
           </label>
+          <label class="toolbar-control">
+            Filter
+            <input
+              type="search"
+              id="register-filter"
+              placeholder="payee / narration&hellip;"
+            />
+          </label>
+          <span id="register-filter-state" class="readout"></span>
         </div>
         <div id="register-host"></div>
         <p id="register-readout" class="readout">No row selected.</p>
@@ -121,12 +133,23 @@
           rename it inline &mdash; Enter commits, Escape cancels, blur commits.
           Drag any row onto a group to re-parent it (drag a selected row to move
           the whole selection); hovering a collapsed group mid-drag springs it
-          open.
+          open. Rows carry built-in icons (default heuristics resolver) and a
+          posting-count badge in the decoration lane;
+          <strong>On collision</strong> picks how drops resolve leaf-name
+          clashes (reject &middot; skip &middot; replace).
         </p>
         <div class="tree-controls">
           <label class="toolbar-control">
             <input type="checkbox" id="flatten-toggle" />
             Flatten empty groups
+          </label>
+          <label class="toolbar-control">
+            On collision
+            <select id="tree-collision" aria-label="Drop collision strategy">
+              <option value="reject">Reject</option>
+              <option value="skip">Skip</option>
+              <option value="replace">Replace</option>
+            </select>
           </label>
           <button id="tree-reset" type="button">Reset tree</button>
           <input

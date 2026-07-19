@@ -1,8 +1,10 @@
 import {
+  type AccountDropCollision,
   type AccountMove,
   AccountTree,
   type AccountTreeContextMenuRequest,
   type AccountTreeSearchMode,
+  createDefaultAccountIconResolver,
 } from '@cynco/accounts';
 import {
   createEntryStreamFromArray,
@@ -16,6 +18,7 @@ import {
   Reconciliation,
   Register,
   type RegisterDensity,
+  type RegisterFilter,
   type RegisterGroupBy,
   type RegisterRowData,
 } from '@cynco/journals';
@@ -110,6 +113,11 @@ const registerRangeToggle = mustGetElement(
   'register-range-toggle',
   HTMLInputElement
 );
+const registerFilterInput = mustGetElement('register-filter', HTMLInputElement);
+const registerFilterState = mustGetElement(
+  'register-filter-state',
+  HTMLElement
+);
 const entryDiffHost = mustGetElement('entrydiff-host', HTMLElement);
 const ledgerHost = mustGetElement('ledger-host', HTMLElement);
 const ledgerReadout = mustGetElement('ledger-readout', HTMLElement);
@@ -123,6 +131,7 @@ const reconciliationReadout = mustGetElement(
 const accountsHost = mustGetElement('accounts-host', HTMLElement);
 const accountsReadout = mustGetElement('accounts-readout', HTMLElement);
 const flattenToggle = mustGetElement('flatten-toggle', HTMLInputElement);
+const treeCollisionSelect = mustGetElement('tree-collision', HTMLSelectElement);
 const treeReset = mustGetElement('tree-reset', HTMLButtonElement);
 const treeSearchInput = mustGetElement('tree-search', HTMLInputElement);
 const treeSearchMode = mustGetElement('tree-search-mode', HTMLSelectElement);
@@ -294,6 +303,15 @@ function isGroupByName(value: string): value is RegisterGroupBy {
   );
 }
 
+// The filter input's current value as a RegisterFilter, or null when empty
+// (null keeps the register's unfiltered fast path). Shared by the input
+// listener and every rebuild so a groupBy/density change never loses the
+// active query.
+function currentRegisterFilter(): RegisterFilter | null {
+  const query = registerFilterInput.value;
+  return query === '' ? null : { query };
+}
+
 // (Re)creates the standalone Register. Density affects both CSS row height
 // and the JS window math, so density changes rebuild the instance instead of
 // mutating options in place; the groupBy/selection controls rebuild too so
@@ -306,11 +324,16 @@ function renderRegister(
   const groupBy = isGroupByName(registerGroupBySelect.value)
     ? registerGroupBySelect.value
     : 'none';
+  const filter = currentRegisterFilter();
+  registerFilterState.textContent = '';
   register = new Register({
     account: REGISTER_ACCOUNT,
     density,
     groupBy,
     selectionMode: registerRangeToggle.checked ? 'range' : 'single',
+    // The filter survives rebuilds (groupBy/density/workload changes) via
+    // the options seed; per-keystroke updates go through setFilter below.
+    filter: filter ?? undefined,
     workerPool,
     onRowSelect(row, index) {
       console.log('register row selected', index, row);
@@ -324,9 +347,26 @@ function renderRegister(
           `(#${indexes[0]}…#${indexes[indexes.length - 1]})`;
       }
     },
+    onFilterResult({ matched, total }) {
+      registerFilterState.textContent =
+        `${matched.toLocaleString('en-MY')} of ` +
+        `${total.toLocaleString('en-MY')} rows`;
+    },
   });
   register.render({ rows, parentNode: registerHost });
 }
+
+// Per-keystroke projection update on the LIVE instance — no rebuild: the
+// filter is a projection overlay, so it composes with the groupBy select
+// (filtered period summaries) and range selection untouched. Clearing the
+// input clears the readout (onFilterResult only fires for active filters).
+registerFilterInput.addEventListener('input', () => {
+  const filter = currentRegisterFilter();
+  if (filter == null) {
+    registerFilterState.textContent = '';
+  }
+  register?.setFilter(filter);
+});
 
 // Current LedgerView sections in display order; the shuffle button mutates
 // this order and pushes it through incremental setSections.
@@ -516,6 +556,30 @@ function describeMoves(moves: readonly AccountMove[]): string {
   return moves.map((move) => `${move.from} → ${move.to}`).join(' · ');
 }
 
+// Posting counts per account, computed once per workload from the same
+// public entries the tree is seeded with — the decoration lane's data
+// source. Keys are the pristine paths, so a renamed/moved account simply
+// loses its badge until the next Reset (fine for a demo readout).
+const postingCountsCache = new Map<WorkloadName, Map<string, number>>();
+
+function getPostingCounts(name: WorkloadName): Map<string, number> {
+  let counts = postingCountsCache.get(name);
+  if (counts == null) {
+    counts = new Map();
+    for (const entry of getEntries(name)) {
+      for (const posting of entry.postings) {
+        counts.set(posting.account, (counts.get(posting.account) ?? 0) + 1);
+      }
+    }
+    postingCountsCache.set(name, counts);
+  }
+  return counts;
+}
+
+function isDropCollision(value: string): value is AccountDropCollision {
+  return value === 'reject' || value === 'skip' || value === 'replace';
+}
+
 // Minimal native menu proving the context-menu composition contract: the
 // tree emits requests (right-click / Shift+F10 / row "…" button); the host
 // renders the menu and calls request.close() — default restores focus to
@@ -595,6 +659,22 @@ function openAccountContextMenu(request: AccountTreeContextMenuRequest): void {
   accountsReadout.textContent = `menu on ${request.paths.join(', ')} (${request.source})`;
 }
 
+// Fake async chart source for the lazy-loading demo: two groups start
+// unloaded; expanding 'Archive:Old-Ledgers' resolves child accounts after a
+// 600ms fake fetch, while 'Archive:Flaky-Import' always rejects so the error
+// row + Retry affordance stays reproducible.
+function fakeLoadChildren(path: string): Promise<readonly string[]> {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      if (path === 'Archive:Flaky-Import') {
+        reject(new Error('import source unreachable'));
+      } else {
+        resolve([`${path}:2023`, `${path}:2024`, `${path}:2025`]);
+      }
+    }, 600);
+  });
+}
+
 // (Re)creates the account tree for the current workload/density/flatten
 // selection. Renames and drops mutate the instance's internal remapped
 // entries; the Reset button simply rebuilds from the pristine workload.
@@ -603,13 +683,40 @@ function renderAccountTree(): void {
   const workload = isWorkloadName(workloadSelect.value)
     ? workloadSelect.value
     : DEFAULT_WORKLOAD;
+  const postingCounts = getPostingCounts(workload);
   accountTree = new AccountTree({
     entries: getEntries(workload),
+    // Lazy-loading showcase: the Archive subtree exists only as unloaded
+    // stubs — expand them to watch the loading row, the fetched children,
+    // and (on Flaky-Import) the error row with Retry.
+    accounts: ['Archive:Old-Ledgers', 'Archive:Flaky-Import'],
+    initiallyUnloaded: ['Archive:Old-Ledgers', 'Archive:Flaky-Import'],
+    loadChildren: fakeLoadChildren,
+    onChildLoadError(path, error) {
+      accountsReadout.textContent = `loading ${path} failed: ${
+        error instanceof Error ? error.message : String(error)
+      } — use Retry on the row`;
+    },
     currency: 'MYR',
     density: densitySelect.value === 'compact' ? 'compact' : 'default',
     initialExpansion: 'top-level',
     flattenEmptyGroups: flattenToggle.checked,
     colorScheme: currentScheme,
+    // Built-in icon set via the default top-level heuristics resolver.
+    icons: { resolver: createDefaultAccountIconResolver() },
+    // Host decoration lane: a posting-count badge on leaves with activity.
+    renderDecorations({ path, isGroup }) {
+      if (isGroup) {
+        return [];
+      }
+      const count = postingCounts.get(path);
+      return count == null
+        ? []
+        : [{ kind: 'text', text: `${count}×`, tone: 'neutral' }];
+    },
+    dropCollision: isDropCollision(treeCollisionSelect.value)
+      ? treeCollisionSelect.value
+      : 'reject',
     onSelect(selectedPaths, focusedPath) {
       accountsReadout.textContent =
         selectedPaths.length === 0
@@ -623,6 +730,23 @@ function renderAccountTree(): void {
     onMove(moves) {
       console.log('accounts moved', moves);
       accountsReadout.textContent = `moved ${describeMoves(moves)}`;
+    },
+    // Fires after onMove with the strategy breakdown (skipped / replaced).
+    onDropComplete({ moves, skipped, replaced }) {
+      const parts = [`moved ${describeMoves(moves)}`];
+      if (skipped.length > 0) {
+        parts.push(`skipped ${describeMoves(skipped)}`);
+      }
+      if (replaced.length > 0) {
+        parts.push(`replaced ${replaced.join(', ')}`);
+      }
+      accountsReadout.textContent = parts.join(' · ');
+    },
+    onDropError({ reason, attempted }) {
+      accountsReadout.textContent =
+        attempted.length > 0
+          ? `drop ${reason}: ${describeMoves(attempted)}`
+          : `drop ${reason}`;
     },
     contextMenu: {
       rowButton: true,
@@ -640,6 +764,13 @@ function renderAccountTree(): void {
 // Flatten is a live projection toggle on the existing instance — no rebuild.
 flattenToggle.addEventListener('change', () => {
   accountTree?.setFlattenEmptyGroups(flattenToggle.checked);
+});
+
+// dropCollision is a constructor option; the demo rebuilds the tree so the
+// selected strategy also re-reads cleanly after renames/moves mutated it.
+treeCollisionSelect.addEventListener('change', () => {
+  renderAccountTree();
+  accountsReadout.textContent = `drop collision strategy: ${treeCollisionSelect.value}`;
 });
 
 treeReset.addEventListener('click', () => {
