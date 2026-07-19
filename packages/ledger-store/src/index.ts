@@ -27,6 +27,9 @@ export type {
   SchedulerTask,
 } from './scheduler';
 export type {
+  AccountChildLoadChange,
+  AccountChildLoadState,
+  AccountChildLoadStateKind,
   AccountMutationOp,
   AccountMutationRejectionReason,
   AccountMutationResult,

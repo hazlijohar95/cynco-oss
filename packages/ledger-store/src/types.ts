@@ -190,19 +190,74 @@ export interface MutationEvent {
   accountsChanged: readonly string[];
   /** Present only on account-topology mutations; see {@link AccountTopologyChange}. */
   topology?: AccountTopologyChange;
+  /**
+   * Present only on child-load transitions that must reach views:
+   * `completeChildLoad` (alongside its `topology`) and `failChildLoad`
+   * (alone). See {@link AccountChildLoadChange}.
+   */
+  childLoad?: AccountChildLoadChange;
 }
 
 /**
  * Machine-readable reasons an `AccountStore.moveAccount` (or a move op inside
  * `batchAccounts`) is rejected. Rejections return a result with `ok: false`
  * instead of throwing — topology mutations degrade gracefully like every
- * other parser boundary in this package.
+ * other parser boundary in this package. `not-loading` is the child-load
+ * variant: `completeChildLoad` was called for a path that has no load in
+ * flight (unknown path, or the state machine sits in a different state).
  */
 export type AccountMutationRejectionReason =
   | 'unknown-source'
   | 'invalid-target'
   | 'target-inside-source'
-  | 'target-exists';
+  | 'target-exists'
+  | 'not-loading';
+
+/**
+ * Where a path sits in the child-loading state machine:
+ *
+ * - `loaded` (default): the path's children — possibly none — are all known
+ *   to the store. Every path is `loaded` unless `markUnloaded` said otherwise.
+ * - `unloaded`: the path claims children that have not been fetched yet. The
+ *   path renders as an expandable GROUP even with zero children in the store.
+ * - `loading`: a fetch is in flight (`beginChildLoad`).
+ * - `error`: the last fetch failed (`failChildLoad`); `error` carries the
+ *   remembered message until a retry transitions back to `loading`.
+ */
+export type AccountChildLoadStateKind =
+  | 'loaded'
+  | 'unloaded'
+  | 'loading'
+  | 'error';
+
+/**
+ * Result of `AccountStore.getChildLoadState`. Unknown paths and paths that
+ * never entered the machine report `{ state: 'loaded' }` — graceful
+ * degradation, absence means "nothing pending".
+ */
+export interface AccountChildLoadState {
+  state: AccountChildLoadStateKind;
+  /** Remembered failure message; present only in the `error` state. */
+  error?: string;
+}
+
+/**
+ * The child-load variant payload of a {@link MutationEvent}: which path's
+ * load machine transitioned and to which state. `completeChildLoad` emits ONE
+ * event carrying both the topology change (the added children) and this
+ * transition (`state: 'loaded'`); `failChildLoad` emits an event carrying
+ * only this transition (`state: 'error'` plus the message) — no topology
+ * changed, but views must re-render the group row (drop the spinner, show
+ * the error affordance).
+ */
+export interface AccountChildLoadChange {
+  /** Canonical path whose load state transitioned. */
+  path: string;
+  /** The state the machine landed in. */
+  state: AccountChildLoadStateKind;
+  /** Failure message; present only when `state` is `error`. */
+  error?: string;
+}
 
 /**
  * Outcome of one `AccountStore` topology mutation call. `added`, `removed`,

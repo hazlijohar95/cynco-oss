@@ -43,6 +43,8 @@ import {
 } from './accountPath';
 import { chunksOf } from './chunksOf';
 import type {
+  AccountChildLoadChange,
+  AccountChildLoadState,
   AccountMutationOp,
   AccountMutationRejectionReason,
   AccountMutationResult,
@@ -135,6 +137,16 @@ export class AccountStore {
    * inert.
    */
   private readonly expandedPaths: Set<string>;
+  /**
+   * Child-load machine entries keyed by path (canonical tier, like
+   * expansion: survives derived rebuilds and follows moveAccount remaps).
+   * Absence means `loaded` — the default for every path — so the map only
+   * ever holds the pending minority (`unloaded` / `loading` / `error`).
+   */
+  private readonly childLoadByPath: Map<
+    string,
+    { state: 'unloaded' | 'loading' | 'error'; error?: string }
+  >;
   private readonly listeners: Set<(event: MutationEvent) => void>;
 
   // --- Derived tiers (lazily rebuilt; null = dirty) --------------------------
@@ -159,6 +171,7 @@ export class AccountStore {
     this.currencyCodes = [];
     this.currencyIdByCode = new Map<string, number>();
     this.expandedPaths = new Set<string>();
+    this.childLoadByPath = new Map();
     this.listeners = new Set<(event: MutationEvent) => void>();
     this.derived = null;
     this.visibleIds = null;
@@ -473,6 +486,124 @@ export class AccountStore {
     this.visibleIds = null;
   }
 
+  // --- Child loading (lazy subtrees) -------------------------------------------
+
+  /**
+   * Declares the paths' children as not yet fetched: the paths transition to
+   * `unloaded` and render as expandable GROUPS even with zero children in
+   * the store (the expand affordance is what triggers the fetch). Unknown
+   * paths are ignored — graceful degradation, same contract as every other
+   * mutation input. Marking is a force-reset from ANY state, which doubles
+   * as the cancellation primitive: a load in flight when its path is
+   * re-marked finds the machine no longer in `loading` on completion, so the
+   * stale result is refused at the store boundary too.
+   *
+   * A marked path is also collapsed: its children are unknown, so the
+   * default-expanded state new accounts get would leave no gesture to
+   * trigger the load with.
+   */
+  markUnloaded(paths: readonly string[]): void {
+    for (const path of paths) {
+      if (!this.pathSet.has(path)) {
+        continue;
+      }
+      this.childLoadByPath.set(path, { state: 'unloaded' });
+      if (this.expandedPaths.delete(path)) {
+        this.visibleIds = null;
+      }
+    }
+  }
+
+  /**
+   * Transitions `unloaded`/`error` → `loading`. Returns false as a no-op for
+   * unknown paths and wrong states (`loaded`, or a load already in flight).
+   * Deliberately emits no event: the transition is always caller-initiated
+   * (the caller is about to fetch and re-render anyway), unlike
+   * complete/fail which arrive asynchronously and must reach passive views.
+   */
+  beginChildLoad(path: string): boolean {
+    const entry = this.childLoadByPath.get(path);
+    if (entry == null || entry.state === 'loading') {
+      return false;
+    }
+    this.childLoadByPath.set(path, { state: 'loading' });
+    return true;
+  }
+
+  /**
+   * Resolves a load in flight: adds `childPaths` through the exact
+   * `addAccounts` primitive (auto-created ancestors, invalid paths skipped
+   * silently) and transitions the path → `loaded`. Rejected with reason
+   * `not-loading` — a no-op, mirroring the move-rejection convention — when
+   * the path has no load in flight (unknown, or wrong state; a stale
+   * response arriving after `markUnloaded` reset the machine lands here).
+   * Emits ONE honest event carrying both the topology change (the paths
+   * actually created) and the load transition in `childLoad`, so views
+   * re-render the group row (spinner off, children in) from one signal.
+   */
+  completeChildLoad(path: string, childPaths: string[]): AccountMutationResult {
+    if (this.childLoadByPath.get(path)?.state !== 'loading') {
+      return rejectedMutation('not-loading');
+    }
+    const added: string[] = [];
+    for (const childPath of childPaths) {
+      this.collectPathWithAncestors(childPath, added);
+    }
+    this.childLoadByPath.delete(path);
+    if (added.length > 0) {
+      this.markTopologyDirty();
+    }
+    this.emitTopologyChange(
+      { addedPaths: added, removedPaths: [], movedPaths: [] },
+      { path, state: 'loaded' }
+    );
+    return { ok: true, added, removed: [], moved: [] };
+  }
+
+  /**
+   * Fails a load in flight: transitions `loading` → `error`, remembers the
+   * message (surfaced by `getChildLoadState` until a retry), and emits an
+   * event with only the `childLoad` transition — no topology changed, but
+   * views must re-render the row (spinner → error affordance). No-op when
+   * the path has no load in flight.
+   */
+  failChildLoad(path: string, error?: string): void {
+    if (this.childLoadByPath.get(path)?.state !== 'loading') {
+      return;
+    }
+    this.childLoadByPath.set(
+      path,
+      error != null ? { state: 'error', error } : { state: 'error' }
+    );
+    const childLoad: AccountChildLoadChange =
+      error != null
+        ? { path, state: 'error', error }
+        : { path, state: 'error' };
+    const event: MutationEvent = {
+      entriesChanged: [],
+      accountsChanged: [path],
+      childLoad,
+    };
+    for (const listener of this.listeners) {
+      listener(event);
+    }
+  }
+
+  /**
+   * Where the path sits in the child-loading machine. Unknown paths and
+   * ordinary (never-marked) paths report `loaded` — absence means "nothing
+   * pending", never a throw.
+   */
+  getChildLoadState(path: string): AccountChildLoadState {
+    const entry = this.childLoadByPath.get(path);
+    if (entry == null) {
+      return { state: 'loaded' };
+    }
+    return entry.error != null
+      ? { state: entry.state, error: entry.error }
+      : { state: entry.state };
+  }
+
   // --- Visible projection (slice-first reads) ---------------------------------
 
   /** Number of rows currently visible given the expansion state. */
@@ -552,6 +683,7 @@ export class AccountStore {
       }
       this.pathSet.delete(current);
       this.expandedPaths.delete(current);
+      this.childLoadByPath.delete(current);
       this.ownBalancesByPath.delete(current);
       this.postingCountsByPath.delete(current);
       removed.push(current);
@@ -647,6 +779,13 @@ export class AccountStore {
       if (this.expandedPaths.delete(oldPath)) {
         this.expandedPaths.add(newPath);
       }
+      // Load state follows the moved path like expansion does: a pending
+      // subtree renamed mid-flight keeps claiming unfetched children.
+      const loadEntry = this.childLoadByPath.get(oldPath);
+      if (loadEntry != null) {
+        this.childLoadByPath.delete(oldPath);
+        this.childLoadByPath.set(newPath, loadEntry);
+      }
       const balances = this.ownBalancesByPath.get(oldPath);
       if (balances != null) {
         this.ownBalancesByPath.delete(oldPath);
@@ -684,13 +823,22 @@ export class AccountStore {
 
   // --- Internals ---------------------------------------------------------------
 
-  /** True when the path is a known account that currently has children. */
+  /**
+   * True when the path is a known account that currently has children — or
+   * sits in a pending child-load state (`unloaded`/`loading`/`error`), whose
+   * whole meaning is "children exist but are not fetched yet". This is the
+   * projection-honesty seam: expansion (`setExpanded`/`isExpanded`) and row
+   * materialization both route through group-ness, so a zero-child unloaded
+   * path renders as an expandable group with a truthful expand affordance.
+   */
   private isGroupPath(path: string): boolean {
     if (!this.pathSet.has(path)) {
       return false;
     }
     const children = this.childPathsByParent.get(path);
-    return children != null && children.size > 0;
+    return (
+      (children != null && children.size > 0) || this.childLoadByPath.has(path)
+    );
   }
 
   /** Drops both derived tiers after any topology mutation. */
@@ -699,8 +847,17 @@ export class AccountStore {
     this.visibleIds = null;
   }
 
-  /** Notifies listeners with an honest account-topology mutation event. */
-  private emitTopologyChange(topology: AccountTopologyChange): void {
+  /**
+   * Notifies listeners with an honest account-topology mutation event.
+   * `completeChildLoad` passes its transition through `childLoad` so the ONE
+   * event carries both halves (children added + machine now `loaded`); the
+   * transitioned path joins `accountsChanged` because its own row changes
+   * (spinner off) even when the load produced zero new paths.
+   */
+  private emitTopologyChange(
+    topology: AccountTopologyChange,
+    childLoad?: AccountChildLoadChange
+  ): void {
     const accounts = new Set<string>();
     for (const path of topology.addedPaths) {
       accounts.add(path);
@@ -712,10 +869,14 @@ export class AccountStore {
       accounts.add(pair.from);
       accounts.add(pair.to);
     }
+    if (childLoad != null) {
+      accounts.add(childLoad.path);
+    }
     const event: MutationEvent = {
       entriesChanged: [],
       accountsChanged: [...accounts],
       topology,
+      ...(childLoad != null ? { childLoad } : {}),
     };
     for (const listener of this.listeners) {
       listener(event);
@@ -914,9 +1075,13 @@ export class AccountStore {
     return this.visibleIds;
   }
 
-  /** Builds one public AccountRow from derived typed-array state. */
+  /** Builds one public AccountRow from derived typed-array state. Pending
+   * child-load paths materialize as groups even with zero children — the
+   * live-map check keeps row kind honest without a derived rebuild. */
   private materializeRow(derived: DerivedTopology, id: number): AccountRow {
-    const isGroup = derived.childCounts[id] > 0;
+    const isGroup =
+      derived.childCounts[id] > 0 ||
+      this.childLoadByPath.has(derived.pathsById[id]);
     return {
       path: derived.pathsById[id],
       name: derived.namesById[id],
