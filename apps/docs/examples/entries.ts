@@ -70,6 +70,66 @@ export const PAYROLL_ENTRY: LedgerEntry = {
 };
 
 /**
+ * Before-version for the home EntryDiff demo: the office fit-out deposit as
+ * first keyed in — pending, no PO link, original quote.
+ */
+export const FIT_OUT_ENTRY_BEFORE: LedgerEntry = {
+  id: 'home-fit-out',
+  date: '2026-07-08',
+  flag: 'pending',
+  payee: 'Delima Trading',
+  narration: 'Office fit-out deposit',
+  tags: ['fit-out'],
+  links: [],
+  postings: [
+    {
+      account: 'Expenses:Office:Renovation',
+      amount: 450_000,
+      currency: 'MYR',
+    },
+    {
+      account: 'Assets:Current:Cash-Maybank',
+      amount: -450_000,
+      currency: 'MYR',
+    },
+  ],
+};
+
+/**
+ * After-version: the revised quote lands — amount corrected, a delivery leg
+ * split out, flag cleared, PO link attached. Exercises every diff kind the
+ * card renders: changed date/flag, word-level narration diff, added tag and
+ * link pills, an amount-changed posting pair, and an added posting. Both
+ * versions balance to exactly zero.
+ */
+export const FIT_OUT_ENTRY_AFTER: LedgerEntry = {
+  id: 'home-fit-out',
+  date: '2026-07-10',
+  flag: 'cleared',
+  payee: 'Delima Trading',
+  narration: 'Office fit-out deposit — revised quote',
+  tags: ['fit-out', 'capex'],
+  links: ['PO-1042'],
+  postings: [
+    {
+      account: 'Expenses:Office:Renovation',
+      amount: 425_000,
+      currency: 'MYR',
+    },
+    {
+      account: 'Expenses:Office:Delivery',
+      amount: 18_000,
+      currency: 'MYR',
+    },
+    {
+      account: 'Assets:Current:Cash-Maybank',
+      amount: -443_000,
+      currency: 'MYR',
+    },
+  ],
+};
+
+/**
  * Deliberately unbalanced: the cash leg is RM 1.00 short, so the renderer
  * draws the dashed checker bar and reports the exact per-currency residual.
  */

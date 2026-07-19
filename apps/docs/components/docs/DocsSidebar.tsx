@@ -15,6 +15,7 @@ interface HeadingItem {
 const PRODUCT_PAGES = [
   { href: '/docs/journals', label: 'Journals' },
   { href: '/docs/accounts', label: 'Accounts' },
+  { href: '/docs/theming', label: 'Theming' },
 ] as const;
 
 const navLinkClass =

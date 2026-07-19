@@ -1,6 +1,9 @@
 import { preloadAccountTreeHTML } from '@cynco/accounts/ssr';
-import { JournalEntry } from '@cynco/journals/react';
-import { preloadJournalEntryHTML } from '@cynco/journals/ssr';
+import { EntryDiff, JournalEntry } from '@cynco/journals/react';
+import {
+  preloadEntryDiffHTML,
+  preloadJournalEntryHTML,
+} from '@cynco/journals/ssr';
 import { workloads } from '@cynco/ledger-test-data';
 
 import { CyncoCompanySection } from '@/components/CyncoCompanySection';
@@ -13,6 +16,8 @@ import { AccountTreeComparison } from '@/examples/AccountTreeComparison';
 import { AccountTreeDemo } from '@/examples/AccountTreeDemo';
 import {
   ACCOUNT_TREE_DEMO_ID,
+  FIT_OUT_ENTRY_AFTER,
+  FIT_OUT_ENTRY_BEFORE,
   PAYROLL_ENTRY,
   UNBALANCED_ENTRY,
   WORKSPACE_TREE_ID,
@@ -40,6 +45,7 @@ export default function Home() {
           <JournalEntrySection />
           <RegisterSection />
           <ReconciliationSection />
+          <EntryDiffSection />
           <AccountTreeSection />
           <UnbalancedSection />
           <CyncoCompanySection />
@@ -133,6 +139,42 @@ function ReconciliationSection() {
       />
       <ReconciliationDemo />
       <ReconciliationLegend />
+    </section>
+  );
+}
+
+async function EntryDiffSection() {
+  const ssrHTML = await preloadEntryDiffHTML(
+    FIT_OUT_ENTRY_BEFORE,
+    FIT_OUT_ENTRY_AFTER
+  );
+  return (
+    <section className={`${SECTION} space-y-8`}>
+      <FeatureHeader
+        id="entry-diff"
+        title="Every edit, diffed like code"
+        description={
+          <>
+            Two versions of one entry rendered as an audit-trail diff — word
+            highlights on the narration, tag and link pills added, postings
+            aligned by account and currency with exact before/after amounts.
+            Server-rendered via <code>preloadEntryDiffHTML</code> and adopted at
+            hydration, like every card on this page.
+          </>
+        }
+      />
+      <div className="demo-container">
+        <EntryDiff
+          before={FIT_OUT_ENTRY_BEFORE}
+          after={FIT_OUT_ENTRY_AFTER}
+          ssrHTML={ssrHTML}
+        />
+      </div>
+      <Footnote>
+        The revised quote splits out a delivery leg — both versions balance to
+        exactly zero, and the diff is pure data from{' '}
+        <code>diffEntryVersions</code>.
+      </Footnote>
     </section>
   );
 }

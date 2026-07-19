@@ -109,6 +109,127 @@ view.render({
 });
 `;
 
+const KEYBOARD_MAP = `
+// Keyboard navigation ships ON: the register grid is a tab stop
+// (tabindex="0") and one delegated keydown handler owns the whole map.
+// Hosts composing their own focus management can opt out entirely:
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  disableKeyboardNavigation: true, // no keydown listener, no tabindex
+});
+
+// Focus is virtual — aria-activedescendant on the grid points at the
+// focused row's id; the row itself is patched with data-focused.
+register.focusRow(12); // programmatic counterpart (reveals + focuses)
+`;
+
+const RANGE_SELECTION = `
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  selectionMode: 'range', // 'single' (default) | 'range'
+  onSelectionChange({ indexes, rows }) {
+    // Sorted entry indexes + their rows, fired on every user-driven
+    // change (pointer AND keyboard). Fires in both modes; single mode
+    // reports a 0/1-length selection.
+    console.log(indexes, rows.length);
+  },
+});
+
+// RegisterSelection: the shift-range anchor plus the selected entry
+// indexes (always entry-index space — group headers are never selectable).
+const { anchor, indexes } = register.getSelection();
+
+// Programmatic selection does NOT fire callbacks (original behavior):
+register.setSelectedRow(3);
+`;
+
+const PERIOD_GROUPING = `
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  groupBy: 'month', // 'none' (default) | 'month' | 'quarter' | 'year'
+  stickyGroupLabels: true, // default whenever groupBy !== 'none'
+});
+
+// Each group header renders a RegisterGroupSummary:
+// { key: '2026-03', label: 'March 2026', entryCount: 14,
+//   netChange: Map { 'MYR' => 152_300 } } — integer minor units, built in
+// one O(n) pass per data update.
+`;
+
+const SCROLL_APIS = `
+// Every scroll-to API takes the same options:
+// { align?: 'start' | 'center' | 'nearest'; behavior?: 'smooth' | 'auto' }
+register.scrollToRow(500, { align: 'center', behavior: 'smooth' });
+register.scrollToDate('2026-03-01'); // first row dated on/after (binary search)
+ledgerView.scrollToSection('Assets:Current:AR', { behavior: 'smooth' });
+ledgerView.scrollToRow('Assets:Current:AR', 12, { align: 'start' });
+
+// Spring tuning (Register and LedgerView options, or SmoothScroller
+// directly for your own containers):
+const settings: SmoothScrollSettings = {
+  omega: 0.015,         // rad/ms; 99% settle ≈ 6.6 / omega (~440ms here)
+  epsilonPx: 0.5,       // remaining distance below which it may settle
+  epsilonVelocity: 0.01, // velocity below which it may settle
+};
+new Register({ account, smoothScrollSettings: settings });
+`;
+
+const ENTRY_DIFF_API = `
+import { diffEntryVersions, EntryDiff } from '@cynco/journals';
+
+// Pure data: the ledger analog of a file diff. Header fields get
+// word-level segments, tags/links diff as sets, postings align by
+// (account, currency) — amounts stay integer minor units end to end.
+const diff = diffEntryVersions(before, after);
+// diff.kind: 'created' | 'deleted' | 'modified' | 'unchanged'
+// diff.postings: [{ kind: 'amount-changed', account, currency,
+//                   beforeAmount, afterAmount }, ...]
+
+// The component follows the JournalEntry lifecycle exactly:
+const card = new EntryDiff();
+card.render({
+  before, // null models entry creation (everything added)
+  after,  // null models deletion/void (everything removed)
+  parentNode: document.querySelector('#host')!,
+});
+card.cleanUp();
+`;
+
+const ENTRY_DIFF_SSR = `
+// Server component
+import { EntryDiff } from '@cynco/journals/react';
+import { preloadEntryDiffHTML } from '@cynco/journals/ssr';
+
+export default async function AuditTrail() {
+  const ssrHTML = await preloadEntryDiffHTML(before, after);
+  return <EntryDiff before={before} after={after} ssrHTML={ssrHTML} />;
+}
+`;
+
+const LEDGER_VIEW_V2 = `
+// Incremental reconciliation, keyed by account path: unchanged sections
+// keep their Register instance and DOM, data-changed sections update in
+// place (structural row equality, so fresh-but-identical arrays from
+// immutable stores are "unchanged"), added sections mount, removed
+// sections clean up, and order changes reorder DOM nodes without
+// recreating anything.
+view.setSections([
+  { account: 'Assets:Current:Cash-Maybank', rows: cashRows },
+  { account: 'Assets:Current:AR', rows: arRows },
+]);
+`;
+
+const LEDGER_VIEW_SSR = `
+import { preloadLedgerViewHTML } from '@cynco/journals/ssr';
+
+const ssrHTML = await preloadLedgerViewHTML(sections, { id: 'ledger' });
+
+// Client: pass the SAME id so ARIA row ids agree.
+const view = new LedgerView({ id: 'ledger' });
+view.hydrate({ sections, container }); // falls back to render when
+                                       // the markup is missing
+`;
+
 const RECONCILIATION_API = `
 import { proposeMatches, Reconciliation } from '@cynco/journals';
 
@@ -325,8 +446,10 @@ export default async function JournalsDocsPage() {
                   </td>
                   <td>
                     Vanilla classes (<code>JournalEntry</code>,{' '}
-                    <code>Register</code>, <code>LedgerView</code>), pure HTML
-                    renderers, and utilities like <code>formatMinorUnits</code>
+                    <code>Register</code>, <code>LedgerView</code>,{' '}
+                    <code>EntryDiff</code>), pure HTML renderers, and utilities
+                    like <code>formatMinorUnits</code> and{' '}
+                    <code>diffEntryVersions</code>
                   </td>
                 </tr>
                 <tr>
@@ -343,8 +466,11 @@ export default async function JournalsDocsPage() {
                     <code>@cynco/journals/ssr</code>
                   </td>
                   <td>
-                    <code>preloadJournalEntryHTML</code> and{' '}
-                    <code>preloadRegisterHTML</code> for server prerendering
+                    <code>preloadJournalEntryHTML</code>,{' '}
+                    <code>preloadRegisterHTML</code>,{' '}
+                    <code>preloadLedgerViewHTML</code>,{' '}
+                    <code>preloadReconciliationHTML</code>, and{' '}
+                    <code>preloadEntryDiffHTML</code> for server prerendering
                   </td>
                 </tr>
               </tbody>
@@ -376,6 +502,159 @@ export default async function JournalsDocsPage() {
             <CodeBlock code={VANILLA_REGISTER} />
             <h3>LedgerView</h3>
             <CodeBlock code={VANILLA_LEDGER_VIEW} />
+
+            <h2 id="keyboard-navigation">Keyboard navigation &amp; ARIA</h2>
+            <p>
+              The register is an ARIA grid: <code>role=&quot;grid&quot;</code>{' '}
+              with <code>aria-label</code> (the <code>label</code> option,
+              defaulting to the account path), <code>aria-rowcount</code>{' '}
+              counting model rows (interleaved group headers included), rows
+              with <code>role=&quot;row&quot;</code> +{' '}
+              <code>aria-rowindex</code> + <code>aria-selected</code>, cells
+              with <code>role=&quot;gridcell&quot;</code>, and — in range mode —{' '}
+              <code>aria-multiselectable</code>. Group header rows are real grid
+              rows spanning every column via <code>aria-colspan</code>, but stay
+              non-interactive. Focus is virtual: the grid is the single tab stop
+              and <code>aria-activedescendant</code> points at the focused row,
+              so navigation lives in entry-index space and group headers are
+              skipped without any bookkeeping.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <kbd>↓</kbd> / <kbd>↑</kbd>
+                  </td>
+                  <td>
+                    Move focus one entry row. At a section edge inside a{' '}
+                    <code>LedgerView</code>, focus hands off to the neighboring
+                    section (the <code>onFocusBoundary</code> hook); standalone
+                    registers clamp.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Home</kbd> / <kbd>End</kbd>
+                  </td>
+                  <td>First / last entry row.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>PageDown</kbd> / <kbd>PageUp</kbd>
+                  </td>
+                  <td>One viewport&rsquo;s worth of entry rows.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Enter</kbd> / <kbd>Space</kbd>
+                  </td>
+                  <td>
+                    Select the focused row — exactly a plain click, one shared
+                    code path, so pointer and keyboard can never drift apart.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Shift</kbd>+<kbd>↓</kbd>/<kbd>↑</kbd>
+                  </td>
+                  <td>
+                    Range mode: extend the selection from the anchor (a
+                    shift-click on the new row).
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>A</kbd>
+                  </td>
+                  <td>
+                    Range mode: select every entry row. Single mode leaves the
+                    browser&rsquo;s select-all alone.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Escape</kbd>
+                  </td>
+                  <td>Clear the selection (no-op when nothing is selected).</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              Keys consumed by an active IME composition (Enter confirming a
+              candidate, Escape dismissing one) never drive navigation or
+              selection. Keyboard navigation ships on by default — the
+              breaking-ish part of this feature: the register becomes a tab stop
+              on every page that embeds it. That is the right default (a
+              pointer-only data grid is inaccessible), but hosts composing their
+              own focus management get an escape hatch:
+            </p>
+            <CodeBlock code={KEYBOARD_MAP} />
+
+            <h2 id="range-selection">Range selection</h2>
+            <p>
+              <code>selectionMode: &apos;single&apos;</code> (default) preserves
+              the original one-row behavior exactly.{' '}
+              <code>&apos;range&apos;</code> is Pierre-style line selection:
+              click selects one row and sets the anchor, shift-click extends
+              anchor→target contiguously, meta/ctrl-click toggles a row in or
+              out. Keyboard mirrors pointer exactly. <code>onRowSelect</code>{' '}
+              keeps firing for the primary (last-clicked) row for back-compat.
+            </p>
+            <CodeBlock code={RANGE_SELECTION} />
+
+            <h2 id="period-grouping">Period grouping</h2>
+            <p>
+              <code>groupBy</code> interleaves period header rows — month,
+              quarter, or year — into the virtual row space; <code>none</code>{' '}
+              keeps the flat pure-arithmetic fast path. Each header shows the
+              period label, distinct-entry count, and net change per currency.
+              Selection, <code>data-row-index</code>, and every callback stay in
+              entry-index space regardless of grouping.
+            </p>
+            <CodeBlock code={PERIOD_GROUPING} />
+            <p>
+              With grouping active, the current period&rsquo;s label pins as a
+              slim strip just below the register&rsquo;s sticky header (
+              <code>stickyGroupLabels</code> defaults to true). It is a mirror
+              of the real group row — aria-hidden and pointer-inert, because{' '}
+              <code>position: sticky</code> cannot work on rows a virtualized
+              window evicts and recreates — updated from the prefix-sum row
+              model in O(log n) per scroll frame, with DOM writes only when the
+              period changes. In a <code>LedgerView</code> it pins below the
+              owning section&rsquo;s sticky header.
+            </p>
+
+            <h2 id="scroll-apis">Scroll APIs</h2>
+            <p>
+              <code>scrollToRow</code>, <code>scrollToDate</code> (first row
+              dated on or after, by binary search), and the LedgerView
+              counterparts share one options shape. <code>align</code> defaults
+              to <code>nearest</code> for rows (minimal movement; a no-op when
+              the row is already visible) and <code>start</code> for sections,
+              which accounts for the sticky header overlaying the viewport top.{' '}
+              <code>behavior</code> defaults to <code>auto</code> (instant) —
+              smooth is opt-in everywhere. Targets come from the same
+              data-derived offsets the virtualizer uses, so no layout reads
+              happen before a scroll; out-of-range rows, unknown accounts, and
+              dates past the last row are graceful no-ops.
+            </p>
+            <CodeBlock code={SCROLL_APIS} />
+            <p>
+              Smooth scrolling is a critically-damped spring — it approaches the
+              target as fast as possible without ever overshooting, because
+              scroll positions must never bounce past a row and come back. User
+              input wins: wheel, touch, scrollbar drags, and scroll keys cancel
+              an in-flight animation instantly (listeners exist only while
+              animating), and <code>prefers-reduced-motion</code> turns every
+              smooth scroll into an instant jump. Keyboard focus reveal stays
+              instant so it never lags typing.
+            </p>
 
             <h2 id="reconciliation">Reconciliation</h2>
             <p>
@@ -414,6 +693,56 @@ export default async function JournalsDocsPage() {
                 contract as the other components.
               </li>
             </ul>
+
+            <h2 id="entry-diff">EntryDiff</h2>
+            <p>
+              The audit-trail view: the diff between two versions of a journal
+              entry, rendered like a file diff. <code>diffEntryVersions</code>{' '}
+              is pure data — scalar header fields (date, flag, payee, narration)
+              classify as unchanged / changed / added / removed with word-level
+              segments for changed text (adjacent changed runs separated by a
+              single space merge, so highlights read as phrases, not confetti);
+              tags and links diff as sets; postings pair by (account, currency),
+              so both sides of an amount change share account and currency.{' '}
+              <code>null</code> on either side models creation or deletion.
+            </p>
+            <CodeBlock code={ENTRY_DIFF_API} />
+            <CodeBlock code={ENTRY_DIFF_SSR} />
+            <p>
+              Client renders and SSR preloads share the same string builder, so
+              hydration adopts the server DOM verbatim with zero writes. The
+              diff card is a read-only audit artifact: posting annotation slots
+              are deliberately not supported.
+            </p>
+
+            <h2 id="ledger-view-v2">LedgerView v2</h2>
+            <p>
+              <code>setSections</code> reconciles incrementally instead of
+              rebuilding, and focus and selection are per-register state keyed
+              by entry index, so they survive whenever their section survives:
+            </p>
+            <CodeBlock code={LEDGER_VIEW_V2} />
+            <p>
+              Across <code>setSections</code> the scroll position anchors to
+              what the user sees: the topmost visible section + entry row is
+              captured before the update and restored after, so sections
+              growing, shrinking, appearing, or disappearing above it never
+              shift the content in view. If the anchor section itself was
+              removed, the nearest surviving neighbor takes its place (preceding
+              first, then following), falling back to the raw scrollTop only
+              when nothing survives.
+            </p>
+            <CodeBlock code={LEDGER_VIEW_SSR} />
+            <p>
+              The preload emits the shared scroller, every section&rsquo;s
+              sticky header, and each section&rsquo;s leading rows — capped per
+              section (128) and across the view (512 total, leading sections
+              first) — with exactly sized spacers, so pre-hydration scrollbar
+              geometry matches what the hydrated client computes.{' '}
+              <code>&lt;LedgerView sections options ssrHTML /&gt;</code> from{' '}
+              <code>@cynco/journals/react</code> takes the preload just like{' '}
+              <code>Register</code>.
+            </p>
 
             <h2 id="entry-stream">EntryStream</h2>
             <p>
@@ -480,8 +809,12 @@ export default async function JournalsDocsPage() {
                 virtualized account register.
               </li>
               <li>
-                <code>&lt;LedgerView sections options /&gt;</code> — several
-                registers in one scroll container.
+                <code>&lt;LedgerView sections options ssrHTML /&gt;</code> —
+                several registers in one scroll container.
+              </li>
+              <li>
+                <code>&lt;EntryDiff before after options ssrHTML /&gt;</code> —
+                the audit-trail diff card.
               </li>
             </ul>
 

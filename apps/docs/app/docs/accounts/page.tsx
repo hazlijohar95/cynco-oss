@@ -198,6 +198,89 @@ controller.getMovePlan(['Assets:Current:Cash-Wise'], 'Assets:Reserve'); // dry r
 controller.movePaths(['Assets:Current:Cash-Wise'], 'Assets:Reserve');  // applies + fires onMove
 `;
 
+const CONTEXT_MENU_EXAMPLE = `
+// The tree never renders a menu itself — it owns triggering, target
+// normalization, positioning data, ARIA, and the focus lifecycle; the
+// host renders whatever menu it likes (Radix, native, hand-rolled).
+const tree = new AccountTree({
+  entries,
+  contextMenu: {
+    rowButton: true, // optional per-row "…" button lane
+    onOpen(request: AccountTreeContextMenuRequest) {
+      // request.path   — the row the menu is for
+      // request.paths  — effective targets: the whole selection when the
+      //                  row is part of the current multi-selection,
+      //                  otherwise just [path] (DnD-style normalization)
+      // request.anchor — { x, y } pointer coords for right-click,
+      //                  { rect: DOMRect } for keyboard / button opens
+      // request.source — 'pointer' | 'keyboard' | 'button'
+      showMyMenu(request);
+    },
+  },
+});
+`;
+
+const CONTEXT_MENU_HOST = `
+// A realistic host menu (Radix-style). The menu MUST call request.close()
+// when it dismisses:
+<DropdownMenu.Root
+  open={menu != null}
+  onOpenChange={(open) => {
+    if (!open) {
+      menu?.close(); // restoreFocus: true — back to the originating row
+      setMenu(null);
+    }
+  }}
+>
+  <DropdownMenu.Content style={positionFromAnchor(menu?.anchor)}>
+    <DropdownMenu.Item
+      onSelect={() => {
+        const path = menu!.path;
+        menu!.close({ restoreFocus: false }); // the rename handoff
+        setMenu(null);
+        treeRef.current!.beginRename(path);
+      }}
+    >
+      Rename
+    </DropdownMenu.Item>
+    <DropdownMenu.Item onSelect={() => archive(menu!.paths)}>
+      Archive {menu!.paths.length} account(s)
+    </DropdownMenu.Item>
+  </DropdownMenu.Content>
+</DropdownMenu.Root>
+`;
+
+const SEARCH_EXAMPLE = `
+const controller = tree.getController();
+
+// Case-insensitive substring match against each path segment. The
+// expansion state from before the session is snapshotted once and
+// restored exactly by endSearch().
+controller.beginSearch('cash', { mode: 'hide-non-matches' });
+// mode: 'expand-matches' (default) | 'collapse-non-matches'
+//     | 'hide-non-matches'
+
+controller.focusNextSearchMatch();     // cyclic, projection order
+controller.focusPreviousSearchMatch();
+controller.getSearchMatchState(); // { index: 1, total: 2 } — 1-based,
+                                  // or null with no active session
+controller.endSearch(); // restores the pre-search expansion
+`;
+
+const STICKY_STACK_EXAMPLE = `
+const tree = new AccountTree({
+  entries,
+  stickyAncestors: 'stack', // 'nearest' (default) | 'stack'
+});
+`;
+
+const TRUNCATION_EXAMPLE = `
+const tree = new AccountTree({
+  entries,
+  nameTruncation: 'middle', // 'end' (default) | 'middle'
+});
+`;
+
 export default function AccountsDocsPage() {
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5">
@@ -316,6 +399,114 @@ export default function AccountsDocsPage() {
               a 1px accent inset ring; invalid targets show nothing.
             </p>
             <CodeBlock code={DND_EXAMPLE} />
+
+            <h2 id="context-menus">Context menus</h2>
+            <p>
+              Context menus are a composition surface, not a widget. Triggers:
+              right-click on a row (the row is focused and selected first when
+              it was not already in the selection), <kbd>Shift</kbd>+
+              <kbd>F10</kbd> and the dedicated ContextMenu key (focused row,
+              rect anchor), and — with <code>rowButton: true</code> — a trailing
+              &ldquo;Row actions&rdquo; button per row revealed on hover /
+              focus-within. When configured, rows carry{' '}
+              <code>aria-haspopup=&quot;menu&quot;</code>.
+            </p>
+            <CodeBlock code={CONTEXT_MENU_EXAMPLE} />
+            <p>
+              The close contract: <code>close()</code> (default{' '}
+              <code>restoreFocus: true</code>) returns focus to the tree and the
+              originating row, re-materializing the row if virtualization
+              evicted it. <code>close(&#123; restoreFocus: false &#125;)</code>{' '}
+              is the <em>rename handoff</em>: call it and then{' '}
+              <code>tree.beginRename(request.path)</code> so the rename input
+              keeps focus without the tree stealing it back. Exactly one session
+              is live at a time — opening a new menu supersedes the previous
+              session, whose <code>close()</code> becomes a no-op, so a late
+              close is always safe.
+            </p>
+            <CodeBlock code={CONTEXT_MENU_HOST} />
+
+            <h2 id="search">Search modes &amp; match navigation</h2>
+            <p>
+              <code>beginSearch(query, options?)</code> starts (or refines) a
+              search session; <code>options.mode</code> picks how matches
+              reshape the tree. <code>expand-matches</code> (default)
+              auto-expands ancestors of every match;{' '}
+              <code>collapse-non-matches</code> additionally collapses every
+              group with no match in its subtree — the minimal expansion
+              revealing all matches; <code>hide-non-matches</code> filters the
+              visible projection to matches plus their ancestors.{' '}
+              <code>hide-non-matches</code> is projection-level only (like{' '}
+              <code>flattenEmptyGroups</code>): canonical topology is untouched,
+              and <code>aria-posinset</code> / <code>aria-setsize</code> are
+              recomputed over the <em>filtered</em> visible siblings, so
+              assistive tech never hears counts for rows that are not there.
+            </p>
+            <CodeBlock code={SEARCH_EXAMPLE} />
+            <p>
+              While a session is active, <kbd>F3</kbd> / <kbd>Shift</kbd>+
+              <kbd>F3</kbd> on the tree step to the next / previous match
+              (IME-guarded like every other key). Hosts building a search input
+              should call the controller&rsquo;s{' '}
+              <code>focusNextSearchMatch</code> /{' '}
+              <code>focusPreviousSearchMatch</code> directly and render{' '}
+              <code>getSearchMatchState()</code> as the{' '}
+              <code>&#123;index&#125;/&#123;total&#125;</code> readout. Search
+              mutations report an honest <code>searchChanged</code> facet on{' '}
+              <code>onChange</code> events, so hosts can track match decorations
+              without inferring them from expansion changes.
+            </p>
+
+            <h2 id="sticky-ancestors">Sticky ancestor stack</h2>
+            <p>
+              The sticky header mirrors the top visible row&rsquo;s off-screen
+              ancestor(s) above the tree. <code>nearest</code> (default) shows
+              the single nearest ancestor; <code>stack</code> shows the whole
+              breadcrumb, capped at 4 mirror rows with the nearest ancestors
+              winning — unbounded sticky stacks would eat the viewport.
+            </p>
+            <CodeBlock code={STICKY_STACK_EXAMPLE} />
+            <p>
+              Mirrors are visually identical to real rows but{' '}
+              <code>aria-hidden</code> with no treeitem semantics, and clicking
+              one scrolls to and focuses the real ancestor row. Under{' '}
+              <code>flattenEmptyGroups</code> and <code>hide-non-matches</code>{' '}
+              the stack follows the <em>visible</em>-parent chain, so hidden
+              mid-chain groups never surface. The scroller&rsquo;s spacer math
+              accounts for the stack height, keeping virtualized rows at exact
+              pixel positions.
+            </p>
+
+            <h2 id="middle-truncation">Middle name truncation</h2>
+            <p>
+              Deep charts produce names (and flattened chain labels) longer than
+              the row. <code>end</code> (default) keeps plain CSS ellipsis;{' '}
+              <code>middle</code> turns on measured middle truncation:
+            </p>
+            <CodeBlock code={TRUNCATION_EXAMPLE} />
+            <p>
+              After every window commit — and on container resize — the view
+              measures the rendered name elements in one batched pass (all
+              reads, then all writes: at most one reflow) and rewrites only the
+              overflowing ones as <code>head…tail</code>, keeping the
+              leaf&rsquo;s tail visible since account names distinguish at the
+              end (<code>Ve…-Maybank</code>, not <code>VeryLongAcc…</code>).
+              Truncated rows (and only those) carry <code>title</code> with the
+              full name; selection/focus-only patches skip the pass. The full
+              name always stays in controller state — inline rename edits the
+              real name, never the truncated presentation text.
+            </p>
+
+            <h2 id="ime">IME input</h2>
+            <p>
+              Every keydown surface (navigation, type-ahead, the rename editor)
+              ignores events that belong to an active IME composition (
+              <code>event.isComposing</code>, or the legacy{' '}
+              <code>keyCode === 229</code> older engines report). Enter during
+              composition confirms the IME candidate — it never commits a rename
+              — and Escape dismisses the candidate without cancelling the rename
+              session.
+            </p>
 
             <h2 id="react-api">React API</h2>
             <p>
