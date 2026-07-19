@@ -1,6 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
-import { dark, darkSoft, light, lightSoft } from '../src/roles';
+import {
+  dark,
+  darkCvd,
+  darkSoft,
+  darkTritan,
+  light,
+  lightCvd,
+  lightSoft,
+  lightTritan,
+} from '../src/roles';
 import { themeToCSSVariables } from '../src/themeToCSSVariables';
 
 const HEX_COLOR = /^#(?:[0-9a-f]{6}|[0-9a-f]{8}|[0-9a-f]{3})$/i;
@@ -23,7 +32,16 @@ describe('themeToCSSVariables', () => {
   });
 
   test('every role value in every built-in theme is a hex color', () => {
-    for (const roles of [dark, darkSoft, light, lightSoft]) {
+    for (const roles of [
+      dark,
+      darkCvd,
+      darkSoft,
+      darkTritan,
+      light,
+      lightCvd,
+      lightSoft,
+      lightTritan,
+    ]) {
       for (const value of Object.values(themeToCSSVariables('t', roles))) {
         expect(value).toMatch(HEX_COLOR);
       }
@@ -32,7 +50,15 @@ describe('themeToCSSVariables', () => {
 
   test('all built-in themes expose an identical variable set', () => {
     const keys = Object.keys(themeToCSSVariables('t', dark)).sort();
-    for (const roles of [darkSoft, light, lightSoft]) {
+    for (const roles of [
+      darkCvd,
+      darkSoft,
+      darkTritan,
+      light,
+      lightCvd,
+      lightSoft,
+      lightTritan,
+    ]) {
       expect(Object.keys(themeToCSSVariables('t', roles)).sort()).toEqual(keys);
     }
   });

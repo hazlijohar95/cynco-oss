@@ -23,3 +23,21 @@ const style = themeToCSSVariables('journals', dark);
 - `ledger` — financial semantics: `debit` and `credit` mirror diff added and
   deleted colors, plus tokens for dates, payees, accounts, currencies, tags,
   links, and reconciliation status.
+
+## Role sets
+
+- `light` / `dark` and the contrast-compressed `lightSoft` / `darkSoft`.
+- `lightCvd` / `darkCvd` — safe for protanopia and deuteranopia (red-green color
+  vision deficiency): debit/credit ride a blue ↔ orange axis.
+- `lightTritan` / `darkTritan` — safe for tritanopia: debit/credit ride a teal ↔
+  vermillion axis.
+
+The CVD sets are enforced by an objective test gate (Machado 2009 simulation,
+CIEDE2000 separation, WCAG contrast) — see [ACCESSIBILITY.md](ACCESSIBILITY.md).
+
+## Color science
+
+Pure, dependency-free helpers used by the gate and exported for consumers:
+`parseHex` (null on malformed input), `srgbToLinear` / `linearToSrgb`,
+`relativeLuminance` / `contrastRatio` (WCAG 2.x), `simulateCvd` (Machado et al.
+2009 dichromacy simulation), and `deltaE2000` / `deltaE2000Lab` (CIEDE2000).
