@@ -1,0 +1,51 @@
+name: Deploy docs
+
+# Builds the static export of the docs/marketing site and ships it to
+# Cloudflare Workers static assets whenever main changes. Requires the
+# CLOUDFLARE_API_TOKEN repository secret (Workers Scripts: Edit permission).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: true
+
+env:
+  NO_COLOR: 1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # proto installs the exact toolchain pinned in .prototools; moon then
+      # installs workspace dependencies with a frozen lockfile on demand.
+      - uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      # Build the workspace package dists the docs app resolves against.
+      - name: Build package dependencies
+        run:
+          moon run journals:build accounts:build theme:build ledger-store:build
+          ledger-test-data:build
+
+      - name: Build static export
+        working-directory: apps/docs
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          NEXT_OUTPUT: 'export'
+        run: pnpm exec next build
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: apps/docs
+          command: deploy

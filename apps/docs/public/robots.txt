@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://cynco-docs.hazli-johar.workers.dev/sitemap.xml
