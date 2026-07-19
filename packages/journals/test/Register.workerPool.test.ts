@@ -62,11 +62,32 @@ async function renderRegister(
   if (scroller instanceof HTMLElement) {
     stubScrollerGeometry(scroller, GEOMETRY);
   }
-  // Two waits: the virtualizer's rAF window pass, then the worker round-trip
-  // plus its rAF commit.
-  await wait(10);
-  await wait(10);
+  // Settle by quiescence, not fixed sleeps: the pipeline commits in stages
+  // (a synchronous initial pass before the geometry stub is honored, an rAF
+  // window correction, and — on the pooled path — the worker round-trip plus
+  // its rAF commit). Fixed sleeps race those stages on loaded CI runners and
+  // polling for merely non-empty rows exits on the pre-correction window, so
+  // wait until the rendered rows are non-empty AND unchanged across several
+  // consecutive ticks, bounded so a broken pipeline still fails fast.
   const rowsElement = shadowRoot?.querySelector('[data-register-rows]');
+  const settleDeadline = Date.now() + 3000;
+  const requiredStableReads = 5;
+  let stableReads = 0;
+  let lastHTML = '';
+  while (
+    rowsElement instanceof HTMLElement &&
+    stableReads < requiredStableReads &&
+    Date.now() < settleDeadline
+  ) {
+    await wait(10);
+    const currentHTML = rowsElement.innerHTML;
+    if (currentHTML !== '' && currentHTML === lastHTML) {
+      stableReads += 1;
+    } else {
+      stableReads = 0;
+      lastHTML = currentHTML;
+    }
+  }
   const before = shadowRoot?.querySelector('[data-register-spacer="before"]');
   const after = shadowRoot?.querySelector('[data-register-spacer="after"]');
   const result = {
