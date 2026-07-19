@@ -10,13 +10,21 @@
 // frame, so slice reads must never re-scan the whole entry list.
 
 import { isValidAccountPath } from './accountPath';
+import { chunksOf } from './chunksOf';
 import type {
   EntryFilter,
+  EntryIngestOptions,
+  EntryIngestResult,
   LedgerEntry,
   MutationEvent,
   RegisterOptions,
   RegisterRow,
 } from './types';
+
+// Default entries per addEntriesAsync chunk: large enough that per-chunk
+// sort/event overhead stays negligible, small enough that one chunk applies
+// well inside a frame budget on the 1M-entry workload.
+const DEFAULT_INGEST_CHUNK_SIZE = 5000;
 
 // One cached register: which (entry, posting) pairs touch the account, in
 // entry order, plus per-currency prefix sums aligned to those rows.
@@ -236,6 +244,60 @@ export class EntryStore {
       added.map((entry) => entry.id),
       [added]
     );
+  }
+
+  /**
+   * Time-sliced bulk ingest: applies the source in whole chunks through the
+   * synchronous addEntries path — so dedupe rules, cache invalidation, and
+   * mutation events stay exactly as honest as a manual sequence of
+   * addEntries calls — and yields to the event loop between chunks. The end
+   * state is identical to one synchronous addEntries of the same data.
+   *
+   * When a cooperative scheduler is given, each chunk application runs as
+   * one scheduler task (serialized FIFO with the caller's other scheduled
+   * work); otherwise the ingest yields via setTimeout(0) directly. Aborting
+   * via `options.signal` stops before the next chunk: chunks are atomic, so
+   * the store is always in a consistent every-chunk-fully-applied state,
+   * and the result reports `aborted: true` instead of rejecting. A rejected
+   * scheduler task (scheduler aborted) does reject, mirroring the
+   * scheduler's own contract.
+   */
+  async addEntriesAsync(
+    entries: Iterable<LedgerEntry> | AsyncIterable<LedgerEntry>,
+    options: EntryIngestOptions = {}
+  ): Promise<EntryIngestResult> {
+    const chunkSize = options.chunkSize ?? DEFAULT_INGEST_CHUNK_SIZE;
+    const scheduler = options.scheduler;
+    let added = 0;
+    let skipped = 0;
+    for await (const chunk of chunksOf(entries, chunkSize)) {
+      if (options.signal?.aborted === true) {
+        return { added, skipped, aborted: true };
+      }
+      // Counting through the public entry count keeps the added/skipped
+      // numbers honest against addEntries' own dedupe, instead of
+      // re-implementing the duplicate rules here.
+      const applyChunk = (): number => {
+        const before = this.entries.length;
+        this.addEntries(chunk);
+        return this.entries.length - before;
+      };
+      let addedInChunk: number;
+      if (scheduler != null) {
+        addedInChunk = await scheduler.schedule(
+          (): { done: boolean; value?: number } => ({
+            done: true,
+            value: applyChunk(),
+          })
+        );
+      } else {
+        addedInChunk = applyChunk();
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      }
+      added += addedInChunk;
+      skipped += chunk.length - addedInChunk;
+    }
+    return { added, skipped, aborted: false };
   }
 
   /**

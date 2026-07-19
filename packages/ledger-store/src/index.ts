@@ -13,11 +13,31 @@ export {
   isEntryBalanced,
   sumPostingsByCurrency,
 } from './money';
+export {
+  createCooperativeScheduler,
+  SchedulerAbortedError,
+  SchedulerQueueFullError,
+} from './scheduler';
 export type {
+  CooperativeScheduler,
+  SchedulerDeadline,
+  SchedulerMetrics,
+  SchedulerOptions,
+  SchedulerStep,
+  SchedulerTask,
+} from './scheduler';
+export type {
+  AccountMutationOp,
+  AccountMutationRejectionReason,
+  AccountMutationResult,
   AccountRow,
+  AccountStoreAsyncOptions,
   AccountStoreOptions,
+  AccountTopologyChange,
   EntryFilter,
   EntryFlag,
+  EntryIngestOptions,
+  EntryIngestResult,
   LedgerEntry,
   MinorUnits,
   MutationEvent,

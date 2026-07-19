@@ -3,6 +3,8 @@
 // register renderer (@cynco/journals), and the chart-of-accounts tree
 // (@cynco/accounts) — change them only via the shared spec.
 
+import type { CooperativeScheduler } from './scheduler';
+
 /**
  * Integer minor units (sen, cents). Never floats: all monetary arithmetic in
  * the suite happens on integers so no rounding error can ever appear in a
@@ -154,16 +156,127 @@ export interface RegisterOptions {
 }
 
 /**
- * Semantic invalidation data fired after every `EntryStore` mutation. The
- * event is honest: it lists only entries that actually changed (a duplicate
- * add or a no-op remove contributes nothing) and the account paths whose
- * registers/balances those changes touched.
+ * The account-topology variant payload of a {@link MutationEvent}: exactly
+ * which account paths an `AccountStore` mutation created, deleted, or
+ * remapped. Moved subtrees list every affected path as a from→to pair (the
+ * subtree root and each descendant), so subscribers can remap their own
+ * path-keyed state without re-deriving the subtree themselves.
+ */
+export interface AccountTopologyChange {
+  /** Canonical paths created by the mutation (implied ancestors included). */
+  addedPaths: readonly string[];
+  /** Canonical paths deleted by the mutation (descendants included). */
+  removedPaths: readonly string[];
+  /** Every remapped path as a from→to pair, subtree root first. */
+  movedPaths: ReadonlyArray<{ from: string; to: string }>;
+}
+
+/**
+ * Semantic invalidation data fired after every store mutation. The event is
+ * honest: it lists only entries/accounts that actually changed (a duplicate
+ * add or a no-op remove contributes nothing).
+ *
+ * Two variants share this shape: entry mutations (`EntryStore`) leave
+ * `topology` undefined and list the changed entry ids plus the account paths
+ * their postings touch; account-topology mutations (`AccountStore`) carry a
+ * {@link AccountTopologyChange} in `topology`, list no entry ids, and use
+ * `accountsChanged` for the deduplicated union of every added, removed, and
+ * moved (both from and to) path.
  */
 export interface MutationEvent {
   /** Ids of entries added, removed, or replaced by the mutation. */
   entriesChanged: readonly string[];
   /** Deduplicated account paths referenced by the changed entries' postings. */
   accountsChanged: readonly string[];
+  /** Present only on account-topology mutations; see {@link AccountTopologyChange}. */
+  topology?: AccountTopologyChange;
+}
+
+/**
+ * Machine-readable reasons an `AccountStore.moveAccount` (or a move op inside
+ * `batchAccounts`) is rejected. Rejections return a result with `ok: false`
+ * instead of throwing — topology mutations degrade gracefully like every
+ * other parser boundary in this package.
+ */
+export type AccountMutationRejectionReason =
+  | 'unknown-source'
+  | 'invalid-target'
+  | 'target-inside-source'
+  | 'target-exists';
+
+/**
+ * Outcome of one `AccountStore` topology mutation call. `added`, `removed`,
+ * and `moved` list exactly the paths the call changed (mirroring the emitted
+ * {@link AccountTopologyChange}); a rejected move sets `ok: false` plus a
+ * {@link AccountMutationRejectionReason} and changes nothing further.
+ */
+export interface AccountMutationResult {
+  /** False only when a move op was rejected; adds/removes always succeed. */
+  ok: boolean;
+  /** Why the mutation was rejected; present only when `ok` is false. */
+  reason?: AccountMutationRejectionReason;
+  /** Canonical paths created (implied ancestors included). */
+  added: string[];
+  /** Canonical paths deleted (descendants included). */
+  removed: string[];
+  /** Every remapped path as a from→to pair, subtree root first. */
+  moved: Array<{ from: string; to: string }>;
+}
+
+/**
+ * One operation inside `AccountStore.batchAccounts`. Ops apply in order
+ * against the live path collection, so later ops see the effects of earlier
+ * ones (a batch may add a subtree and immediately move it).
+ */
+export type AccountMutationOp =
+  | { type: 'add'; paths: readonly string[] }
+  | { type: 'remove'; paths: readonly string[] }
+  | { type: 'move'; from: string; to: string };
+
+/**
+ * Options bag for `EntryStore.addEntriesAsync`. The scheduler is the shared
+ * cooperative scheduler from `createCooperativeScheduler`; when omitted the
+ * ingest still yields to the event loop between chunks via `setTimeout(0)`.
+ */
+export interface EntryIngestOptions {
+  /** Shared cooperative scheduler; chunk application runs as its tasks. */
+  scheduler?: CooperativeScheduler;
+  /** Entries applied per chunk before yielding. Defaults to 5000. */
+  chunkSize?: number;
+  /**
+   * Aborting stops the ingest before the next chunk. Chunks are atomic:
+   * every chunk already applied stays applied and the store remains
+   * consistent; the returned result reports `aborted: true`.
+   */
+  signal?: AbortSignal;
+}
+
+/**
+ * Outcome of `EntryStore.addEntriesAsync`: how many entries were inserted,
+ * how many were skipped as duplicate ids (same dedupe rules as the
+ * synchronous `addEntries`), and whether the ingest stopped early because
+ * the caller's `AbortSignal` fired.
+ */
+export interface EntryIngestResult {
+  /** Entries actually inserted into the store. */
+  added: number;
+  /** Entries skipped because their id already existed. */
+  skipped: number;
+  /** True when the ingest stopped early via the caller's AbortSignal. */
+  aborted: boolean;
+}
+
+/**
+ * Options bag for `AccountStore.fromPathsAsync`. Mirrors
+ * {@link EntryIngestOptions} minus the abort signal — a partially built
+ * chart of accounts is not a useful artifact, so construction either
+ * completes or the caller drops the promise.
+ */
+export interface AccountStoreAsyncOptions {
+  /** Shared cooperative scheduler; chunk collection runs as its tasks. */
+  scheduler?: CooperativeScheduler;
+  /** Paths collected per chunk before yielding. Defaults to 5000. */
+  chunkSize?: number;
 }
 
 /** Options bag for constructing an `AccountStore`. */

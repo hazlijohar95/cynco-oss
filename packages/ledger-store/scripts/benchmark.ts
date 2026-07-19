@@ -111,6 +111,47 @@ group('AccountStore (50k accounts, 100k entries)', () => {
   });
 });
 
+// Mutation-burst fixture: a dedicated store (mutations would dirty the
+// shared read store) plus a generation counter so every burst renames a
+// fresh set of top-level groups — steady-state tree size, no path
+// collisions across iterations.
+const mutationStore = new AccountStore({ entries, accountPaths });
+mutationStore.getVisibleCount(); // force the initial derived build
+let topNames = Array.from(
+  { length: ACCOUNT_TOP_COUNT },
+  (_, top) => `Top${String(top).padStart(2, '0')}`
+);
+let moveGeneration = 0;
+
+group('AccountStore mutations (50k accounts)', () => {
+  bench('100-move burst + one projection read (lazy single rebuild)', () => {
+    moveGeneration += 1;
+    const nextNames: string[] = [];
+    for (let index = 0; index < 100; index += 1) {
+      const slot = index % ACCOUNT_TOP_COUNT;
+      const from = index < ACCOUNT_TOP_COUNT ? topNames[slot] : nextNames[slot];
+      const to = `G${moveGeneration}x${index}`;
+      mutationStore.moveAccount(from, to);
+      nextNames[slot] = to;
+    }
+    topNames = nextNames;
+    do_not_optimize(mutationStore.getVisibleCount());
+  });
+
+  bench('addAccounts of 1k new leaves + projection read', () => {
+    moveGeneration += 1;
+    const paths: string[] = [];
+    for (let index = 0; index < 1000; index += 1) {
+      paths.push(`${topNames[0]}:Added${moveGeneration}:Leaf${index}`);
+    }
+    mutationStore.addAccounts(paths);
+    mutationStore.getVisibleCount();
+    do_not_optimize(
+      mutationStore.removeAccounts([`${topNames[0]}:Added${moveGeneration}`])
+    );
+  });
+});
+
 group('EntryStore (100k entries)', () => {
   bench('build (sort + id index)', () => {
     do_not_optimize(new EntryStore(entries));
@@ -143,6 +184,11 @@ group('EntryStore (100k entries)', () => {
         includeDescendants: true,
       })
     );
+  });
+
+  bench('addEntriesAsync 100k entries (5k chunks, setTimeout yields)', async () => {
+    const store = new EntryStore();
+    do_not_optimize(await store.addEntriesAsync(entries));
   });
 });
 
