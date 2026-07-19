@@ -43,9 +43,14 @@ jobs:
           NEXT_OUTPUT: 'export'
         run: pnpm exec next build
 
+      # wrangler is a workspace devDependency (pnpm catalog) because the
+      # action's ad-hoc fallback installs with npm, which cannot parse the
+      # pnpm-only `catalog:` protocol in package.json. packageManager: pnpm
+      # makes the action detect and reuse the already-installed binary.
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: apps/docs
+          packageManager: pnpm
           command: deploy
