@@ -1,0 +1,8 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# `test` and `typecheck` are inherited from .moon/tasks/bun-common.yml (all
+# TypeScript projects); the tags add build/dev (tsdown) and the publish guard
+# chain (prepublish), so no project-level tasks are needed here.
+language: 'typescript'
+layer: 'library'
+tags: ['tsdown', 'publishable']

@@ -8,7 +8,8 @@
     "@cynco/journals": "workspace:*",
     "@cynco/ledger-store": "workspace:*",
     "@cynco/ledger-test-data": "workspace:*",
-    "@cynco/theme": "workspace:*"
+    "@cynco/theme": "workspace:*",
+    "@cynco/theming": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

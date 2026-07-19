@@ -1,0 +1,76 @@
+{
+  "name": "@cynco/theming",
+  "version": "0.1.0-beta.1",
+  "description": "Cynco theming: runtime theme controller, persistence, and React bindings for ledger UIs",
+  "keywords": [
+    "controller",
+    "cynco",
+    "dark",
+    "ledger",
+    "light",
+    "theme",
+    "theming"
+  ],
+  "homepage": "https://github.com/hazlijohar95/cynco-oss/tree/main/packages/theming",
+  "bugs": {
+    "url": "https://github.com/hazlijohar95/cynco-oss/issues"
+  },
+  "license": "MIT",
+  "author": "Hazli Johar <coding@hazli.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hazlijohar95/cynco-oss.git",
+    "directory": "packages/theming"
+  },
+  "files": [
+    "dist",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/*"
+      ],
+      "react": [
+        "dist/react/index.d.ts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run theming:prepublish"
+  },
+  "dependencies": {
+    "@cynco/theme": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "react": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}
