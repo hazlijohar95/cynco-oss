@@ -144,6 +144,15 @@ export class Reconciliation {
   // in-flight accept/reject state untouched.
   setOptions(options: ReconciliationOptions | undefined): void {
     if (options == null) return;
+    // Reference bail-out (the Register.setRows idiom): the React adapter
+    // calls this on every committed render, and with `options.matches`
+    // supplied the dataChanged test below would otherwise re-derive the
+    // match set — blowing away in-flight accept/reject state — even though
+    // nothing changed. Fresh options objects (the documented data-change
+    // signal) still take the full path.
+    if (options === this.options) {
+      return;
+    }
     const dataChanged =
       options.statementLines !== this.lastLines ||
       options.postings !== this.lastPostings ||

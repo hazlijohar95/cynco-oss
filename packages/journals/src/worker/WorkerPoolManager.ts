@@ -57,6 +57,12 @@ interface PoolTask {
 export interface RenderRegisterWindowProps {
   rows: readonly RegisterRowData[];
   range: RowRange;
+  /**
+   * Absolute entry index of `rows[0]` when the caller sends only the flat
+   * window's slice instead of the whole dataset; see
+   * {@link RegisterWindowRequest.rowsOffset}. Default 0 (full rows).
+   */
+  rowsOffset?: number;
   selectedIndex: number | null;
   /** Sorted selected entry indexes (range selection); wins over selectedIndex. */
   selectedIndexes?: readonly number[] | null;
@@ -125,6 +131,7 @@ export class WorkerPoolManager {
   public renderRegisterWindow({
     rows,
     range,
+    rowsOffset,
     selectedIndex,
     selectedIndexes,
     groupBy,
@@ -137,6 +144,7 @@ export class WorkerPoolManager {
         type: 'register-window',
         rows,
         range,
+        rowsOffset,
         selectedIndex,
         selectedIndexes,
         groupBy,
@@ -153,7 +161,8 @@ export class WorkerPoolManager {
           selectedIndexes != null ? new Set(selectedIndexes) : selectedIndex,
           groupBy,
           idPrefix ?? undefined,
-          filter
+          filter,
+          rowsOffset
         ),
     }) as Promise<string>;
   }

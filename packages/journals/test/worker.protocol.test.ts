@@ -85,6 +85,51 @@ describe('worker protocol', () => {
     expect(response.html).toContain("data-row-selected='true'");
   });
 
+  test('flat register-window accepts just the window slice with rowsOffset, byte-identical to full rows', () => {
+    const rows = makeRows(200);
+    const range = { start: 120, end: 150 };
+    // Full-dataset request: the pre-slice protocol shape, still supported.
+    const fullResponse = handleWorkerRequest({
+      type: 'register-window',
+      id: 't2s-full',
+      rows,
+      range,
+      selectedIndex: 130,
+      selectedIndexes: [125, 130],
+      idPrefix: 'wp-slice',
+    });
+    // Sliced request: only the window's rows cross the protocol; rowsOffset
+    // restores absolute entry indexes so every index-derived byte matches.
+    const slicedResponse = handleWorkerRequest({
+      type: 'register-window',
+      id: 't2s-sliced',
+      rows: rows.slice(range.start, range.end),
+      range,
+      rowsOffset: range.start,
+      selectedIndex: 130,
+      selectedIndexes: [125, 130],
+      idPrefix: 'wp-slice',
+    });
+    if (
+      fullResponse.type !== 'success' ||
+      fullResponse.requestType !== 'register-window' ||
+      slicedResponse.type !== 'success' ||
+      slicedResponse.requestType !== 'register-window'
+    ) {
+      throw new Error('expected register-window successes');
+    }
+    expect(slicedResponse.html).toBe(fullResponse.html);
+    expect(slicedResponse.html).toBe(
+      renderRegisterRowsHTML(rows, range, new Set([125, 130]), 'wp-slice')
+    );
+    // Absolute-index bytes survive the slice: data-row-index, ids,
+    // aria-rowindex, and selection membership all stay in dataset space.
+    expect(slicedResponse.html).toContain('data-row-index="120"');
+    expect(slicedResponse.html).toContain('id="wp-slice-row-149"');
+    expect(slicedResponse.html).toContain('aria-rowindex="121"');
+    expect(slicedResponse.html).toContain("data-row-selected='true'");
+  });
+
   test('register-window threads idPrefix so worker row ids match the sync renderer byte for byte', () => {
     const rows = makeRows(20);
     const range = { start: 0, end: 10 };

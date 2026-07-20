@@ -159,7 +159,8 @@ register.setFilter(null); // clear
 - **Matching** is a case-insensitive substring test on `fields` (default
   `['description']` — the payee/narration pair; `'date'` and `'flag'` opt in). A
   lazy lowercase corpus is built on the first application and reused across
-  query changes; it drops on `setRows`.
+  query changes; it drops when `setRows` receives a new array reference
+  (same-reference calls are a no-op — rows are treated as immutable).
 - **Identity is full-data everywhere public**: selection, focus, callbacks,
   `scrollToRow`, and row ids keep their original entry indexes. The filter never
   mutates selection — filtered-out selected rows simply are not rendered until

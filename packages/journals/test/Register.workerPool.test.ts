@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Register, type RegisterOptions } from '../src/components/Register';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { JOURNALS_TAG_NAME } from '../src/constants';
+import type { RegisterWindowRequest } from '../src/worker/types';
 import { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import {
   type DomHandle,
@@ -117,6 +118,20 @@ describe('Register worker pool integration', () => {
     expect(pooled.before).toBe(sync.before);
     expect(pooled.after).toBe(sync.after);
     expect(mock.totalTaskPosts()).toBeGreaterThanOrEqual(1);
+    // The PERFORMANCE.md invariant at the protocol boundary: flat window
+    // requests carry only the visible slice (plus the offset that keeps
+    // indexes absolute), never the whole dataset.
+    const windowRequests = mock.instances
+      .flatMap((worker) => worker.postedRequests)
+      .filter(
+        (request): request is RegisterWindowRequest =>
+          request.type === 'register-window'
+      );
+    expect(windowRequests.length).toBeGreaterThanOrEqual(1);
+    for (const request of windowRequests) {
+      expect(request.rows.length).toBe(request.range.end - request.range.start);
+      expect(request.rowsOffset).toBe(request.range.start);
+    }
     pool.terminate();
   });
 
@@ -134,6 +149,19 @@ describe('Register worker pool integration', () => {
     expect(pooled.before).toBe(sync.before);
     expect(pooled.after).toBe(sync.after);
     expect(mock.totalTaskPosts()).toBeGreaterThanOrEqual(1);
+    // Grouped windows still need the FULL dataset (the worker rebuilds the
+    // grouped model, and period summaries span rows outside the window).
+    const windowRequests = mock.instances
+      .flatMap((worker) => worker.postedRequests)
+      .filter(
+        (request): request is RegisterWindowRequest =>
+          request.type === 'register-window'
+      );
+    expect(windowRequests.length).toBeGreaterThanOrEqual(1);
+    for (const request of windowRequests) {
+      expect(request.rows.length).toBe(500);
+      expect(request.rowsOffset).toBe(0);
+    }
     pool.terminate();
   });
 

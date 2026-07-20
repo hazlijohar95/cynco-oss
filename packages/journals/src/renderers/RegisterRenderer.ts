@@ -285,19 +285,25 @@ export function renderStickyGroupLabelHTML(
 // Renders the `[start, end)` slice of rows in one string so the component
 // can commit a whole window with a single innerHTML write. `selected`
 // accepts the legacy single index or a set of entry indexes; both produce
-// identical bytes for the same effective selection.
+// identical bytes for the same effective selection. `rowsOffset` is the
+// absolute entry index of `rows[0]` (default 0 — the whole-dataset case):
+// the worker protocol sends flat windows as just the visible slice, and the
+// offset keeps every index-derived byte (data-row-index, ids, aria-rowindex,
+// selection membership) in absolute entry-index space so sliced and
+// full-array calls produce identical output.
 export function renderRegisterRowsHTML(
   rows: readonly RegisterRowData[],
   range: RowRange,
   selected: RegisterSelectedRows,
-  idPrefix?: string
+  idPrefix?: string,
+  rowsOffset = 0
 ): string {
   let html = '';
   for (let index = range.start; index < range.end; index += 1) {
     // Flat register: the entry index IS the model index, so aria-rowindex is
     // simply index + 1 (the renderRegisterRowHTML default).
     html += renderRegisterRowHTML(
-      rows[index],
+      rows[index - rowsOffset],
       index,
       isRowIndexSelected(selected, index),
       index + 1,
@@ -351,14 +357,19 @@ export function renderRegisterVirtualRowsHTML(
 // model builders and the match test are pure, the outputs cannot drift. An
 // active filter forces the model path even for groupBy 'none' (the client
 // mirrors this: filtered flat registers window over a model too), and the
-// range is then in FILTERED-model-index space.
+// range is then in FILTERED-model-index space. `rowsOffset` applies to the
+// FLAT branch only (see renderRegisterRowsHTML): it lets the worker protocol
+// ship just the window's row slice; grouped/filtered requests always carry
+// full rows (the model builders need the whole dataset), so their offset is
+// always 0.
 export function renderRegisterWindowHTML(
   rows: readonly RegisterRowData[],
   range: RowRange,
   selected: RegisterSelectedRows,
   groupBy?: RegisterGroupBy,
   idPrefix?: string,
-  filter?: RegisterFilter | null
+  filter?: RegisterFilter | null,
+  rowsOffset = 0
 ): string {
   const activeFilter = filter != null && filter.query !== '' ? filter : null;
   if (activeFilter != null) {
@@ -382,7 +393,7 @@ export function renderRegisterWindowHTML(
       idPrefix
     );
   }
-  return renderRegisterRowsHTML(rows, range, selected, idPrefix);
+  return renderRegisterRowsHTML(rows, range, selected, idPrefix, rowsOffset);
 }
 
 // Full register HTML for SSR: sticky header plus every row with zero-height

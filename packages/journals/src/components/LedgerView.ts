@@ -269,6 +269,14 @@ export class LedgerView {
    * itself was removed).
    */
   setSections(sections: readonly LedgerSection[]): void {
+    // Reference bail-out (the Register.setRows idiom): the React adapter
+    // calls this on every committed render, and a same-reference array
+    // cannot carry changes — skipping avoids the anchor capture/restore
+    // pass and, worse, canceling an in-flight smooth scroll for nothing.
+    // Sections are treated as immutable; pass a fresh array to reconcile.
+    if (sections === this.sections) {
+      return;
+    }
     const { scroller, content, virtualizer } = this;
     if (scroller == null || content == null || virtualizer == null) {
       return;

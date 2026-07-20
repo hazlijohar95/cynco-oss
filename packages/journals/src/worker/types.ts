@@ -29,6 +29,17 @@ export interface RegisterWindowRequest {
   id: WorkerRequestId;
   rows: readonly RegisterRowData[];
   range: RowRange;
+  /**
+   * Absolute entry index of `rows[0]`. Lets the flat (ungrouped, unfiltered)
+   * path send ONLY the window's row slice instead of structured-cloning the
+   * whole dataset per request: every index-dependent byte in the flat window
+   * HTML (data-row-index, row ids, aria-rowindex, selection membership)
+   * derives from the absolute index this offset restores, and running
+   * balances are precomputed per row. `range` stays in absolute entry-index
+   * space. Must be 0 (or absent) whenever `groupBy`/`filter` are active —
+   * those paths rebuild models over the FULL dataset, so full rows are sent.
+   */
+  rowsOffset?: number;
   selectedIndex: number | null;
   /**
    * Selected entry indexes for range selection. When present it wins over

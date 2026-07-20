@@ -314,6 +314,14 @@ export class Register implements VirtualizedInstance {
 
   setOptions(options: RegisterOptions | undefined): void {
     if (options == null) return;
+    // Reference bail-out (the setRows idiom): a same-reference options
+    // object cannot carry changes — callers passing fresh objects (even
+    // with stable nested data) still take the full path, so this only
+    // skips the per-render no-op work the React adapter would otherwise
+    // trigger. Deliberately NOT a deep/shallow compare.
+    if (options === this.options) {
+      return;
+    }
     const previousGroupBy = this.options.groupBy ?? 'none';
     const previousFilter = this.options.filter ?? null;
     this.options = options;
@@ -437,6 +445,15 @@ export class Register implements VirtualizedInstance {
   }
 
   setRows(rows: readonly RegisterRowData[]): void {
+    // Reference bail-out: the React adapter pushes props on EVERY committed
+    // render, so an unchanged rows array must not bump rowsVersion (which
+    // would invalidate the worker LRU cache), drop the filter corpus, or
+    // rebuild the header/window. Rows are treated as immutable — in-place
+    // mutation followed by a same-reference setRows is unsupported (pass a
+    // fresh array to force a rebuild).
+    if (rows === this.rows) {
+      return;
+    }
     this.rows = rows;
     this.rowsVersion += 1;
     // The lazy filter corpus is positional over the rows array, so any data
@@ -993,6 +1010,17 @@ export class Register implements VirtualizedInstance {
     const version = ++this.windowRenderVersion;
     const { rows, activeFilter } = this;
     const groupBy = this.options.groupBy ?? 'none';
+    // Flat, unfiltered windows depend only on the rows inside the range —
+    // running balances are precomputed per row and every index-derived byte
+    // comes from the absolute index rowsOffset restores — so the worker gets
+    // just the visible slice instead of a structured clone of the whole
+    // dataset (O(window) per request, not O(dataset)). Grouped/filtered
+    // paths still need full rows: the worker rebuilds group summaries and
+    // filter matches over the entire dataset. The cache key already carries
+    // rowsVersion + range, which fully determines the slice's contents.
+    const isFlatWindow = groupBy === 'none' && activeFilter == null;
+    const windowRows = isFlatWindow ? rows.slice(range.start, range.end) : rows;
+    const rowsOffset = isFlatWindow ? range.start : 0;
     const selectedIndexes = this.getSortedSelection();
     // The filter segment sits LAST in the cache key: the query is raw user
     // text and may contain ':', so trailing position keeps it from forging
@@ -1003,8 +1031,9 @@ export class Register implements VirtualizedInstance {
         : 'nofilter';
     void pool
       .renderRegisterWindow({
-        rows,
+        rows: windowRows,
         range,
+        rowsOffset,
         selectedIndex: this.selectionPrimary,
         selectedIndexes,
         groupBy,

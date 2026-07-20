@@ -41,7 +41,10 @@ export function handleWorkerRequest(request: WorkerRequest): WorkerResponse {
               : request.selectedIndex,
             request.groupBy,
             request.idPrefix ?? undefined,
-            request.filter
+            request.filter,
+            // Flat windows arrive as just the visible slice; the offset
+            // restores absolute entry indexes (see RegisterWindowRequest).
+            request.rowsOffset
           ),
           sentAt: Date.now(),
         };

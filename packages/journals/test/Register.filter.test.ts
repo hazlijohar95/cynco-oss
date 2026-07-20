@@ -403,7 +403,7 @@ describe('match highlighting', () => {
 });
 
 describe('corpus reuse and invalidation', () => {
-  test('the lowercase corpus is reused across query changes and dropped on setRows', async () => {
+  test('the lowercase corpus is reused across query changes and dropped on a new rows reference', async () => {
     const rows = makeSearchableRows();
     const harness = await createHarness({}, rows);
     harness.register.setFilter({ query: 'acme' }); // Builds the corpus.
@@ -413,8 +413,13 @@ describe('corpus reuse and invalidation', () => {
     rows[3].entry.narration = 'zebra crossing';
     harness.register.setFilter({ query: 'zebra' });
     expect(renderedIndexes(harness)).toEqual([]);
-    // setRows invalidates the corpus; the same query now sees the new text.
+    // Same-reference setRows is a no-op (the reference bail-out): the
+    // corpus survives and keeps answering from the old text.
     harness.register.setRows(rows);
+    expect(renderedIndexes(harness)).toEqual([]);
+    // A NEW array reference is the data-change signal: it invalidates the
+    // corpus and the same query now sees the mutated text.
+    harness.register.setRows(rows.slice());
     expect(renderedIndexes(harness)).toEqual([3]);
     harness.cleanUp();
   });
