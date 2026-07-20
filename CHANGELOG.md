@@ -13,12 +13,16 @@ inlined inside `@cynco/accounts`.
 
 ## [Unreleased]
 
-Nothing has been published to npm yet. The workspace currently sits at
-`@cynco/theme@0.1.0`, `@cynco/theming@0.1.0-beta.1`,
-`@cynco/journals@0.1.0-beta.1`, and `@cynco/accounts@0.1.0-beta.1`; these
-versions describe the state below and will form the first published release.
+Nothing yet.
 
-### @cynco/theme — 0.1.0 (unpublished)
+## 2026-07-21 — first release
+
+The first versions published to npm: `@cynco/theme@0.1.0` (dist-tag `latest`)
+and `@cynco/theming@0.1.0-beta.1`, `@cynco/journals@0.1.0-beta.1`,
+`@cynco/accounts@0.1.0-beta.1` (dist-tags `beta` and `latest`, so bare installs
+resolve).
+
+### @cynco/theme — 0.1.0
 
 #### Added
 
@@ -28,7 +32,7 @@ versions describe the state below and will form the first published release.
   backing measured accessibility gates that run as tests.
 - `themeToCSSVariables` for emitting `--*-theme-*` custom-property chains.
 
-### @cynco/theming — 0.1.0-beta.1 (unpublished)
+### @cynco/theming — 0.1.0-beta.1
 
 #### Added
 
@@ -38,7 +42,7 @@ versions describe the state below and will form the first published release.
   `--accounts-*` prefixes plus a `color-scheme` pin.
 - React bindings for connecting the controller to component trees.
 
-### @cynco/journals — 0.1.0-beta.1 (unpublished)
+### @cynco/journals — 0.1.0-beta.1
 
 #### Added
 
@@ -52,7 +56,7 @@ versions describe the state below and will form the first published release.
   follow package imports inside workers.
 - React and SSR subpath exports (`./react`, `./ssr`).
 
-### @cynco/accounts — 0.1.0-beta.1 (unpublished)
+### @cynco/accounts — 0.1.0-beta.1
 
 #### Added
 
