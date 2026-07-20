@@ -1,6 +1,7 @@
 # Journals, from Cynco
 
-Docs: <https://ledger.cynco.dev/docs/journals> · npm: [`@cynco/journals`](https://www.npmjs.com/package/@cynco/journals)
+Docs: <https://ledger.cynco.dev/docs/journals> · npm:
+[`@cynco/journals`](https://www.npmjs.com/package/@cynco/journals)
 
 `@cynco/journals` is a framework-agnostic rendering library for journal entries
 and account registers. Beautiful by default, virtualized for scale, and exact to

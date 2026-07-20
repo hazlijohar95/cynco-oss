@@ -1,6 +1,7 @@
 # @cynco/theme
 
-npm: [`@cynco/theme`](https://www.npmjs.com/package/@cynco/theme) · used by the role sets documented at <https://ledger.cynco.dev/docs/theming>
+npm: [`@cynco/theme`](https://www.npmjs.com/package/@cynco/theme) · used by the
+role sets documented at <https://ledger.cynco.dev/docs/theming>
 
 Cynco theme: color palettes and semantic roles for ledger UIs, from
 [Cynco](https://github.com/hazlijohar95/cynco-oss) — modern accounting

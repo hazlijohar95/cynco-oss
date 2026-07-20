@@ -1,6 +1,7 @@
 # @cynco/accounts
 
-Docs: <https://ledger.cynco.dev/docs/accounts> · npm: [`@cynco/accounts`](https://www.npmjs.com/package/@cynco/accounts)
+Docs: <https://ledger.cynco.dev/docs/accounts> · npm:
+[`@cynco/accounts`](https://www.npmjs.com/package/@cynco/accounts)
 
 Path-first account tree UI for the web.
 
