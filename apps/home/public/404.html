@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>404 — Cynco</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: light-dark(#ffffff, #161616);
+        --fg: light-dark(#161616, #ffffff);
+        --muted: light-dark(#6b6b6b, #9a9a9a);
+        --line: light-dark(#e4e4e4, #2e2e2e);
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family:
+          ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas,
+          'Liberation Mono', monospace;
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        text-align: center;
+      }
+      p {
+        color: var(--muted);
+      }
+      a {
+        color: var(--fg);
+        text-decoration: none;
+        border-bottom: 1px solid var(--line);
+      }
+      a:hover {
+        border-bottom-color: var(--fg);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>[404]</p>
+      <h1>No entry at this address</h1>
+      <p><a href="/">Back to the index</a></p>
+    </main>
+  </body>
+</html>

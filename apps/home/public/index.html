@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cynco — accounting infrastructure</title>
+    <meta
+      name="description"
+      content="Cynco builds accounting infrastructure: integer minor units end to end, entries that balance by construction, rendering that holds at six-figure row counts."
+    />
+    <link rel="canonical" href="https://cynco.dev/" />
+    <meta property="og:title" content="Cynco — accounting infrastructure" />
+    <meta
+      property="og:description"
+      content="Cynco builds accounting infrastructure: integer minor units end to end, entries that balance by construction, rendering that holds at six-figure row counts."
+    />
+    <meta property="og:url" content="https://cynco.dev/" />
+    <meta property="og:site_name" content="Cynco" />
+    <meta property="og:type" content="website" />
+    <meta
+      name="theme-color"
+      content="#ffffff"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#161616"
+      media="(prefers-color-scheme: dark)"
+    />
+    <style>
+      /* Company index for cynco.dev. One static file, no build step: the
+         page is a ledger — projects are entries, hairline rules are the
+         ruling, statuses sit in the credit column. Colors mirror the ledger
+         app's light-dark pair (#ffffff/#161616). */
+      :root {
+        color-scheme: light dark;
+        --bg: light-dark(#ffffff, #161616);
+        --fg: light-dark(#161616, #ffffff);
+        --muted: light-dark(#6b6b6b, #9a9a9a);
+        --faint: light-dark(#8f8f8f, #6f6f6f);
+        --line: light-dark(#e4e4e4, #2e2e2e);
+        --hover: light-dark(#f6f6f6, #1f1f1f);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family:
+          ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas,
+          'Liberation Mono', monospace;
+        font-size: 14px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 72px 24px 48px;
+      }
+      .mark {
+        font-size: 13px;
+        letter-spacing: 0.4em;
+        font-weight: 600;
+      }
+      .tag {
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      p.lede {
+        color: var(--muted);
+        margin: 40px 0 0;
+        max-width: 56ch;
+      }
+      h2 {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        color: var(--faint);
+        margin: 56px 0 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+      tr {
+        border-top: 1px solid var(--line);
+      }
+      tr:last-child {
+        border-bottom: 1px solid var(--line);
+      }
+      td {
+        padding: 12px 16px 12px 0;
+        vertical-align: top;
+      }
+      td:last-child {
+        padding-right: 0;
+        text-align: right;
+        white-space: nowrap;
+      }
+      a {
+        color: var(--fg);
+        text-decoration: none;
+        border-bottom: 1px solid var(--line);
+      }
+      a:hover {
+        border-bottom-color: var(--fg);
+      }
+      .name a {
+        font-weight: 600;
+        border-bottom: none;
+      }
+      .name a:hover {
+        border-bottom: 1px solid var(--fg);
+      }
+      .desc {
+        color: var(--muted);
+      }
+      .status {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+      }
+      .status::before {
+        content: '';
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: light-dark(#1a7f37, #3fb950);
+        margin-right: 8px;
+        vertical-align: 1px;
+      }
+      ul.pkgs {
+        list-style: none;
+        margin: 12px 0 0;
+        padding: 0;
+      }
+      ul.pkgs li {
+        border-top: 1px solid var(--line);
+        padding: 10px 0;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      ul.pkgs li:last-child {
+        border-bottom: 1px solid var(--line);
+      }
+      ul.pkgs .desc {
+        text-align: right;
+        flex: 1;
+      }
+      footer {
+        margin-top: 72px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+        color: var(--faint);
+        font-size: 12px;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      footer a {
+        color: var(--muted);
+      }
+      @media (max-width: 560px) {
+        main {
+          padding-top: 48px;
+        }
+        td.desc-cell {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="mark">CYNCO</div>
+        <div class="tag">accounting infrastructure</div>
+      </header>
+
+      <p class="lede">
+        Built the way systems engineers build databases: integer minor units end
+        to end, entries that balance by construction, rendering that holds at
+        six-figure row counts. Open source, TypeScript.
+      </p>
+
+      <h2>PROJECTS</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td class="name"><a href="https://ledger.cynco.dev">ledger</a></td>
+            <td class="desc desc-cell">
+              Ledger UI primitives — journal entries, virtualized registers,
+              reconciliation, and the chart of accounts. Vanilla core, React
+              adapters, SSR.
+            </td>
+            <td><span class="status">ONLINE</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>PACKAGES</h2>
+      <ul class="pkgs">
+        <li>
+          <a href="https://www.npmjs.com/package/@cynco/journals"
+            >@cynco/journals</a
+          >
+          <span class="desc">journal entries and account registers</span>
+        </li>
+        <li>
+          <a href="https://www.npmjs.com/package/@cynco/accounts"
+            >@cynco/accounts</a
+          >
+          <span class="desc">chart-of-accounts tree</span>
+        </li>
+        <li>
+          <a href="https://www.npmjs.com/package/@cynco/theming"
+            >@cynco/theming</a
+          >
+          <span class="desc">runtime theme controller</span>
+        </li>
+        <li>
+          <a href="https://www.npmjs.com/package/@cynco/theme">@cynco/theme</a>
+          <span class="desc">palettes and CVD-safe role sets</span>
+        </li>
+      </ul>
+
+      <footer>
+        <span>&copy; 2026 Cynco</span>
+        <span>
+          <a href="https://github.com/hazlijohar95/cynco-oss">GitHub</a>
+          &nbsp;&middot;&nbsp;
+          <a href="https://www.npmjs.com/org/cynco">npm</a>
+        </span>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,18 @@
+{
+  // Cloudflare Workers static-assets deployment for the cynco.dev company
+  // index. No build step — public/ is hand-written HTML. Deploy with:
+  //   pnpm exec wrangler deploy
+  "name": "cynco-home",
+  "account_id": "9c006d850453ab5c068f5688d138521b",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "404-page",
+  },
+  // Apex + www on the cynco.dev zone; Cloudflare manages DNS and certs.
+  // Projects live on their own subdomains (ledger.cynco.dev is the first).
+  "routes": [
+    { "pattern": "cynco.dev", "custom_domain": true },
+    { "pattern": "www.cynco.dev", "custom_domain": true },
+  ],
+}

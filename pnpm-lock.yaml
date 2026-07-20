@@ -249,6 +249,12 @@ importers:
         specifier: 'catalog:'
         version: 4.110.0
 
+  apps/home:
+    devDependencies:
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.110.0
+
   packages/accounts:
     dependencies:
       '@cynco/ledger-store':

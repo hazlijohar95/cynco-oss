@@ -1,0 +1,21 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# Company index for cynco.dev: hand-written static HTML in public/, deployed
+# to Cloudflare Workers static assets (see wrangler.jsonc). No build, no
+# tests — the inherited JS lanes are excluded so `moon ci` has nothing to do
+# here beyond repo-level lint/format, which cover this directory already.
+language: 'javascript'
+layer: 'application'
+
+workspace:
+  inheritedTasks:
+    exclude: ['test', 'typecheck']
+
+tasks:
+  # Local preview against the same asset config the deploy uses.
+  serve:
+    command: 'wrangler dev'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'

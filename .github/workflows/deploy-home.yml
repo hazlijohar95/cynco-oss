@@ -1,0 +1,45 @@
+name: Deploy home
+
+# Ships the static cynco.dev company index (apps/home/public) to Cloudflare
+# Workers whenever it changes on main. No build step — the assets are
+# committed as-is. Uses the same CLOUDFLARE_API_TOKEN secret as deploy-docs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/home/**'
+      - '.github/workflows/deploy-home.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-home
+  cancel-in-progress: true
+
+env:
+  NO_COLOR: 1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # proto installs the exact toolchain pinned in .prototools; moon then
+      # installs workspace dependencies with a frozen lockfile on demand.
+      # Needed only so the wrangler workspace devDependency exists for the
+      # action's packageManager: pnpm detection.
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: apps/home
+          packageManager: pnpm
+          command: deploy
