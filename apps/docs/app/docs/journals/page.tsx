@@ -156,6 +156,22 @@ const register = new Register({
 // one O(n) pass per data update.
 `;
 
+const REGISTER_FILTER = `
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  filter: { query: 'coffee' }, // optional initial filter
+  onFilterResult({ matched, total }) {
+    readout.textContent = \`\${matched} of \${total}\`;
+  },
+});
+
+// Per keystroke — the visible rows reshape in place:
+register.setFilter({ query: input.value });
+// Opt extra fields in; 'description' (payee + narration) is the default:
+register.setFilter({ query: '2026-03', fields: ['description', 'date'] });
+register.setFilter(null); // clear — back to the unfiltered fast path
+`;
+
 const SCROLL_APIS = `
 // Every scroll-to API takes the same options:
 // { align?: 'start' | 'center' | 'nearest'; behavior?: 'smooth' | 'auto' }
@@ -287,6 +303,22 @@ stream.cleanUp();
 
 // Demo/test helper: array -> stream on a fixed cadence.
 const entrySource = createEntryStreamFromArray(entries, { delayMs: 40 });
+`;
+
+const LIVE_REGIONS = `
+// Reconciliation: every accept / reject / undo announces the resulting
+// per-currency difference ("MYR difference 42.00", or "All currencies
+// reconciled" at exactly zero) — one announcement per discrete change.
+const reconciliation = new Reconciliation({
+  account,
+  statementLines,
+  postings,
+  disableAnnouncements: true, // opt out when the host narrates itself
+});
+
+// EntryStream announces exactly two moments: stream start
+// ("Streaming entries…") and completion ("N entries loaded"). The visual
+// footer count keeps ticking but is deliberately not a live region.
 `;
 
 const WORKER_API = `
@@ -630,6 +662,71 @@ export default async function JournalsDocsPage() {
               owning section&rsquo;s sticky header.
             </p>
 
+            <h2 id="register-filter">Register filter</h2>
+            <p>
+              <code>Register</code> takes a projection-level filter — the same
+              philosophy as the accounts tree&rsquo;s{' '}
+              <code>hide-non-matches</code> search: canonical rows are never
+              touched, only which rows are <em>visible</em> changes. Matching is
+              a case-insensitive substring test on <code>fields</code>, which
+              defaults to <code>[&apos;description&apos;]</code> — the
+              payee/narration pair the description cell renders, matched as
+              separate lines so a query can never match across their boundary;{' '}
+              <code>&apos;date&apos;</code> and <code>&apos;flag&apos;</code>{' '}
+              opt in.
+            </p>
+            <CodeBlock code={REGISTER_FILTER} />
+            <ul>
+              <li>
+                <strong>Identity is full-data everywhere public</strong>:
+                selection, focus, callbacks, <code>scrollToRow</code>, and row
+                ids keep their original entry indexes. The filter never mutates
+                selection — filtered-out selected rows simply are not rendered,
+                and reappear (still selected) once the filter releases them.{' '}
+                <code>aria-rowcount</code> / <code>aria-rowindex</code> describe
+                the presented (filtered) grid.
+              </li>
+              <li>
+                <strong>Grouping stays honest</strong>: period headers survive
+                only for periods containing matches, and their count /
+                net-change summaries are recomputed over the <em>matched</em>{' '}
+                rows — the summary describes what&rsquo;s shown, not the
+                period&rsquo;s full total.
+              </li>
+              <li>
+                <strong>Highlighting</strong>: matched substrings in text cells
+                wrap in <code>&lt;mark data-filter-match&gt;</code> (themed via
+                the match/accent color family, or the{' '}
+                <code>--journals-bg-filter-match</code> override). Construction
+                is escape-safe: match positions are found on the raw string,
+                then the before / match / after slices are escaped separately
+                and joined with the mark tags — no search ever runs over escaped
+                HTML, so a query like <code>amp</code> can never split an{' '}
+                <code>&amp;amp;</code> entity.
+              </li>
+              <li>
+                <strong>Keyboard</strong> navigation walks matched rows only; if
+                the focused row gets filtered out, focus clears and{' '}
+                <code>aria-activedescendant</code> is removed.
+              </li>
+              <li>
+                <strong>Parity</strong>: the filter crosses the worker protocol
+                and the SSR preload (
+                <code>preloadRegisterHTML(rows, &#123; filter &#125;)</code>),
+                so worker, sync, and server HTML stay byte-identical.
+              </li>
+            </ul>
+            <p>
+              An empty query or <code>null</code> is &ldquo;no filter&rdquo; and
+              keeps the unfiltered fast path — no corpus, no model allocation.
+              The lazy lowercase corpus is built on the first application,
+              reused across query changes, and dropped on <code>setRows</code>.{' '}
+              <code>onFilterResult</code> fires after each application of an
+              active filter (entry rows only, never group headers); clearing the
+              filter fires nothing, so hosts reset their readout when they
+              clear.
+            </p>
+
             <h2 id="scroll-apis">Scroll APIs</h2>
             <p>
               <code>scrollToRow</code>, <code>scrollToDate</code> (first row
@@ -758,6 +855,28 @@ export default async function JournalsDocsPage() {
               <code>@cynco/journals/react</code>.
             </p>
             <CodeBlock code={ENTRY_STREAM_API} />
+
+            <h2 id="live-regions">Live-region announcements</h2>
+            <p>
+              Dynamic surfaces announce state changes to screen readers through
+              visually-hidden <code>aria-live=&quot;polite&quot;</code> regions
+              — one per component instance, kept <em>outside</em> the
+              re-rendered markup so re-renders never re-announce. Live regions
+              are created empty on both render and hydrate, so SSR output never
+              replays a stale announcement.
+            </p>
+            <CodeBlock code={LIVE_REGIONS} />
+            <p>
+              <code>disableAnnouncements</code> is a <code>Reconciliation</code>{' '}
+              option: by default every accept / reject / undo announces the
+              resulting per-currency difference, because the header&rsquo;s
+              difference figures would otherwise change silently. Hosts that
+              narrate reconciliation state themselves flip it on so users never
+              hear the same change twice. EntryStream&rsquo;s two announcements
+              (start and completion) are always on — intermediate per-flush
+              counts stay visual-only, since announcing a streaming count would
+              be an unusable firehose.
+            </p>
 
             <h2 id="worker-pool">Worker pool</h2>
             <p>

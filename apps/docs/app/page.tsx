@@ -118,6 +118,12 @@ function RegisterSection() {
       />
       <RegisterDemo />
       <RegisterComparison />
+      <Footnote>
+        Registers also take a projection-level filter: <code>setFilter</code>{' '}
+        reshapes the visible rows in place — group summaries recomputed over the
+        matched rows, matched substrings highlighted — while selection and every
+        public index stay in full-data space.
+      </Footnote>
     </section>
   );
 }

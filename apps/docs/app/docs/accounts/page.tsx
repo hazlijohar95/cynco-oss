@@ -136,6 +136,41 @@ tree.setAccountStatus([
 ]);
 `;
 
+const ICONS_EXAMPLE = `
+import { AccountTree, createDefaultAccountIconResolver } from '@cynco/accounts';
+
+const tree = new AccountTree({
+  entries,
+  icons: { resolver: createDefaultAccountIconResolver() },
+});
+
+// Or your own resolver — return a built-in name, or null for no icon:
+const custom = new AccountTree({
+  entries,
+  icons: {
+    resolver({ path, name, isGroup, depth }) {
+      if (isGroup) return 'folder';
+      return path.startsWith('Assets:') ? 'wallet' : null;
+    },
+  },
+});
+`;
+
+const DECORATIONS_EXAMPLE = `
+const tree = new AccountTree({
+  entries,
+  renderDecorations({ path, name, isGroup, depth, visibleChildCount }) {
+    const count = postingCounts.get(path);
+    return [
+      ...(count ? [{ kind: 'text' as const, text: \`\${count}×\` }] : []),
+      ...(isStale(path)
+        ? [{ kind: 'dot' as const, tone: 'warn' as const }]
+        : []),
+    ];
+  },
+});
+`;
+
 const FLATTEN_EXAMPLE = `
 const tree = new AccountTree({
   entries,
@@ -196,6 +231,42 @@ const tree = new AccountTree({
 const controller = tree.getController();
 controller.getMovePlan(['Assets:Current:Cash-Wise'], 'Assets:Reserve'); // dry run
 controller.movePaths(['Assets:Current:Cash-Wise'], 'Assets:Reserve');  // applies + fires onMove
+`;
+
+const DROP_COLLISION_EXAMPLE = `
+const tree = new AccountTree({
+  entries,
+  dropCollision: 'skip', // 'reject' (default) | 'skip' | 'replace'
+  onMove(moves) {
+    // fires first — the original event, applied moves only
+  },
+  onDropComplete({ moves, skipped, replaced }) {
+    // fires second — the richer superset
+  },
+  onDropError({ reason, attempted }) {
+    // reason: 'collision' | 'invalid-target' | 'self-drop'
+  },
+});
+
+// Programmatic movers share the exact same path via the controller:
+const controller = tree.getController();
+controller.applyMovePlan(
+  controller.planMovePaths(sources, target, 'replace')
+);
+`;
+
+const LAZY_LOADING_EXAMPLE = `
+const tree = new AccountTree({
+  accounts: ['Assets:Current:Cash', 'Archive'],
+  initiallyUnloaded: ['Archive'],
+  loadChildren: async (path) => {
+    const response = await fetch(\`/api/accounts?parent=\${path}\`);
+    return response.json(); // canonical child paths, e.g. ['Archive:2024']
+  },
+  onChildLoadError(path, error) {
+    console.warn(\`loading \${path} failed\`, error);
+  },
+});
 `;
 
 const CONTEXT_MENU_EXAMPLE = `
@@ -319,7 +390,7 @@ export default function AccountsDocsPage() {
                   <td>
                     The vanilla <code>AccountTree</code> view, the headless{' '}
                     <code>AccountTreeController</code>, pure renderers, and
-                    utilities
+                    utilities like <code>createDefaultAccountIconResolver</code>
                   </td>
                 </tr>
                 <tr>
@@ -362,6 +433,155 @@ export default function AccountsDocsPage() {
             </p>
             <CodeBlock code={STATUS_EXAMPLE} />
 
+            <h2 id="account-icons">Account icons</h2>
+            <p>
+              Rows can render an icon between the chevron and the name, resolved
+              per row from a built-in, <em>closed</em> icon set. The resolver
+              returns an <code>AccountIconName</code> or <code>null</code> (no
+              icon — with the <code>icons</code> option absent, row markup is
+              byte-identical to a tree without icons).
+            </p>
+            <CodeBlock code={ICONS_EXAMPLE} />
+            <p>
+              <strong>The closed union is the XSS boundary</strong>: resolvers
+              never return markup; the renderer only interpolates its own
+              built-in SVG path data and validates the returned name at runtime,
+              so untyped hosts cannot inject HTML through the icon lane. And the{' '}
+              <strong>hot-path contract</strong>: the resolver runs once per
+              rendered row per window commit — never per selection/focus patch —
+              so keep it cheap and pure (same input, same output, no I/O). Icons
+              are decorative (<code>aria-hidden</code>), colored by{' '}
+              <code>currentColor</code>, and sized by the density scale (
+              <code>--accounts-icon-size</code>, override with{' '}
+              <code>--accounts-icon-size-override</code>). Sticky mirror rows
+              and renaming rows keep their icon.
+            </p>
+            <p>
+              <code>createDefaultAccountIconResolver()</code> is a pragmatic
+              default over top-level segment heuristics — replace it when you
+              have real account-type metadata:
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Icon</th>
+                  <th>Default resolver assignment</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>folder</code>
+                  </td>
+                  <td>Every group, any depth — groups read as containers.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>cash</code>
+                  </td>
+                  <td>
+                    Assets leaves whose name contains &ldquo;cash&rdquo; or
+                    &ldquo;petty&rdquo; — checked first, so{' '}
+                    <code>Cash-Maybank</code> reads as cash held at a bank.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>bank</code>
+                  </td>
+                  <td>Assets leaves whose name contains &ldquo;bank&rdquo;.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>receivable</code>
+                  </td>
+                  <td>
+                    Assets leaves whose name contains &ldquo;receivable&rdquo;
+                    or &ldquo;debtor&rdquo;.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>wallet</code>
+                  </td>
+                  <td>Every other Assets leaf.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>payable</code>
+                  </td>
+                  <td>Liabilities leaves.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>income</code>
+                  </td>
+                  <td>Income / Revenue leaves.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>expense</code>
+                  </td>
+                  <td>Expenses leaves.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>equity</code>
+                  </td>
+                  <td>Equity / Capital leaves.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>chart</code>
+                  </td>
+                  <td>
+                    Never assigned by the default resolver — available to custom
+                    resolvers.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              Leaves under any other top-level segment get no icon — the same
+              look as an unresolved row.
+            </p>
+
+            <h2 id="row-decorations">Row decorations</h2>
+            <p>
+              <code>renderDecorations</code> adds a host-driven trailing lane
+              between the name and the balance — small text badges and colored
+              dots. Decorations are recomputed per window commit;
+              controller-driven status dots (<code>setAccountStatus</code>, with
+              ancestor roll-up) stay a separate lane right before them. Same
+              hot-path contract as icon resolvers: cheap and pure.
+            </p>
+            <CodeBlock code={DECORATIONS_EXAMPLE} />
+            <ul>
+              <li>
+                Tones (<code>neutral | info | success | warn | danger</code>)
+                map onto the theme state colors (<code>--accounts-tone-*</code>,
+                resolving through <code>--accounts-theme-states-*</code>;{' '}
+                <code>neutral</code> uses the muted foreground).
+              </li>
+              <li>
+                <strong>At most 3 decorations render per row</strong> — rows are
+                fixed-height by contract (all virtualization math is{' '}
+                <code>index * rowHeight</code>), and an unbounded lane would
+                break that.
+              </li>
+              <li>
+                Text decorations are escaped and contribute to the row&rsquo;s
+                accessible name as ordinary text content; dots are{' '}
+                <code>aria-hidden</code> (a bare colored circle has no
+                announceable meaning).
+              </li>
+              <li>
+                <code>visibleChildCount</code> is the number of child rows an
+                expanded group currently contributes to the projection (0 for
+                leaves and collapsed groups).
+              </li>
+            </ul>
+
             <h2 id="flattening">Flattening empty groups</h2>
             <p>
               <code>flattenEmptyGroups</code> collapses single-child group
@@ -399,6 +619,71 @@ export default function AccountsDocsPage() {
               a 1px accent inset ring; invalid targets show nothing.
             </p>
             <CodeBlock code={DND_EXAMPLE} />
+
+            <h2 id="drop-collision">Drop collision strategies</h2>
+            <p>
+              <code>dropCollision</code> decides what happens when a dragged
+              account&rsquo;s leaf name already exists under the drop target:
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Strategy</th>
+                  <th>Behavior</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <code>reject</code> (default)
+                  </td>
+                  <td>
+                    Any collision blocks the whole drop — nothing moves,{' '}
+                    <code>onDropError</code> fires with{' '}
+                    <code>reason: &apos;collision&apos;</code> and the full
+                    attempted batch. The colliding target still accepts the drop
+                    gesture so the error is surfaced instead of the cursor being
+                    silently refused.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>skip</code>
+                  </td>
+                  <td>
+                    Colliding moves drop out of the plan; the rest proceed and{' '}
+                    <code>onDropComplete.skipped</code> lists what stayed put.
+                    When every candidate collides, the drop is a silent no-op
+                    (no event).
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>replace</code>
+                  </td>
+                  <td>
+                    The existing account at each colliding destination — and its
+                    whole subtree — is removed, then the move proceeds.{' '}
+                    <code>onDropComplete.replaced</code> lists the removed
+                    roots.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <CodeBlock code={DROP_COLLISION_EXAMPLE} />
+            <p>
+              Under <code>replace</code>, removal runs through the same remap
+              rebuild as the move itself: exactly one change event;
+              selection/focus/status/search state on removed paths is dropped
+              (never remapped); and ledger entries with any posting inside a
+              replaced subtree are dropped whole (a partial entry would not
+              balance) — sync your own store from the <code>replaced</code>{' '}
+              list. Ordering: <code>onMove</code> (back-compat, applied moves
+              only) always fires before <code>onDropComplete</code>;{' '}
+              <code>onDropError</code> fires alone — an erroring drop applies
+              nothing. <code>getMovePlan</code> / <code>movePaths</code> keep
+              their original skip-shaped behavior.
+            </p>
 
             <h2 id="context-menus">Context menus</h2>
             <p>
@@ -456,6 +741,81 @@ export default function AccountsDocsPage() {
               <code>onChange</code> events, so hosts can track match decorations
               without inferring them from expansion changes.
             </p>
+
+            <h2 id="lazy-loading">Lazy child loading</h2>
+            <p>
+              Huge charts (or remote ones) don&rsquo;t need every subtree up
+              front. Mark groups as <em>unloaded</em> and give the tree an async
+              loader; expanding an unloaded group fetches its children on
+              demand:
+            </p>
+            <CodeBlock code={LAZY_LOADING_EXAMPLE} />
+            <p>
+              An unloaded group renders as a collapsed, expandable group even
+              with zero children in the store — the chevron affordance is
+              truthful because &ldquo;unloaded&rdquo; <em>means</em>{' '}
+              &ldquo;children exist but are unfetched&rdquo;. Expanding it
+              (chevron click, <kbd>→</kbd>, programmatic{' '}
+              <code>setExpanded</code>) starts exactly one load:{' '}
+              <code>loadChildren(path)</code> resolves to the group&rsquo;s
+              canonical child paths (nested descendants allowed; ancestors
+              auto-create; invalid paths are skipped). Loaded children then flow
+              through the normal projection/window pipeline. The controller
+              surface is <code>markUnloaded(paths)</code>,{' '}
+              <code>getChildLoadState(path)</code>,{' '}
+              <code>requestChildLoad(path)</code>, and{' '}
+              <code>cancelChildLoads()</code>, backed by a per-path store state
+              machine (unloaded → loading → loaded / error).
+            </p>
+            <p>
+              While a fetch is in flight the group row carries{' '}
+              <code>aria-busy=&quot;true&quot;</code> and an expanded group
+              shows one fixed-height <em>loading row</em> (CSS-animated dots
+              honoring <code>prefers-reduced-motion</code>;{' '}
+              <code>aria-hidden</code>, since the group&rsquo;s{' '}
+              <code>aria-busy</code> already tells assistive tech). A rejection
+              swaps it for an <em>error row</em> with the failure message and a
+              real, labelled Retry <code>&lt;button&gt;</code>. Placeholder rows
+              are projection-level view rows, not store rows: never selectable,
+              never drag sources or drop targets, and keyboard navigation /
+              type-ahead skip them — with one deliberate exception to the
+              roving-tabindex pattern: the Retry button keeps{' '}
+              <code>tabindex=&quot;0&quot;</code>, because the row is not a
+              treeitem (<code>aria-activedescendant</code> can never reach it)
+              and the only recovery control must stay keyboard-reachable.
+              Collapsing and re-expanding an error group does <em>not</em>{' '}
+              auto-retry; Retry (or <code>requestChildLoad</code>) is the
+              explicit gesture, so a failing endpoint is never hammered by
+              browsing.
+            </p>
+            <ul>
+              <li>
+                <strong>Expand-all never loads.</strong>{' '}
+                <code>expandAll()</code> skips unloaded groups by design: it is
+                one gesture, and fanning it out into N network fetches would be
+                surprising, slow, and unbounded. Expand the specific group you
+                want fetched.
+              </li>
+              <li>
+                <strong>Stale responses are discarded.</strong> Each attempt
+                carries a token: a load that settles after{' '}
+                <code>cleanUp()</code>, after the group was removed or moved
+                (rename / drag &amp; drop), or after a newer attempt for the
+                same path is discarded instead of resurrecting rows the tree
+                moved on from. The store double-guards this — a completion for a
+                machine no longer in <code>loading</code> is refused.
+              </li>
+              <li>
+                <strong>
+                  Search &amp; flatten can&rsquo;t see unfetched children.
+                </strong>{' '}
+                Under <code>hide-non-matches</code> an unloaded group stays
+                visible only when the group itself matches, and{' '}
+                <code>flattenEmptyGroups</code> never flattens into or through a
+                group with a pending load — the placeholder needs an honest
+                anchor row.
+              </li>
+            </ul>
 
             <h2 id="sticky-ancestors">Sticky ancestor stack</h2>
             <p>
