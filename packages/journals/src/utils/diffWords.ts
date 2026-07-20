@@ -6,13 +6,13 @@ export interface WordDiff {
   after: readonly WordDiffSegment[];
 }
 
-// Word-level diff between two header field strings, adapted from the Pierre
-// diffs word-alt treatment: LCS over word tokens (whitespace preserved
+// Word-level diff between two header field strings using the word-alt
+// treatment: LCS over word tokens (whitespace preserved
 // verbatim), then a join pass that folds a single-space unchanged gap
 // between two changed runs into one contiguous highlight so phrase edits
 // read as one span instead of per-word confetti. Returns null whenever a
 // truthful word-level highlight can't be produced — either side exceeds
-// MAX_FIELD_DIFF_LENGTH (Pierre's maxLineDiffLength guard), or the edit is
+// MAX_FIELD_DIFF_LENGTH, or the edit is
 // whitespace-only and therefore invisible at word granularity — and callers
 // then mark the whole field changed instead.
 export function diffWords(before: string, after: string): WordDiff | null {

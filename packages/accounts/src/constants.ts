@@ -32,7 +32,7 @@ export const DEFAULT_OVERSCAN_ROWS = 10;
 
 /**
  * Viewport height assumed when the scroller has no measurable layout yet
- * (SSR, first paint, jsdom). Matches Pierre trees' default projection.
+ * (SSR, first paint, jsdom).
  */
 export const DEFAULT_VIEWPORT_HEIGHT = 420;
 
@@ -41,7 +41,7 @@ export const DEFAULT_CURRENCY = 'MYR';
 
 /**
  * SSR preload row cap: `preloadAccountTreeHTML` renders at most this many
- * rows (the deferred-projection cap, mirroring Pierre trees). The server
+ * rows (the deferred-projection cap). The server
  * cannot know the viewport, and 512 fixed-height rows comfortably cover any
  * initial screen while keeping the HTML payload bounded; the client
  * re-windows on its first scroll.
@@ -50,8 +50,8 @@ export const SSR_MAX_PRELOADED_ROWS = 512;
 
 /**
  * Spring-loaded expansion delay: how long a drag must hover a collapsed
- * group before it auto-expands. Pierre's trees default to 800ms
- * (`openOnDropDelay`); we run slightly snappier per the accounts spec.
+ * group before it auto-expands. Tuned slightly snappier than the common
+ * 800ms convention per the accounts spec.
  */
 export const DRAG_EXPAND_DELAY_MS = 700;
 
@@ -62,7 +62,7 @@ export const DRAG_EXPAND_DELAY_MS = 700;
  * keeps only the NEAREST ancestors (the deepest ones carry the most
  * information about the rows under the cursor; the root is the most
  * guessable). Four rows ≈ one quarter of a 480px viewport at default
- * density, the ceiling Pierre-style sticky overlays stay comfortable at.
+ * density, the ceiling the sticky overlays stay comfortable at.
  */
 export const STICKY_ANCESTOR_STACK_MAX = 4;
 

@@ -136,7 +136,7 @@ export interface RegisterFilterResult {
 /**
  * Row selection behavior. `single` (default) keeps the original one-row
  * selection; `range` adds shift-click contiguous extension and
- * meta/ctrl-click toggling (Pierre line-selection style, pointer-only).
+ * meta/ctrl-click toggling (pointer-only line selection).
  */
 export type RegisterSelectionMode = 'single' | 'range';
 
@@ -269,7 +269,7 @@ export type FieldChangeKind = 'unchanged' | 'changed' | 'added' | 'removed';
 /**
  * One run of a word-level diff: `changed` runs get highlight spans, the rest
  * render as plain text. Adjacent runs separated by a single space are merged
- * (the Pierre "word-alt" join) so highlights read as phrases, not confetti.
+ * (the word-alt join) so highlights read as phrases, not confetti.
  */
 export interface WordDiffSegment {
   changed: boolean;

@@ -84,8 +84,7 @@ export interface ProposeMatchesPoolProps {
 
 const DEFAULT_RESULT_CACHE_SIZE = 200;
 
-// Off-main-thread computation pool for @cynco/journals, mirroring the Pierre
-// diffs worker architecture sized to our protocol: N workers, a FIFO task
+// Off-main-thread computation pool for @cynco/journals: N workers, a FIFO task
 // queue with dedupe-by-key (identical in-flight requests share one job), an
 // LRU result cache, stats subscribers, and — the load-bearing guarantee — a
 // transparent main-thread fallback. Every job carries its own fallback

@@ -9,7 +9,7 @@ import { defineConfig, type UserConfig } from 'tsdown';
 // intended cascade order even when the minifier reorders rules.
 const LAYER_ORDER = '@layer base,theme,rendered,unsafe;';
 
-// Three-config build (the Pierre diffs shape): the main unbundled library
+// Three-config build: the main unbundled library
 // (worker entries excluded), the plain worker entry for bundlers that can
 // follow package imports inside workers, and the fully-bundled portable
 // worker (noExternal everything) for bundlers that cannot.

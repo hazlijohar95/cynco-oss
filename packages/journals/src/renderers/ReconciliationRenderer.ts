@@ -336,8 +336,8 @@ function renderGroupedBookCellHTML(
   return html;
 }
 
-// Center gutter: hover-revealed action buttons in the Pierre gutter-utility
-// style. Proposed pairs get accept/reject; accepted pairs get undo;
+// Center gutter: hover-revealed action buttons. Proposed pairs get
+// accept/reject; accepted pairs get undo;
 // unmatched rows get an empty gutter (their affordances live in the cells).
 function renderGutterHTML(match: ReconciliationMatch | null): string {
   let html = '<div data-recon-gutter>';

@@ -172,8 +172,8 @@ function renderChildLoadPlaceholderHTML(
   return html;
 }
 
-// Trailing per-row "…" button opening the context menu (Pierre's row menu
-// button lane adapted to string rendering). A real, labelled control — like
+// Trailing per-row "…" button opening the context menu, in a dedicated
+// row action lane. A real, labelled control — like
 // the rename input, it lives inside the treeitem without breaking its
 // semantics — but tabindex -1 so the roving tabindex stays on rows; keyboard
 // users open the menu via Shift+F10 / the ContextMenu key instead. CSS keeps
@@ -206,8 +206,8 @@ export function renderAccountRowsHTML(
 /**
  * Sticky mirror row: identical visual content to a flow row but no treeitem
  * semantics (no role/aria/tabindex/id) and aria-hidden on the wrapper, so
- * assistive tech never sees the account twice — the same split Pierre's
- * sticky overlay rows use.
+ * assistive tech never sees the account twice — the same split the sticky
+ * overlay rows use.
  */
 export function renderStickyRowHTML(
   row: AccountTreeRowData,
@@ -258,8 +258,8 @@ function renderRowLabelHTML(row: AccountTreeRowData): string {
   return html;
 }
 
-// Inline rename editor (Pierre's RenameInput adapted to string rendering):
-// inset background, hairline border, focus ring via CSS. The draft value is
+// Inline rename editor for string-rendered rows: inset background, hairline
+// border, focus ring via CSS. The draft value is
 // baked into the value attribute so a re-rendered row reproduces the
 // in-progress text; the view re-focuses it after window rewrites.
 function renderRenameInputHTML(

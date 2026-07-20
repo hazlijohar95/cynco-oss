@@ -7,7 +7,7 @@
  * `isComposing: true`. Older Safari/Edge (and some IMEs on current engines)
  * instead report the legacy `keyCode === 229` — the W3C "process key"
  * placeholder emitted for every keystroke the IME swallows — so both signals
- * are checked, exactly the guard Pierre's trees use.
+ * are checked.
  */
 export function isComposingEvent(event: KeyboardEvent): boolean {
   return event.isComposing || event.keyCode === 229;

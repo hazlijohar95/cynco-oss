@@ -166,7 +166,7 @@ describe('commit / cancel / blur semantics', () => {
     expect(queryRenameInput(rows)).toBeNull();
   });
 
-  test('blur commits (Pierre behavior)', () => {
+  test('blur commits the rename', () => {
     const { tree: mounted, rows } = mountTree();
     mounted.beginRename('Expenses:Rent');
     const input = setDraft(rows, 'Premises');

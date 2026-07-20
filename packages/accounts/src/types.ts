@@ -219,8 +219,8 @@ export interface SelectPathOptions {
 }
 
 /**
- * How an active search session reshapes the tree (the Pierre trees search
- * modes adapted to account charts):
+ * How an active search session reshapes the tree (the search modes for
+ * account charts):
  *
  * - `expand-matches` (default): ancestors of every match are auto-expanded so
  *   matches become visible; everything else keeps its current expansion.

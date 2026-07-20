@@ -149,8 +149,8 @@ export interface AccountTreeOptions extends AccountTreeControllerOptions {
    */
   stickyAncestors?: AccountTreeStickyAncestors;
   /**
-   * Context menu composition surface (the Pierre trees contract adapted to
-   * string-rendered rows). The component does NOT render a menu — it owns
+   * Context menu composition surface for string-rendered rows. The component
+   * does NOT render a menu — it owns
    * triggering (right-click, Shift+F10 / ContextMenu key, optional per-row
    * "…" button), target normalization, positioning data, ARIA, and the
    * focus lifecycle; the host renders the menu from `onOpen` and MUST call
@@ -962,7 +962,7 @@ export class AccountTree {
     }
   }
 
-  // Scroll hysteresis (the Pierre computeWindowRange rule): while the raw
+  // Scroll hysteresis: while the raw
   // visible range (no overscan) still fits inside the rendered window, keep
   // it — the overscan buffer exists precisely so small scrolls are free.
   // Only when the viewport escapes the buffer is a new overscanned window
@@ -1076,7 +1076,7 @@ export class AccountTree {
   };
 
   /**
-   * Sticky-stack click forwarding (Pierre's overlay idiom): a click on a
+   * Sticky-stack click forwarding: a click on a
    * mirror scrolls to and focuses the REAL ancestor row — the mirror itself
    * is aria-hidden and must never act as a treeitem. Only the 'stack' mode
    * receives these clicks; 'nearest' keeps its v1 `pointer-events: none`
@@ -1116,8 +1116,8 @@ export class AccountTree {
     if (path == null) {
       return;
     }
-    // Double-click on an already-selected row starts a rename (Pierre's
-    // slow-rename analog); otherwise groups keep their toggle behavior.
+    // Double-click on an already-selected row starts a rename; otherwise
+    // groups keep their toggle behavior.
     if (this.lastClickPath === path && this.lastClickWasOnSelected) {
       this.startRenameSession(path);
       return;
@@ -1419,14 +1419,14 @@ export class AccountTree {
       this.controller.getRenameDraft()
     );
     if (!result.ok) {
-      // Invalid or colliding names revert (Pierre commits-or-reverts on
-      // blur; we mirror that for Enter too rather than trapping focus).
+      // Invalid or colliding names revert on Enter rather than trapping
+      // focus, matching the commit-or-revert-on-blur behavior below.
       this.controller.cancelRename();
     }
   }
 
   /**
-   * The rename-handoff half of the Pierre pattern: the controller owns the
+   * The rename-handoff half of the pattern: the controller owns the
    * session, so whenever the renaming row (re)enters the window the freshly
    * created input is re-focused and — only right after the session began —
    * select-all'd. While the row is scrolled out there is simply no input.
@@ -1460,8 +1460,8 @@ export class AccountTree {
     }
   };
 
-  // Blur commits (Pierre's RenameInput behavior) — but only real blurs:
-  // window rewrites destroying the input set suppressRenameCommit first.
+  // Blur commits the rename — but only real blurs: window rewrites
+  // destroying the input set suppressRenameCommit first.
   private handleFocusOut = (event: Event): void => {
     if (this.suppressRenameCommit) {
       return;
@@ -1639,7 +1639,7 @@ export class AccountTree {
 
   // Tracks the highlighted target and arms the spring-loaded expansion: a
   // collapsed group hovered for the configured delay auto-expands so drags
-  // can descend into closed subtrees (Pierre's openOnDropDelay behavior).
+  // can descend into closed subtrees.
   private setDropTarget(path: string | null): void {
     if (this.dropTargetPath === path) {
       return;

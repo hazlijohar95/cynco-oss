@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 //
-// Worktree manager for parallel development (adapted from Pierre's wt suite).
+// Worktree manager for parallel development.
 //
 //   bun scripts/wt.ts create <branch> [--base <ref>]
 //   bun scripts/wt.ts list

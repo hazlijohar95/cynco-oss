@@ -1,4 +1,4 @@
-/* Page chrome for the kitchen-sink demo: achromatic Pierre-docs aesthetic.
+/* Page chrome for the kitchen-sink demo: achromatic docs aesthetic.
  * The html class ('dark' | 'light') drives color-scheme, and every chrome
  * color is a light-dark() pair — one stylesheet serves both modes. Component
  * colors are themed separately via --journals-theme-* variables on #stage. */

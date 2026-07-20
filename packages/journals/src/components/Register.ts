@@ -101,7 +101,7 @@ export interface RegisterOptions extends RegisterRenderOptions {
   smoothScrollSettings?: SmoothScrollSettings;
   /**
    * Selection behavior. `single` (default) preserves the original one-row
-   * behavior exactly. `range` is Pierre-style line selection: click selects
+   * behavior exactly. `range` is contiguous line selection: click selects
    * one row and sets the anchor, shift-click extends anchor→target
    * contiguously (in entry-index space, so group header rows are skipped
    * naturally), meta/ctrl-click toggles a row in or out. Keyboard mirrors

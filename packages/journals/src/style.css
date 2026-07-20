@@ -270,7 +270,7 @@
     overscroll-behavior: contain;
     /* Virtualized content: window commits rewrite rows and spacer heights,
      * which Chrome's scroll anchoring would "compensate" by shifting
-     * scrollTop, corrupting the window math (the Pierre trees fix). */
+     * scrollTop, corrupting the window math. */
     overflow-anchor: none;
   }
 
@@ -616,7 +616,7 @@
   }
 
   /* Word-level highlight spans get the stronger mix on top of the line
-   * tint, the Pierre word-alt treatment. */
+   * tint, the word-alt treatment. */
   [data-diff-old] [data-diff-word] {
     background-color: var(--journals-bg-removed-word);
   }
@@ -1131,8 +1131,8 @@
     user-select: none;
   }
 
-  /* Center action gutter: Pierre gutter-utility style — small 4px-radius
-   * buttons that fade in on row hover. */
+  /* Center action gutter: small 4px-radius buttons that fade in on row
+   * hover. */
   [data-recon-gutter] {
     display: flex;
     align-items: center;

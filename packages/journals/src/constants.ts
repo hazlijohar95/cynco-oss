@@ -42,8 +42,8 @@ export const DEFAULT_GROUP_HEADER_HEIGHT: number =
 
 /**
  * Cap on the character length of a header field eligible for word-level
- * diffing (Pierre's maxLineDiffLength). Fields longer than this on either
- * side skip the O(words²) LCS and render as wholly changed instead.
+ * diffing. Fields longer than this on either side skip the O(words²) LCS and
+ * render as wholly changed instead.
  */
 export const MAX_FIELD_DIFF_LENGTH = 1000;
 

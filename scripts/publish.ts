@@ -12,9 +12,9 @@ import {
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 
-// Shared release pipeline for every published @cynco package (adapted from
-// Pierre's trees publish flow). Invoked per package through the inherited
-// `publish` moon task, which runs with the package directory as cwd:
+// Shared release pipeline for every published @cynco package. Invoked per
+// package through the inherited `publish` moon task, which runs with the
+// package directory as cwd:
 //
 //   moonx theme:publish -- --dry-run
 //   moonx accounts:publish -- --tag=beta

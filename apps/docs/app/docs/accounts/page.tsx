@@ -213,8 +213,8 @@ controller.cancelRename();
 `;
 
 const DND_EXAMPLE = `
-// Rows are HTML5 drag sources; group rows are drop targets. Guards mirror
-// Pierre's trees: no self-drops, no drops into an own descendant, drops on
+// Rows are HTML5 drag sources; group rows are drop targets. Guards:
+// no self-drops, no drops into an own descendant, drops on
 // the current parent are no-ops, and leaf-name collisions at the target are
 // skipped. Dragging a selected row moves the whole selection (descendants
 // of dragged groups ride along); hovering a collapsed group for 700ms

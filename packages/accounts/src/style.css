@@ -230,7 +230,7 @@
     overscroll-behavior: contain;
     /* Virtualized content: window commits rewrite rows and spacer heights,
      * which Chrome's scroll anchoring would "compensate" by shifting
-     * scrollTop, corrupting the window math (the Pierre trees fix). */
+     * scrollTop, corrupting the window math. */
     overflow-anchor: none;
     padding-inline: var(--accounts-padding-inline);
     outline: none;
@@ -463,8 +463,8 @@
     text-overflow: ellipsis;
   }
 
-  /* Inline rename editor (Pierre RenameInput adapted): inset background,
-   * hairline border, focus ring; sized to sit inside the row. */
+  /* Inline rename editor: inset background, hairline border, focus ring;
+   * sized to sit inside the row. */
   [data-rename-input] {
     appearance: none;
     flex: 1 1 auto;
@@ -589,8 +589,7 @@
   /* Row-actions button ("…" lane, `contextMenu.rowButton`): a real control
    * embedded in the treeitem like the rename input. Invisible at rest —
    * revealed on row hover / focus-within (and on the keyboard-focused row)
-   * so the lane adds no noise — but always hit-testable, matching Pierre's
-   * trigger behavior. */
+   * so the lane adds no noise — but always hit-testable. */
   [data-row-action] {
     appearance: none;
     flex-shrink: 0;

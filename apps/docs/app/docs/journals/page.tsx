@@ -632,8 +632,8 @@ export default async function JournalsDocsPage() {
             <p>
               <code>selectionMode: &apos;single&apos;</code> (default) preserves
               the original one-row behavior exactly.{' '}
-              <code>&apos;range&apos;</code> is Pierre-style line selection:
-              click selects one row and sets the anchor, shift-click extends
+              <code>&apos;range&apos;</code> is contiguous line selection: click
+              selects one row and sets the anchor, shift-click extends
               anchor→target contiguously, meta/ctrl-click toggles a row in or
               out. Keyboard mirrors pointer exactly. <code>onRowSelect</code>{' '}
               keeps firing for the primary (last-clicked) row for back-compat.

@@ -1119,8 +1119,8 @@ export class AccountTreeController {
    * Focuses the next search match after the focused row, cycling past the
    * end back to the first match. Deterministic order is projection (visible)
    * order. Returns the focused path, or null with no session / no matches.
-   * (Pierre's trees clamp at the ends; we cycle so a single F3 keeps
-   * walking a small match set — documented deviation.)
+   * Search navigation cycles at the ends so a single F3 keeps walking a
+   * small match set rather than stopping.
    */
   focusNextSearchMatch(): string | null {
     return this.focusRelativeSearchMatch(1);
@@ -1135,7 +1135,7 @@ export class AccountTreeController {
    * `{ index, total }` readout for the active session (`3/12`-style UIs):
    * 1-based index of the focused match, or of the nearest upcoming match in
    * projection order when focus is not on a match (the row
-   * `focusNextSearchMatch` would land on — Pierre's next-from-here
+   * `focusNextSearchMatch` would land on — next-from-here
    * semantics), wrapping past the end. Null when no session is active;
    * `{ index: 0, total: 0 }` for a live session without matches.
    */
@@ -1386,7 +1386,7 @@ export class AccountTreeController {
   /**
    * Computes the moves a drop would perform under the SKIP collision
    * strategy (the original behavior — colliding candidates drop out, the
-   * rest survive), applying the Pierre guard set without mutating anything.
+   * rest survive), applying the move guard set without mutating anything.
    * Kept as the back-compat surface; strategy-aware callers use
    * `planMovePaths` for the full moves/skipped/replaced breakdown.
    */
