@@ -42,7 +42,7 @@ export function ReconciliationDemo() {
   const instanceRef = useRef<ReconciliationComponent | null>(null);
   const getInstance = () => instanceRef.current;
   const [readout, setReadout] = useState(
-    'Hover a matched pair to accept or reject it, or accept every exact match at once.'
+    'Hover or tap a matched pair to accept or reject it, or accept every exact match at once.'
   );
 
   const describe = (verb: string, match: ReconciliationMatch) => {
@@ -75,7 +75,7 @@ export function ReconciliationDemo() {
     postings: RECONCILIATION_POSTINGS,
     onAccept: (match) => describe('Accepted', match),
     onReject: (match) => describe('Rejected', match),
-    onUndo: (match) => describe('Undid', match),
+    onUndo: (match) => describe('Reverted', match),
     onCreateEntry: (line) =>
       setReadout(
         `Create-entry requested for "${line.description}" — the component only emits the callback.`
@@ -138,7 +138,7 @@ export function ReconciliationDemo() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 md:items-center">
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="ghost"
           className="text-muted-foreground hover:text-foreground font-normal"
@@ -162,7 +162,7 @@ export function ReconciliationDemo() {
       </div>
       <Footnote>
         <span data-reconciliation-readout>{readout}</span> Matching is
-        deterministic and 1:1 —{' '}
+        deterministic — exact 1:1 pairs plus bounded sum matches —{' '}
         <Link href="/docs/journals#reconciliation" className="footnote-link">
           read the matching engine docs
         </Link>

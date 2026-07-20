@@ -1,4 +1,4 @@
-import { GITHUB_URL } from './Header';
+import { GITHUB_URL } from '@/lib/site';
 
 // Company CTA section in the /data section grammar: 24px section heading,
 // 16px muted copy, and a glossy neutral button.

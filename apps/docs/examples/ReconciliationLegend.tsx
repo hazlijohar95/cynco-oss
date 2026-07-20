@@ -1,6 +1,6 @@
 // Legend for the reconciliation pair states, matching the probed reference
 // legend table: hairline-bordered rounded wrapper, muted/50 header row with
-// 16px/10px cell padding, 41px body rows with 16px/8px padding, `code`
+// 16px/10px cell padding, 40px body rows with 16px/8px padding, `code`
 // state cells and muted descriptions. Indicator cells render live mini
 // swatches driven by the same journals CSS variable chains the component
 // uses (see .recon-swatch-* in globals.css), so themes and overrides apply.

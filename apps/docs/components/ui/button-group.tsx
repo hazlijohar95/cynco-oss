@@ -10,6 +10,9 @@ import { cn } from '@/lib/utils';
 // border) and the rest as muted ghost buttons. Metrics match the probed
 // reference bars: 36px tall, 10px container radius, 9px segment radius,
 // 8px/14px segment padding, 14px medium text, 6px icon gap.
+//
+// The public API is generic over the value union so call sites get a typed
+// onValueChange with no casts; the context stays string-based internally.
 
 interface ButtonGroupContextValue {
   selectedValue?: string;
@@ -19,24 +22,33 @@ interface ButtonGroupContextValue {
 
 const ButtonGroupContext = React.createContext<ButtonGroupContextValue>({});
 
-export interface ButtonGroupProps extends React.HTMLAttributes<HTMLDivElement> {
-  value?: string;
-  onValueChange?: (value: string) => void;
+export interface ButtonGroupProps<T extends string> extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onChange'
+> {
+  value?: T;
+  onValueChange?: (value: T) => void;
   size?: ButtonProps['size'];
   children: React.ReactNode;
 }
 
-export function ButtonGroup({
+export function ButtonGroup<T extends string>({
   className,
   value,
   onValueChange,
   size,
   children,
   ...props
-}: ButtonGroupProps) {
+}: ButtonGroupProps<T>) {
   return (
     <ButtonGroupContext.Provider
-      value={{ selectedValue: value, onValueChange, size }}
+      value={{
+        selectedValue: value,
+        // Item values are authored to match the group's union, so widening
+        // the callback through the string-typed context is sound.
+        onValueChange: onValueChange as ((value: string) => void) | undefined,
+        size,
+      }}
     >
       <div
         className={cn(
@@ -83,7 +95,6 @@ export function ButtonGroupItem({
       size={context.size}
       onClick={handleClick}
       aria-pressed={isSelected}
-      title={value}
       {...props}
     >
       {children}

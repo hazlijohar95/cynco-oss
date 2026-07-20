@@ -50,7 +50,7 @@ export function RegisterComparison() {
           <ComparisonHeading icon={icon} description={description}>
             {title}
           </ComparisonHeading>
-          <div className="border-border overflow-hidden rounded-none border">
+          <div className="demo-container">
             {rows == null ? (
               <div
                 className="text-muted-foreground flex items-center justify-center font-mono text-[13px]"

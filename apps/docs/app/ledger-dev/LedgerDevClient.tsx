@@ -1,10 +1,8 @@
 'use client';
 
 import { AccountTree } from '@cynco/accounts';
-import type { RegisterRowData, RowRange } from '@cynco/journals';
+import type { RegisterRowData } from '@cynco/journals';
 import { Register } from '@cynco/journals';
-import { getOrCreateWorkerPoolSingleton } from '@cynco/journals/worker';
-import type { WorkerPoolManager } from '@cynco/journals/worker';
 import {
   createCooperativeScheduler,
   EntryStore,
@@ -21,8 +19,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { buildRegisterRowsChunked } from './buildRegisterRowsChunked';
 import { countAccountsChunked } from './countAccountsChunked';
+import { useRenderedRangePoll } from './useRenderedRangePoll';
+import { STRESS_INTERVAL_MS, useStressScroll } from './useStressScroll';
+import { acquireWorkerPool, describePool } from './workerPool';
 import { Button } from '@/components/ui/button';
 import { SwitchPill } from '@/components/ui/switch-pill';
+import { afterNextPaint } from '@/lib/afterNextPaint';
 import { cn } from '@/lib/utils';
 
 // The register shows the busiest generated account (roughly a third of all
@@ -40,15 +42,6 @@ const WORKLOAD_ORDER: readonly WorkloadName[] = [
   'large',
   'xl',
 ];
-
-// Auto-scroll stress cadence. The smooth-scroll spring settles in ~440ms,
-// so a 600ms period keeps the register in continuous motion without
-// stacking retargets faster than the spring can express them.
-const STRESS_INTERVAL_MS = 600;
-
-// Rendered-window poll period. getRenderedRange() is a field read, so
-// polling is nearly free; 250ms is fast enough to feel live while scrolling.
-const STATS_POLL_MS = 250;
 
 type LabPhase = 'idle' | 'generating' | 'projecting' | 'ready';
 
@@ -69,39 +62,6 @@ interface LabData {
   timings: LabTimings;
 }
 
-// Resolves after the browser has painted the frame that the pending state
-// update produced: two rAFs guarantee the commit painted, and the trailing
-// setTimeout escapes the rAF callback so the synchronous generation block
-// that follows does not run inside the frame budget.
-function afterNextPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setTimeout(resolve, 0);
-      });
-    });
-  });
-}
-
-// Lazily creates (or reuses) the page-wide worker pool. Worker construction
-// is a bundler concern, so the factory points at the local journals-worker
-// entry; any synchronous failure (no module-worker support) returns null
-// and the register simply runs its main-thread path. Failures AFTER
-// construction are handled inside the pool itself — every job falls back to
-// the main thread transparently.
-function acquireWorkerPool(): WorkerPoolManager | null {
-  try {
-    return getOrCreateWorkerPoolSingleton({
-      workerFactory: () =>
-        new Worker(new URL('./journals-worker.ts', import.meta.url), {
-          type: 'module',
-        }),
-    });
-  } catch {
-    return null;
-  }
-}
-
 function formatCount(value: number): string {
   return value.toLocaleString('en-US');
 }
@@ -110,26 +70,13 @@ function formatMs(value: number): string {
   return `${Math.round(value).toLocaleString('en-US')} ms`;
 }
 
-// Pool state for the stats line, as a comparable string so the poll only
-// re-renders when something actually changed. `workersFailed` means every
-// window render silently ran on the main thread — worth surfacing, since
-// the whole point of the toggle is to compare the two paths.
-function describePool(pool: WorkerPoolManager | null): string {
-  if (pool == null) {
-    return 'unavailable — main-thread fallback';
-  }
-  const stats = pool.getStats();
-  if (stats.workersFailed) {
-    return 'workers failed — main-thread fallback';
-  }
-  return `${String(stats.totalWorkers)} workers · ${String(stats.busyWorkers)} busy`;
-}
-
 // The lab surface: pick a seeded workload, watch it generate with real
 // performance.now() timings, then scroll (or stress-scroll) the virtualized
 // register while the rendered-window readout proves the DOM stays
 // viewport-sized. All wiring goes through the packages' public APIs — the
-// same calls an integrating app would make.
+// same calls an integrating app would make. Poll and stress-scroll loops
+// live in their own hooks (useRenderedRangePoll, useStressScroll); this
+// component owns generation, the two vanilla mounts, and the readout JSX.
 export function LedgerDevClient() {
   const [phase, setPhase] = useState<LabPhase>('idle');
   const [pendingWorkload, setPendingWorkload] = useState<WorkloadName | null>(
@@ -139,8 +86,6 @@ export function LedgerDevClient() {
   const [poolEnabled, setPoolEnabled] = useState(true);
   const [treeEnabled, setTreeEnabled] = useState(true);
   const [treeBuildMs, setTreeBuildMs] = useState<number | null>(null);
-  const [windowRange, setWindowRange] = useState<RowRange | null>(null);
-  const [poolReadout, setPoolReadout] = useState<string | null>(null);
   const [stressRunning, setStressRunning] = useState(false);
 
   const registerHostRef = useRef<HTMLDivElement>(null);
@@ -152,6 +97,13 @@ export function LedgerDevClient() {
   // Monotonic run token: a completion whose token no longer matches was
   // superseded (or the page unmounted) and must not touch state.
   const runTokenRef = useRef(0);
+
+  const { windowRange, poolReadout, setPoolReadout } = useRenderedRangePoll(
+    registerRef,
+    data != null,
+    poolEnabled
+  );
+  useStressScroll(registerRef, data?.rows.length ?? 0, stressRunning);
 
   useEffect(() => {
     return () => {
@@ -166,7 +118,6 @@ export function LedgerDevClient() {
     setPendingWorkload(workload);
     setPhase('generating');
     setData(null);
-    setWindowRange(null);
     setTreeBuildMs(null);
     setStressRunning(false);
     // Let the busy state paint before the synchronous block starts —
@@ -241,7 +192,7 @@ export function LedgerDevClient() {
       registerRef.current = null;
       register.cleanUp();
     };
-  }, [data, poolEnabled]);
+  }, [data, poolEnabled, setPoolReadout]);
 
   // The account tree is optional because seeding its controller walks every
   // posting: measurable at 1M entries, so the toggle lets visitors isolate
@@ -263,57 +214,6 @@ export function LedgerDevClient() {
     };
   }, [data, treeEnabled]);
 
-  // Live rendered-window readout: getRenderedRange() is a plain field read
-  // exposed by the register, polled instead of evented (the component has
-  // no window-rendered callback). State only updates when the range moved,
-  // so idle polling causes zero re-renders.
-  useEffect(() => {
-    if (data == null) return;
-    const interval = window.setInterval(() => {
-      const range = registerRef.current?.getRenderedRange();
-      setWindowRange((previous) => {
-        if (range == null) return previous;
-        if (
-          previous != null &&
-          previous.start === range.start &&
-          previous.end === range.end
-        ) {
-          return previous;
-        }
-        return { start: range.start, end: range.end };
-      });
-      if (poolEnabled) {
-        const readout = describePool(acquireWorkerPool());
-        setPoolReadout((previous) =>
-          previous === readout ? previous : readout
-        );
-      }
-    }, STATS_POLL_MS);
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [data, poolEnabled]);
-
-  // Auto-scroll stress test: jump the smooth-scroll spring to a random row
-  // on a fixed cadence. Random targets defeat any locality the row window
-  // could exploit, so every tick is a cold window render — the worst case
-  // the worker pool exists for. prefers-reduced-motion turns each glide
-  // into an instant jump inside the spring itself.
-  useEffect(() => {
-    if (!stressRunning || data == null) return;
-    const interval = window.setInterval(() => {
-      const total = data.rows.length;
-      if (total === 0) return;
-      registerRef.current?.scrollToRow(Math.floor(Math.random() * total), {
-        align: 'start',
-        behavior: 'smooth',
-      });
-    }, STRESS_INTERVAL_MS);
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [stressRunning, data]);
-
   const scrollToRandomRow = useCallback(() => {
     if (data == null || data.rows.length === 0) return;
     registerRef.current?.scrollToRow(
@@ -330,13 +230,18 @@ export function LedgerDevClient() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-4 py-2.5">
         <span className="text-muted-foreground text-xs">Workload</span>
-        <div className="flex flex-wrap items-center gap-0.5">
+        <div
+          role="group"
+          aria-label="Workload"
+          className="flex flex-wrap items-center gap-0.5"
+        >
           {WORKLOAD_ORDER.map((name) => (
             <Button
               key={name}
               variant="ghost"
               size="xs"
               disabled={busy}
+              aria-pressed={data?.workload === name}
               onClick={() => void generate(name)}
               className={cn(
                 'text-muted-foreground font-normal',
@@ -363,7 +268,7 @@ export function LedgerDevClient() {
       </div>
 
       {phase === 'idle' && (
-        <div className="text-muted-foreground rounded-lg border p-4 font-mono text-[13px]">
+        <div className="text-muted-foreground rounded-lg border p-4 text-[13px]">
           Pick a workload to generate it in this tab. Generation is one
           synchronous pass of the seeded generator (it has no incremental API),
           so the tab blocks until it completes — expect a few seconds at
@@ -376,7 +281,7 @@ export function LedgerDevClient() {
 
       {busy && (
         <div
-          className="text-muted-foreground rounded-lg border p-4 font-mono text-[13px]"
+          className="text-muted-foreground rounded-lg border p-4 text-[13px]"
           role="status"
         >
           {phase === 'generating'
@@ -389,7 +294,7 @@ export function LedgerDevClient() {
 
       {data != null && (
         <>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-4 py-2.5 font-mono text-xs">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-4 py-2.5 text-xs">
             <span>
               {formatCount(data.entries.length)} entries ·{' '}
               {formatCount(data.accountCount)} accounts ·{' '}
@@ -436,7 +341,7 @@ export function LedgerDevClient() {
               <Shuffle size={14} />
               Random row
             </Button>
-            <span className="text-muted-foreground ml-auto font-mono text-xs">
+            <span className="text-muted-foreground ml-auto text-xs">
               {windowRange == null || mountedRows == null
                 ? `DOM window: — of ${formatCount(data.rows.length)} rows`
                 : `DOM window: rows ${formatCount(windowRange.start)}–${formatCount(
@@ -448,7 +353,7 @@ export function LedgerDevClient() {
             </span>
           </div>
 
-          <p className="text-muted-foreground font-mono text-xs">
+          <p className="text-muted-foreground text-xs">
             The register shows <code>{REGISTER_ACCOUNT}</code>, the busiest
             generated account. Fixed row heights reduce windowing to arithmetic,
             so the mounted-row count above stays viewport-sized — independent of

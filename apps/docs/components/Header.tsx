@@ -5,62 +5,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { CyncoMark } from './CyncoMark';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from './ui/button';
+import { GITHUB_URL, SITE_LINKS } from '@/lib/site';
 import { cn } from '@/lib/utils';
-
-export const GITHUB_URL = 'https://github.com/hazlijohar95/cynco-oss';
-
-const NAV_LINKS = [
-  { href: '/', label: 'Home' },
-  { href: '/docs/journals', label: 'Journals' },
-  { href: '/docs/accounts', label: 'Accounts' },
-  { href: '/docs/theming', label: 'Theming' },
-  { href: '/playground', label: 'Playground' },
-  { href: '/ledger-dev', label: 'Perf lab' },
-] as const;
-
-// Cynco's mark: a bold, closed-terminal "C" split by a centered balance bar —
-// the ledger zero-line every entry settles on, and the currency stroke of
-// finance, nested in the initial. It stays unmistakably a C from 16px favicon
-// up, and inherits the current text color so it themes automatically.
-//
-// `size` is the square glyph edge. `duotone` renders the balance bar at 40%
-// opacity, echoing the debit-solid / credit-muted pairing the packages render;
-// the default monotone reads cleanest in dense chrome.
-export function CyncoMark({
-  size = 20,
-  duotone = false,
-}: {
-  size?: number;
-  duotone?: boolean;
-}) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        fill="currentColor"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10c3.28 0 6.19-1.58 8.01-4.02l-3.2-2.4A6 6 0 1 1 12 6c1.94 0 3.68.92 4.78 2.35l3.2-2.4A9.98 9.98 0 0 0 12 2Z"
-      />
-      <rect
-        x="11"
-        y="11"
-        width="9"
-        height="2"
-        rx="1"
-        fill="currentColor"
-        opacity={duotone ? 0.4 : 1}
-      />
-    </svg>
-  );
-}
 
 // Center-nav links in the /data grammar: 13px, muted, no underline, strong
 // on hover; the active route reads in the strong tier.
@@ -72,7 +21,7 @@ function NavLink({ href, label }: { href: string; label: string }) {
     <Link
       href={href}
       className={cn(
-        'text-muted-foreground hover:text-foreground flex h-8 items-center justify-center px-[15px] text-[13px] leading-none whitespace-nowrap',
+        'text-muted-foreground hover:text-foreground flex h-8 items-center justify-center px-4 text-[13px] leading-none whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px]',
         isActive && 'text-foreground pointer-events-none'
       )}
     >
@@ -88,8 +37,8 @@ export interface HeaderProps {
 // Sticky site header in the opencode /data style: brand glyph + wordmark on
 // the left, 13px section nav in the middle, glossy neutral/contrast button
 // pair plus the theme toggle on the right, all over a hairline bottom
-// border on the page background. The mobile menu closes on Escape and on
-// pointer-down outside itself.
+// border on the page background. The mobile menu closes on Escape, on
+// pointer-down outside itself, and when a link inside it is followed.
 export function Header({ className }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLElement>(null);
@@ -119,6 +68,8 @@ export function Header({ className }: HeaderProps) {
     };
   }, [menuOpen]);
 
+  const closeMenu = () => setMenuOpen(false);
+
   return (
     <header
       data-slot="header"
@@ -135,7 +86,7 @@ export function Header({ className }: HeaderProps) {
       </a>
       <Link
         href="/"
-        className="text-foreground flex flex-none items-center gap-2.5"
+        className="text-foreground flex flex-none items-center gap-2.5 focus-visible:outline-2 focus-visible:outline-offset-2"
         aria-label="Accounting by Cynco — home"
       >
         <CyncoMark />
@@ -145,9 +96,12 @@ export function Header({ className }: HeaderProps) {
         </span>
       </Link>
 
-      <nav className="hidden min-w-0 flex-1 items-center justify-center md:flex">
+      <nav
+        aria-label="Primary"
+        className="hidden min-w-0 flex-1 items-center justify-center md:flex"
+      >
         <ul className="m-0 flex list-none items-center p-0">
-          {NAV_LINKS.map(({ href, label }) => (
+          {SITE_LINKS.map(({ href, label }) => (
             <li key={href}>
               <NavLink href={href} label={label} />
             </li>
@@ -156,22 +110,21 @@ export function Header({ className }: HeaderProps) {
       </nav>
 
       <div className="ml-auto flex flex-none items-center gap-2 md:ml-0">
-        {/* Wrapper (not `hidden` on the buttons themselves) because the
-         * unlayered .btn-data display rule outranks layered utilities. */}
-        <div className="hidden items-center gap-2 sm:flex">
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-data btn-data-neutral"
-          >
-            <strong>GitHub</strong>
-            <span>[↗]</span>
-          </a>
-          <Link href="/docs/journals" className="btn-data btn-data-contrast">
-            <strong>Get started</strong>
-          </Link>
-        </div>
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-data btn-data-neutral max-sm:hidden"
+        >
+          <strong>GitHub</strong>
+          <span>[↗]</span>
+        </a>
+        <Link
+          href="/docs/journals"
+          className="btn-data btn-data-contrast max-sm:hidden"
+        >
+          <strong>Get started</strong>
+        </Link>
         <ThemeToggle />
         <Button
           ref={menuButtonRef}
@@ -189,16 +142,17 @@ export function Header({ className }: HeaderProps) {
 
       <nav
         id="site-mobile-menu"
+        aria-label="Primary"
         ref={menuRef}
         className={cn('mobile-popover md:hidden', menuOpen && 'is-open')}
-        onClick={() => setMenuOpen(false)}
       >
         <div className="flex flex-col gap-1">
-          {NAV_LINKS.map(({ href, label }) => (
+          {SITE_LINKS.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
-              className="text-muted-foreground hover:text-foreground hover:bg-secondary px-3 py-2 text-[13px] transition-colors"
+              onClick={closeMenu}
+              className="text-muted-foreground hover:text-foreground hover:bg-secondary px-3 py-2 text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
             >
               {label}
             </Link>
@@ -207,7 +161,8 @@ export function Header({ className }: HeaderProps) {
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-muted-foreground hover:text-foreground hover:bg-secondary px-3 py-2 text-[13px] transition-colors"
+            onClick={closeMenu}
+            className="text-muted-foreground hover:text-foreground hover:bg-secondary px-3 py-2 text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
           >
             GitHub [↗]
           </a>

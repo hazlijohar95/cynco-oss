@@ -82,6 +82,9 @@
     text-underline-offset: 0.25em;
     text-decoration-color: color-mix(in lab, var(--color-primary), transparent);
     color: var(--color-primary);
+    transition:
+      text-decoration-color var(--motion-duration-fast) var(--motion-ease),
+      color var(--motion-duration-fast) var(--motion-ease);
 
     &:hover {
       text-decoration-color: currentcolor;

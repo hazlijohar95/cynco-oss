@@ -5,7 +5,7 @@ import { CodeBlock } from '@/components/docs/CodeBlock';
 import { DocsLayout } from '@/components/docs/DocsLayout';
 import { Footer } from '@/components/Footer';
 
-const docsTitle = 'Theming docs';
+const docsTitle = 'Theming';
 const docsDescription =
   'Documentation for @cynco/theming: the runtime theme controller ' +
   '(light / dark / system), persistence, theme catalogs, DOM application ' +

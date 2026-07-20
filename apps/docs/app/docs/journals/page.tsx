@@ -8,7 +8,7 @@ import { DocsLayout } from '@/components/docs/DocsLayout';
 import { Footer } from '@/components/Footer';
 import { PAYROLL_ENTRY } from '@/examples/entries';
 
-const docsTitle = 'Journals docs';
+const docsTitle = 'Journals';
 const docsDescription =
   'Documentation for @cynco/journals: vanilla and React APIs, SSR ' +
   'hydration, theming, and virtualization for journal entries and account ' +

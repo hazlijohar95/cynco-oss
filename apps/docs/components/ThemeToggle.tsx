@@ -4,58 +4,33 @@ import { Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Button } from './ui/button';
+import {
+  applyPreference,
+  readPreference,
+  type ResolvedTheme,
+  resolveTheme,
+  subscribeTheme,
+} from '@/lib/theme';
 
-type ResolvedTheme = 'light' | 'dark';
-
-// Navbar tint (iOS Safari's <meta name="theme-color">) per resolved mode.
-// These match the page --background values and the literals hardcoded in the
-// layout's pre-paint bootstrap script (which can't import this module).
-const MODE_THEME_COLOR: Record<ResolvedTheme, string> = {
-  light: '#ffffff',
-  dark: '#161616',
-};
-
-function readResolvedTheme(): ResolvedTheme {
-  return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-}
-
-// Points the document's theme-color meta at `color`, creating the meta if it
-// isn't there yet. Kept imperative (not JSX) so exactly one meta exists,
-// shared with the bootstrap script.
-function setThemeColorMeta(color: string) {
-  let meta = document.querySelector('meta[name="theme-color"]');
-  if (meta == null) {
-    meta = document.createElement('meta');
-    meta.setAttribute('name', 'theme-color');
-    document.head.appendChild(meta);
-  }
-  meta.setAttribute('content', color);
-}
-
-// Sun/moon toggle that flips the html class + color-scheme + navbar tint and
-// persists the explicit choice. The pre-paint bootstrap in layout.tsx reads
-// the same localStorage key, so there is never a flash of the wrong mode.
+// Sun/moon toggle that flips to the opposite of the currently resolved mode
+// and persists the explicit choice through lib/theme. The icon pair is
+// CSS-driven (`dark:` variants), so the correct glyph paints from the very
+// first frame with no hydration flash; React state only feeds the
+// accessible label. Subscribes to the shared theme channel so the footer
+// strip, other tabs, and OS flips keep this control honest.
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<ResolvedTheme | null>(null);
+  const [resolved, setResolved] = useState<ResolvedTheme | null>(null);
 
   useEffect(() => {
-    setTheme(readResolvedTheme());
+    const sync = () => setResolved(resolveTheme(readPreference()));
+    sync();
+    return subscribeTheme(sync);
   }, []);
 
   const toggle = () => {
-    const next: ResolvedTheme =
-      readResolvedTheme() === 'dark' ? 'light' : 'dark';
-    const root = document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(next);
-    root.style.colorScheme = next;
-    setThemeColorMeta(MODE_THEME_COLOR[next]);
-    try {
-      window.localStorage.setItem('theme', next);
-    } catch {
-      // Private-mode storage failures only lose persistence, not the toggle.
-    }
-    setTheme(next);
+    applyPreference(
+      resolveTheme(readPreference()) === 'dark' ? 'light' : 'dark'
+    );
   };
 
   return (
@@ -63,9 +38,16 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       onClick={toggle}
-      aria-label="Toggle theme"
+      aria-label={
+        resolved == null
+          ? 'Toggle theme'
+          : resolved === 'dark'
+            ? 'Switch to light theme'
+            : 'Switch to dark theme'
+      }
     >
-      {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
+      <Sun size={16} className="dark:hidden" />
+      <Moon size={16} className="hidden dark:block" />
     </Button>
   );
 }

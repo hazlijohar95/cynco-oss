@@ -30,6 +30,7 @@ import { ReconciliationLegend } from '@/examples/ReconciliationLegend';
 import { RegisterComparison } from '@/examples/RegisterComparison';
 import { RegisterDemo } from '@/examples/RegisterDemo';
 import { WorkspaceDemo } from '@/examples/WorkspaceDemo';
+import { cn } from '@/lib/utils';
 
 // The /data section rhythm: every content section is a hairline-topped slab
 // with 6rem vertical padding inside a hairline-framed 80rem container.
@@ -52,7 +53,7 @@ export default function Home() {
           <CyncoCompanySection />
           <LedgerFilmSection />
         </main>
-        <Footer />
+        <Footer className="px-6 md:px-10 lg:px-12" />
       </div>
     </div>
   );
@@ -71,8 +72,11 @@ async function WorkspaceSection() {
     ...WORKSPACE_TREE_OPTIONS,
   });
   return (
+    // cn (tailwind-merge) resolves the py overrides against SECTION's
+    // defaults; a raw template literal would leave both classes in and let
+    // stylesheet order pick the winner.
     <section
-      className={`${SECTION} relative py-12 max-md:overflow-x-clip md:py-16`}
+      className={cn(SECTION, 'relative py-12 max-md:overflow-x-clip md:py-16')}
     >
       <WorkspaceDemo ssrHTML={ssrHTML} />
     </section>
@@ -90,9 +94,10 @@ async function JournalEntrySection() {
         title="Journal entries, server-rendered"
         description={
           <>
-            A six-posting payroll run — EPF and SOCSO splits — rendered on the
-            server as declarative shadow DOM and adopted at hydration, with no
-            client re-render. Every color resolves through the{' '}
+            A six-posting payroll run — split across EPF and SOCSO,
+            Malaysia&apos;s statutory payroll funds — rendered on the server as
+            declarative shadow DOM and adopted at hydration, with no client
+            re-render. Every color resolves through the{' '}
             <code>@cynco/theme</code> chain: override → role → default, per
             color scheme.
           </>
@@ -139,9 +144,9 @@ function ReconciliationSection() {
         description={
           <>
             Statement lines left, book postings right, proposed matches as
-            tinted pairs. Accept ✓ or reject ✗ from the center gutter, like
-            resolving a merge conflict. The difference is integer arithmetic and
-            reads reconciled only at exactly zero.
+            tinted pairs. Accept or reject each pair from the center gutter,
+            like resolving a merge conflict. The difference is integer
+            arithmetic and reads reconciled only at exactly zero.
           </>
         }
       />

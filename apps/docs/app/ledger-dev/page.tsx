@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 
 import { LedgerDevClient } from './LedgerDevClient';
 import { Footer } from '@/components/Footer';
-import { GITHUB_URL, Header } from '@/components/Header';
+import { Header } from '@/components/Header';
+import { GITHUB_URL } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Performance lab',
@@ -17,12 +18,12 @@ export const metadata: Metadata = {
 // deterministic fixtures the test suite and benchmarks run against.
 export default function LedgerDevPage() {
   return (
-    <div className="mx-auto min-h-screen max-w-6xl px-5">
+    <div className="mx-auto min-h-screen max-w-6xl px-5 font-mono">
       <Header />
       <main id="main" className="space-y-4 py-8">
-        <div className="max-w-3xl">
+        <div className="max-w-3xl space-y-2">
           <h1 className="text-2xl font-medium">Performance lab</h1>
-          <p className="text-muted-foreground text-md">
+          <p className="text-muted-foreground text-base">
             Proof of scale, generated in your browser:{' '}
             <code>@cynco/ledger-test-data</code> builds deterministic seeded
             workloads up to 1,000,000 balanced entries, and the virtualized

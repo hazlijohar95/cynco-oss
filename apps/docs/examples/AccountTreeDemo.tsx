@@ -80,10 +80,11 @@ export function AccountTreeDemo({ ssrHTML }: AccountTreeDemoProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 md:items-center">
+      <div className="flex flex-wrap items-center gap-3">
         <ButtonGroup
           value={density}
-          onValueChange={(value) => changeDensity(value as AccountTreeDensity)}
+          aria-label="Tree density"
+          onValueChange={changeDensity}
         >
           {DENSITIES.map((value) => (
             <ButtonGroupItem key={value} value={value} className="capitalize">

@@ -95,6 +95,11 @@ export function parseCsvLedger(text: string): ParsedCsvLedger {
   const skippedLines: number[] = [];
 
   let currentKey: string | null = null;
+  // The open entry's postings, kept as one mutable array pushed in place —
+  // re-copying the array per folded line would make a single large entry
+  // (all lines sharing date/payee/narration) accidentally O(n²).
+  let currentPostings: { account: string; amount: number; currency: string }[] =
+    [];
   let entryCounter = 0;
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
@@ -134,15 +139,12 @@ export function parseCsvLedger(text: string): ParsedCsvLedger {
     const groupKey = `${date}\u0000${payeeRaw}\u0000${narration}`;
     const posting = { account, amount, currency };
 
-    const last = entries[entries.length - 1];
-    if (groupKey === currentKey && last != null) {
-      entries[entries.length - 1] = {
-        ...last,
-        postings: [...last.postings, posting],
-      };
+    if (groupKey === currentKey && entries.length > 0) {
+      currentPostings.push(posting);
     } else {
       entryCounter += 1;
       currentKey = groupKey;
+      currentPostings = [posting];
       entries.push({
         id: `csv-${entryCounter}`,
         date,
@@ -151,7 +153,7 @@ export function parseCsvLedger(text: string): ParsedCsvLedger {
         narration,
         tags: [],
         links: [],
-        postings: [posting],
+        postings: currentPostings,
       });
     }
   }

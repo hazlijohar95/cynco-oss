@@ -6,7 +6,7 @@ import { CodeBlock } from '@/components/docs/CodeBlock';
 import { DocsLayout } from '@/components/docs/DocsLayout';
 import { Footer } from '@/components/Footer';
 
-const docsTitle = 'Accounts docs';
+const docsTitle = 'Accounts';
 const docsDescription =
   'Documentation for @cynco/accounts: vanilla and React APIs, SSR ' +
   'hydration, theming, and virtualization for the chart-of-accounts tree.';
@@ -585,7 +585,7 @@ export default function AccountsDocsPage() {
             <h2 id="flattening">Flattening empty groups</h2>
             <p>
               <code>flattenEmptyGroups</code> collapses single-child group
-              chains into one row labelled with the joined segments (
+              chains into one row labeled with the joined segments (
               <code>Income : Sales</code>, separators in punctuation color). It
               is purely a projection feature: canonical topology, expansion
               state, selection, and focus all keep canonical colon-delimited
@@ -775,7 +775,7 @@ export default function AccountsDocsPage() {
               <code>aria-hidden</code>, since the group&rsquo;s{' '}
               <code>aria-busy</code> already tells assistive tech). A rejection
               swaps it for an <em>error row</em> with the failure message and a
-              real, labelled Retry <code>&lt;button&gt;</code>. Placeholder rows
+              real, labeled Retry <code>&lt;button&gt;</code>. Placeholder rows
               are projection-level view rows, not store rows: never selectable,
               never drag sources or drop targets, and keyboard navigation /
               type-ahead skip them — with one deliberate exception to the

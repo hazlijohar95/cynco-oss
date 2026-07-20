@@ -3,6 +3,11 @@ import { Geist } from 'next/font/google';
 import localFont from 'next/font/local';
 
 import './globals.css';
+import {
+  MODE_THEME_COLOR,
+  type ResolvedTheme,
+  THEME_STORAGE_KEY,
+} from '@/lib/theme';
 
 // Geist serves docs prose only, so it loads without a preload hint — the
 // marketing page paints entirely in the mono stack.
@@ -14,20 +19,23 @@ const geistSans = Geist({
 
 // The brand monospace: Paper Mono by Paper (OFL 1.1, self-hosted — license
 // alongside the file in fonts/). One variable file covers every weight the
-// site uses (wght 100-800).
+// site uses (wght 100-800). adjustFontFallback is off because next/font's
+// synthesized fallback is size-adjusted Arial — a proportional sans that
+// would reflow tabular ledger layouts during the swap window; the system
+// monos in globals.css --font-mono serve as the real fallbacks instead.
 const paperMono = localFont({
   src: '../fonts/PaperMonoVariable.woff2',
   variable: '--font-paper-mono',
   weight: '100 800',
+  adjustFontFallback: false,
 });
 
+// No `themeColor` here on purpose: the pre-paint bootstrap below owns the
+// theme-color meta (a viewport-emitted meta would be a second, media-scoped
+// tag the theme scripts can't reach — Safari would keep matching it).
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#161616' },
-  ],
 };
 
 const siteUrl = 'https://ledger.cynco.dev';
@@ -42,7 +50,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     default: title,
-    template: '%s',
+    template: '%s · Cynco',
   },
   description,
   openGraph: {
@@ -63,12 +71,17 @@ export const metadata: Metadata = {
 
 // Applies the stored (or system) color mode before first paint: html class,
 // native color-scheme, and the iOS navbar tint meta. Authored as a real
-// function and stringified so it stays type-checked; the meta is created here
-// (not in JSX — React 19 hoists head tags and would manage a duplicate) and
-// owned by JS thereafter. Literals mirror ThemeToggle's MODE_THEME_COLOR.
-const themeBootstrapScript = `(${String(function applyInitialTheme() {
+// function and stringified so it stays type-checked; the shared literals
+// from lib/theme.ts are passed in as an argument instead of being mirrored.
+// A `system` preference deliberately leaves the html class off so the
+// stylesheet's `color-scheme: light dark` + light-dark() tokens keep
+// following the OS live; lib/theme.ts applies the same rule after hydration.
+function applyInitialTheme(config: {
+  storageKey: string;
+  colors: Record<ResolvedTheme, string>;
+}) {
   try {
-    const storedTheme = window.localStorage.getItem('theme');
+    const storedTheme = window.localStorage.getItem(config.storageKey);
     const theme =
       storedTheme === 'light' || storedTheme === 'dark'
         ? storedTheme
@@ -82,8 +95,10 @@ const themeBootstrapScript = `(${String(function applyInitialTheme() {
     const root = document.documentElement;
 
     root.classList.remove('light', 'dark');
-    root.classList.add(resolvedTheme);
-    root.style.colorScheme = resolvedTheme;
+    if (theme !== 'system') {
+      root.classList.add(resolvedTheme);
+      root.style.colorScheme = resolvedTheme;
+    }
 
     let themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (themeColorMeta == null) {
@@ -91,14 +106,16 @@ const themeBootstrapScript = `(${String(function applyInitialTheme() {
       themeColorMeta.setAttribute('name', 'theme-color');
       document.head.appendChild(themeColorMeta);
     }
-    themeColorMeta.setAttribute(
-      'content',
-      resolvedTheme === 'dark' ? '#161616' : '#ffffff'
-    );
+    themeColorMeta.setAttribute('content', config.colors[resolvedTheme]);
   } catch {
     // Ignore storage/media failures and let CSS defaults apply.
   }
-})})()`;
+}
+
+const themeBootstrapScript = `(${String(applyInitialTheme)})(${JSON.stringify({
+  storageKey: THEME_STORAGE_KEY,
+  colors: MODE_THEME_COLOR,
+})})`;
 
 export default function RootLayout({
   children,

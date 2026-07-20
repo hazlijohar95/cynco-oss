@@ -1,72 +1,25 @@
-'use client';
-
 import Link from 'next/link';
-import { useState } from 'react';
 
 import journalsPackageJson from '../../../packages/journals/package.json';
-import { GITHUB_URL } from './Header';
+import { InstallCommand } from './InstallCommand';
+import { GITHUB_URL } from '@/lib/site';
 
 const INSTALL_COMMAND = 'pnpm add @cynco/journals @cynco/accounts';
 
-// Copy affordance for the install chip: faint copy glyph that swaps to the
-// success green while the copied state is live.
-function CopyStatus({ copied }: { copied: boolean }) {
-  if (copied) {
-    return (
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="square"
-        aria-hidden="true"
-        className="text-success shrink-0"
-      >
-        <path d="M5 12.5L10 17.5L19 7" />
-      </svg>
-    );
-  }
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="square"
-      aria-hidden="true"
-      className="text-text-weak shrink-0"
-    >
-      <rect x="9" y="9" width="11" height="11" />
-      <path d="M5 15H4V4h11v1" />
-    </svg>
-  );
-}
-
 // Hero in the opencode /data style: an oversized headline and right-aligned
 // summary knocked out of a 6px pixel-pattern band, followed by a layer-2
-// install chip and the glossy contrast/neutral button pair.
+// install chip and the glossy contrast/neutral button pair. A server
+// component — the copy chip is the only client leaf — so the version read
+// from package.json never ships to the browser bundle.
 export function Hero() {
-  const [copied, setCopied] = useState(false);
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(INSTALL_COMMAND);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch (err) {
-      console.error('Failed to copy to clipboard', err);
-    }
-  };
-
   return (
-    <section className="flex flex-col gap-6 px-6 pt-20 pb-10 md:gap-5 md:px-8 md:pt-24 md:pb-8 lg:px-10">
+    <section className="flex flex-col gap-6 px-6 pt-20 pb-10 md:gap-5 md:px-10 md:pt-24 md:pb-8 lg:px-12">
       {/* The knockout canvas: on desktop the h1 (top-left) and summary
        * (bottom-right) sit on page-background plates layered over the
-       * centered pattern band, exactly like the /data hero. */}
+       * centered pattern band, exactly like the /data hero. The stack
+       * tightens to gap-5 at md because the absolutely-positioned canvas
+       * already carries its own internal air; every sibling below it reads
+       * closer to the 232px band than the mobile flow needs. */}
       <div className="flex flex-col gap-6 md:relative md:block md:h-[232px] md:overflow-hidden">
         <h1 className="text-foreground md:bg-background order-1 text-[38px] leading-none font-medium md:absolute md:top-0 md:left-0 md:z-[1] md:w-max md:max-w-full md:pr-3 md:pb-3 md:text-[64px] md:whitespace-nowrap">
           Ledger primitives
@@ -85,26 +38,11 @@ export function Hero() {
 
       {/* Install chip, styled like the /data hero-meta ticker chip. Wraps
        * on narrow viewports so the command is never truncated. */}
-      <button
-        onClick={() => void copyToClipboard()}
-        title="Copy to clipboard"
-        className="bg-accent text-muted-foreground flex w-fit max-w-full cursor-pointer items-center gap-2 border-0 px-2 py-1 text-left text-[13px] leading-[1.3] font-medium sm:h-6 sm:overflow-hidden sm:py-0 sm:leading-[1.1] sm:whitespace-nowrap"
-      >
-        <span className="text-text-weak" aria-hidden="true">
-          $
-        </span>
-        <span className="break-words sm:overflow-hidden sm:text-ellipsis">
-          {INSTALL_COMMAND}
-        </span>
-        <CopyStatus copied={copied} />
-      </button>
-      <span aria-live="polite" className="sr-only">
-        {copied ? 'Install command copied to clipboard' : ''}
-      </span>
+      <InstallCommand command={INSTALL_COMMAND} />
 
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/docs/journals" className="btn-data btn-data-contrast">
-          <strong>Read the docs</strong>
+          <strong>Get started</strong>
         </Link>
         <a
           href={GITHUB_URL}

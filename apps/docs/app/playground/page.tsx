@@ -11,9 +11,11 @@ export const metadata: Metadata = {
     'accounts and register, rendered by @cynco/accounts and @cynco/journals.',
 };
 
+// font-mono on the wrapper puts the whole tool page in the brand mono —
+// same width and type treatment as the perf lab, its sibling tool page.
 export default function PlaygroundPage() {
   return (
-    <div className="mx-auto min-h-screen max-w-5xl px-5">
+    <div className="mx-auto min-h-screen max-w-6xl px-5 font-mono">
       <Header />
       <main id="main" className="py-8">
         <PlaygroundClient />

@@ -28,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { afterNextPaint } from '@/lib/afterNextPaint';
 
 const REGISTER_ACCOUNT = 'Assets:Current:Cash-Maybank';
 
@@ -51,19 +52,30 @@ export function RegisterDemo() {
   const [rows, setRows] = useState<RegisterRowData[] | null>(null);
   const { ref, inView } = useInViewOnce<HTMLDivElement>();
 
+  // Generation is synchronous, so the "Generating…" placeholder is allowed
+  // to paint first (afterNextPaint) before the block runs — otherwise a
+  // workload switch freezes the tab with the old rows still on screen.
   useEffect(() => {
     if (!inView) return;
+    let cancelled = false;
     setRows(null);
-    const store = new EntryStore(workloads[workload]());
-    setRows(buildRegisterRows(store, REGISTER_ACCOUNT));
+    void afterNextPaint().then(() => {
+      if (cancelled) return;
+      const store = new EntryStore(workloads[workload]());
+      setRows(buildRegisterRows(store, REGISTER_ACCOUNT));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [workload, inView]);
 
   return (
     <div ref={ref} className="space-y-4">
-      <div className="flex flex-wrap gap-3 md:items-center">
+      <div className="flex flex-wrap items-center gap-3">
         <ButtonGroup
           value={density}
-          onValueChange={(value) => setDensity(value as RegisterDensity)}
+          aria-label="Register density"
+          onValueChange={setDensity}
         >
           <ButtonGroupItem value="comfortable">
             <Rows3 size={16} />

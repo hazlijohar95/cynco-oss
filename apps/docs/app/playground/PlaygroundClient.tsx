@@ -6,7 +6,7 @@ import { Register } from '@cynco/journals/react';
 import { EntryStore } from '@cynco/ledger-core';
 import { workloads } from '@cynco/ledger-test-data';
 import { FileUp, Sparkles } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { parseCsvLedger } from './parseCsvLedger';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,8 @@ const SAMPLE_CSV = `date,payee,narration,account,amount,currency
 2026-07-25,,July payroll run,Liabilities:Current:EPF-Payable,-1920.00,MYR
 2026-07-25,,July payroll run,Assets:Current:Cash-Maybank,-7120.00,MYR`;
 
+const CSV_COLUMNS = 'date,payee,narration,account,amount,currency';
+
 type ComponentScheme = 'auto' | 'light' | 'dark';
 
 const SCHEMES: readonly ComponentScheme[] = ['auto', 'light', 'dark'];
@@ -37,10 +39,7 @@ interface LedgerData {
 
 // First leaf-ish default: the account with the most register rows makes the
 // initial right pane interesting without any clicking.
-function pickDefaultAccount(
-  store: EntryStore,
-  entries: LedgerEntry[]
-): string | null {
+function pickDefaultAccount(entries: LedgerEntry[]): string | null {
   const counts = new Map<string, number>();
   for (const entry of entries) {
     for (const posting of entry.postings) {
@@ -58,6 +57,16 @@ function pickDefaultAccount(
   return best;
 }
 
+// Compact narration of which source lines were dropped: the first few line
+// numbers verbatim, then a "+n more" tail.
+function describeSkippedLines(skippedLines: number[]): string {
+  const shown = skippedLines.slice(0, 5).join(', ');
+  const rest = skippedLines.length - 5;
+  return `line${skippedLines.length === 1 ? '' : 's'} ${shown}${
+    rest > 0 ? ` +${String(rest)} more` : ''
+  } skipped`;
+}
+
 // The playground surface: paste or drop a transactions CSV (or load the
 // seeded sample ledger), then browse the resulting chart on the left and the
 // selected account's register on the right. All wiring goes through the
@@ -65,9 +74,13 @@ function pickDefaultAccount(
 export function PlaygroundClient() {
   const [csvText, setCsvText] = useState('');
   const [data, setData] = useState<LedgerData | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [scheme, setScheme] = useState<ComponentScheme>('auto');
   const [isDragging, setIsDragging] = useState(false);
+  // Drag depth counter: dragleave fires on every child boundary crossing,
+  // so the highlight only clears when the counter returns to zero.
+  const dragDepthRef = useRef(0);
 
   const store = useMemo(
     () => (data == null ? null : new EntryStore(data.entries)),
@@ -81,13 +94,14 @@ export function PlaygroundClient() {
 
   const loadEntries = useCallback(
     (entries: LedgerEntry[], label: string, skippedLines: number[] = []) => {
+      setParseError(null);
       setData((previous) => ({
         entries,
         version: (previous?.version ?? 0) + 1,
         label,
         skippedLines,
       }));
-      setSelectedAccount(pickDefaultAccount(new EntryStore(entries), entries));
+      setSelectedAccount(pickDefaultAccount(entries));
     },
     []
   );
@@ -95,7 +109,20 @@ export function PlaygroundClient() {
   const parseCsv = useCallback(
     (text: string, label: string) => {
       const { entries, skippedLines } = parseCsvLedger(text);
-      if (entries.length === 0) return;
+      if (entries.length === 0) {
+        // Every line failed: say so, say how many, and restate the contract
+        // — a silent no-op here would look like a dead button.
+        setParseError(
+          `No valid postings found${
+            skippedLines.length > 0
+              ? ` — ${String(skippedLines.length)} line${
+                  skippedLines.length === 1 ? '' : 's'
+                } skipped`
+              : ''
+          }. Expected columns: ${CSV_COLUMNS} (ISO dates, one posting per line).`
+        );
+        return;
+      }
       loadEntries(entries, label, skippedLines);
     },
     [loadEntries]
@@ -104,6 +131,7 @@ export function PlaygroundClient() {
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
+      dragDepthRef.current = 0;
       setIsDragging(false);
       const file = event.dataTransfer.files[0];
       if (file == null) return;
@@ -120,18 +148,23 @@ export function PlaygroundClient() {
   return (
     <div
       className="space-y-4"
-      onDragOver={(event) => {
-        event.preventDefault();
+      onDragEnter={() => {
+        dragDepthRef.current += 1;
         setIsDragging(true);
       }}
-      onDragLeave={() => setIsDragging(false)}
+      onDragOver={(event) => {
+        event.preventDefault();
+      }}
+      onDragLeave={() => {
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+        if (dragDepthRef.current === 0) setIsDragging(false);
+      }}
       onDrop={handleDrop}
     >
-      <div className="max-w-3xl">
+      <div className="max-w-3xl space-y-2">
         <h1 className="text-2xl font-medium">Playground</h1>
-        <p className="text-muted-foreground text-md">
-          Paste or drop a transactions CSV (
-          <code>date,payee,narration,account,amount,currency</code> — one
+        <p className="text-muted-foreground text-base">
+          Paste or drop a transactions CSV (<code>{CSV_COLUMNS}</code> — one
           posting per line), or load the seeded sample ledger. Amounts are
           parsed with exact string math into integer minor units.
         </p>
@@ -146,10 +179,14 @@ export function PlaygroundClient() {
         >
           <textarea
             value={csvText}
-            onChange={(event) => setCsvText(event.target.value)}
+            onChange={(event) => {
+              setParseError(null);
+              setCsvText(event.target.value);
+            }}
             placeholder={SAMPLE_CSV}
             spellCheck={false}
-            className="placeholder:text-muted-foreground/50 h-48 w-full resize-y rounded-md border bg-transparent p-3 font-mono text-[13px] leading-5 outline-none"
+            aria-label="Transactions CSV"
+            className="placeholder:text-muted-foreground/50 focus-visible:border-ring focus-visible:ring-ring/50 h-48 w-full resize-y rounded-md border bg-transparent p-3 text-[13px] leading-5 outline-none focus-visible:ring-[3px]"
           />
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -170,32 +207,41 @@ export function PlaygroundClient() {
               …or drop a .csv file anywhere on this panel.
             </span>
           </div>
+          {parseError != null && (
+            <p aria-live="polite" className="text-destructive text-sm">
+              {parseError}
+            </p>
+          )}
         </div>
       )}
 
       {data != null && store != null && (
         <>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-4 py-2.5">
-            <span className="font-mono text-xs">
+            <span className="text-xs">
               {data.label} · {entryCount.toLocaleString('en-US')} entries ·{' '}
               {rows.length.toLocaleString('en-US')} rows in view
             </span>
             {data.skippedLines.length > 0 && (
-              <span className="text-muted-foreground font-mono text-xs">
-                {data.skippedLines.length} line
-                {data.skippedLines.length === 1 ? '' : 's'} skipped
+              <span className="text-muted-foreground text-xs">
+                {describeSkippedLines(data.skippedLines)}
               </span>
             )}
             <div className="ml-auto flex items-center gap-2">
               <span className="text-muted-foreground text-xs">
                 Component theme
               </span>
-              <div className="flex items-center gap-0.5">
+              <div
+                role="group"
+                aria-label="Component color scheme"
+                className="flex items-center gap-0.5"
+              >
                 {SCHEMES.map((value) => (
                   <Button
                     key={value}
                     variant="ghost"
                     size="xs"
+                    aria-pressed={scheme === value}
                     onClick={() => setScheme(value)}
                     className={cn(
                       'text-muted-foreground font-normal capitalize',
@@ -241,7 +287,7 @@ export function PlaygroundClient() {
             </div>
             <div className="demo-container min-w-0">
               {selectedAccount == null || rows.length === 0 ? (
-                <div className="text-muted-foreground flex h-[560px] items-center justify-center font-mono text-[13px]">
+                <div className="text-muted-foreground flex h-[560px] items-center justify-center text-[13px]">
                   Select an account with activity to view its register.
                 </div>
               ) : (
@@ -254,9 +300,9 @@ export function PlaygroundClient() {
               )}
             </div>
           </div>
-          <p className="text-muted-foreground font-mono text-xs">
-            Click a tree row to open its register. Registers include
-            descendant-free postings only; balances roll up in the tree.
+          <p className="text-muted-foreground text-xs">
+            Click a tree row to open its register. A register shows postings to
+            the exact account only; child-account balances roll up in the tree.
           </p>
         </>
       )}

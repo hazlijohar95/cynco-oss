@@ -72,7 +72,7 @@ export function JournalEntryDemo({ ssrHTML }: JournalEntryDemoProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 md:items-center">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex w-full gap-3 md:w-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -143,7 +143,8 @@ export function JournalEntryDemo({ ssrHTML }: JournalEntryDemoProps) {
 
         <ButtonGroup
           value={colorScheme}
-          onValueChange={(value) => setColorScheme(value as ColorScheme)}
+          aria-label="Color scheme"
+          onValueChange={setColorScheme}
         >
           <ButtonGroupItem value="system">
             <Monitor size={16} />
@@ -161,7 +162,7 @@ export function JournalEntryDemo({ ssrHTML }: JournalEntryDemoProps) {
 
         <SwitchPill
           icon={<Hash size={16} />}
-          label="Line Numbers"
+          label="Line numbers"
           checked={showLineNumbers}
           onCheckedChange={setShowLineNumbers}
         />
