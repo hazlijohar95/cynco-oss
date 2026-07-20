@@ -28,14 +28,19 @@ tasks:
     inputs:
       - 'src/**/*'
       - 'test/e2e/**/*'
+    options:
+      # Worktree port offset for playwright (see scripts/wt.ts); missing in
+      # the primary checkout, which keeps the default e2e port.
+      envFile: '/.env.worktree'
 
   # Spawned by playwright's webServer (also under CI); JOURNALS_E2E_PORT is
-  # provided by the caller, with a fixed default for manual runs.
+  # provided by the caller, with a worktree-offset default for manual runs.
   test-e2e-server:
     script:
-      'JOURNALS_E2E_PORT=${JOURNALS_E2E_PORT:-9231} vite --config
-      test/e2e/vite.config.ts'
+      'JOURNALS_E2E_PORT=${JOURNALS_E2E_PORT:-$(( ${CYNCO_PORT_OFFSET:-0} + 9231
+      ))} vite --config test/e2e/vite.config.ts'
     options:
       cache: false
       persistent: true
       runInCI: 'always'
+      envFile: '/.env.worktree'

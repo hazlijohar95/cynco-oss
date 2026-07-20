@@ -25,19 +25,24 @@ tasks:
       - 'dist'
 
   # Build deps run to completion first so vite resolves @cynco/* through
-  # complete dists.
+  # complete dists. The port shifts by the worktree's offset from
+  # .env.worktree (written by scripts/wt.ts, loaded via envFile — missing in
+  # the primary checkout, which therefore keeps 4600). The CLI --port
+  # overrides vite.config.ts's pinned default; strictPort stays in force.
   dev:
-    command: 'vite --port 4600'
+    script: 'vite --port $(( ${CYNCO_PORT_OFFSET:-0} + 4600 ))'
     deps:
       - '^:build'
     options:
       cache: false
       persistent: true
       runInCI: 'skip'
+      envFile: '/.env.worktree'
 
   serve:
-    command: 'vite preview'
+    script: 'vite preview --port $(( ${CYNCO_PORT_OFFSET:-0} + 4600 ))'
     options:
       cache: false
       persistent: true
       runInCI: 'skip'
+      envFile: '/.env.worktree'

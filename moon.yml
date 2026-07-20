@@ -121,6 +121,17 @@ tasks:
     options:
       runInCI: 'always'
 
+  # Worktree manager: create/list/remove/sync parallel worktrees, each with
+  # its own port-offset block (see scripts/wt.ts and CONTRIBUTING.md
+  # "Parallel worktrees"). Forward arguments with `moonx root:wt -- <args>`.
+  # No graph edges, so runInCI 'always' is safe (see header note).
+  wt:
+    command: 'bun --silent scripts/wt.ts'
+    options:
+      cache: false
+      interactive: true
+      runInCI: 'always'
+
   clean:
     script:
       'rm -rf apps/*/.next packages/*/dist apps/*/tsconfig.tsbuildinfo

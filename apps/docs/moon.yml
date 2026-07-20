@@ -64,19 +64,23 @@ tasks:
       - '!**/*.tsbuildinfo'
 
   # Build deps run to completion first so next resolves @cynco/* through
-  # complete dists.
+  # complete dists. The port shifts by the worktree's offset from
+  # .env.worktree (written by scripts/wt.ts, loaded via envFile — missing in
+  # the primary checkout, which therefore keeps 4700).
   dev:
-    command: 'next dev --port 4700'
+    script: 'next dev --port $(( ${CYNCO_PORT_OFFSET:-0} + 4700 ))'
     deps:
       - '^:build'
     options:
       cache: false
       persistent: true
       runInCI: 'skip'
+      envFile: '/.env.worktree'
 
   serve:
-    command: 'next start --port 4700'
+    script: 'next start --port $(( ${CYNCO_PORT_OFFSET:-0} + 4700 ))'
     options:
       cache: false
       persistent: true
       runInCI: 'skip'
+      envFile: '/.env.worktree'
