@@ -33,3 +33,17 @@ tasks:
     options:
       cache: false
       runInCI: 'skip'
+
+  # The sanctioned release path for every published package: build + guards,
+  # pnpm pack, manifest rewrite (strip inlined workspace deps and
+  # release-only fields), payload verification, repack, publish. The script
+  # keys its per-package behavior off the task cwd (the project root).
+  # Forward flags with `moonx <project>:publish -- --dry-run` or `--tag=x`.
+  # `interactive` keeps stdio available for npm 2FA prompts; the script also
+  # attaches the upload step to /dev/tty because moon captures task stdio.
+  publish:
+    command: 'bun $workspaceRoot/scripts/publish.ts'
+    options:
+      cache: false
+      interactive: true
+      runInCI: 'skip'

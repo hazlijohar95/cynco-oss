@@ -13,12 +13,19 @@
     "nextjs/no-head-element": "off",
     "nextjs/no-html-link-for-pages": "off",
     "nextjs/no-img-element": "off",
-    "prefer-const": ["error", { "destructuring": "all" }],
+    "prefer-const": [
+      "error",
+      {
+        "destructuring": "all"
+      }
+    ],
     "no-unused-vars": [
       "error",
-      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
     ],
-
     "sort-imports": [
       "error",
       {
@@ -28,7 +35,6 @@
         "ignoreCase": true
       }
     ],
-
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
     "typescript/await-thenable": "error",
@@ -38,7 +44,11 @@
     "typescript/require-await": "warn",
     "typescript/restrict-template-expressions": [
       "warn",
-      { "allowNumber": true, "allowBoolean": true, "allowNullish": true }
+      {
+        "allowNumber": true,
+        "allowBoolean": true,
+        "allowNullish": true
+      }
     ],
     "typescript/strict-boolean-expressions": [
       "error",
@@ -55,7 +65,13 @@
     "typescript/prefer-optional-chain": "off",
     "typescript/no-explicit-any": "warn",
     "typescript/consistent-type-imports": "off",
-    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ],
     "typescript/unbound-method": "off",
     "typescript/no-meaningless-void-operator": "off",
     "typescript/no-duplicate-type-constituents": "off"
@@ -67,7 +83,6 @@
   },
   "globals": {},
   "ignorePatterns": [
-    "scripts/**",
     "**/dist/**",
     "packages/ledger-test-data/*-entries.json",
     "{packages,apps}/*/node_modules/**",

@@ -23,11 +23,32 @@ dependsOn:
 
 workspace:
   inheritedTasks:
-    # The root project inherits JS/TS shared tasks, but `bun test` here would
-    # run every suite in the repo and there is no root tsconfig to typecheck.
+    # The root project inherits JS/TS shared tasks, but the inherited `bun
+    # test` would run every suite in the repo and the inherited typecheck
+    # points at a project tsconfig that does not exist here. Scoped
+    # replacements below cover the repo-level scripts/ tooling only.
     exclude: ['test', 'typecheck']
 
 tasks:
+  # Unit tests for repo-level release tooling (scripts/publish.ts pure
+  # logic). The path filter keeps `moon run :test` from re-running package
+  # suites through the root project. No ^:build dep: the scripts import
+  # nothing from workspace packages.
+  test:
+    command: 'bun test scripts/'
+    inputs:
+      - 'scripts/**/*'
+    options:
+      runInCI: 'always'
+
+  # scripts/ have no project tsconfig at the root (the inherited typecheck
+  # would find nothing), so this scoped tsgo program is what typechecks them.
+  typecheck:
+    command: 'tsgo --noEmit --pretty -p scripts/tsconfig.json'
+    inputs:
+      - 'scripts/**/*'
+    options:
+      runInCI: 'always'
   lint:
     command: 'oxlint --type-aware --tsconfig tsconfig.oxlint.json .'
     deps:

@@ -60,15 +60,9 @@ tasks:
       internal: true
       runInCI: 'skip'
 
-  # Pack -> strip inlined workspace deps -> verify payload -> publish the
-  # rewritten tarball. Forward flags with `moonx accounts:publish -- --tag=x
-  # --dry-run`.
-  publish:
-    command: 'bun scripts/publish.ts'
-    options:
-      cache: false
-      interactive: true
-      runInCI: 'skip'
+  # The `publish` task itself is inherited from the publishable tag: the
+  # shared $workspaceRoot/scripts/publish.ts strips the inlined workspace
+  # deps from the packed manifest before anything reaches the registry.
 
   # No preset: presets force `runInCI: skip` and moon refuses to run such
   # tasks in CI-detected shells (agent harnesses export CI=1). Never targeted

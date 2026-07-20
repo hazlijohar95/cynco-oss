@@ -66,7 +66,7 @@ const actualVersion = pnpmVersion.stdout.trim();
 if (actualVersion !== expectedVersion || actualVersion !== pinnedVersion) {
   fail(
     [
-      `Expected pnpm ${expectedVersion}, but this command is running pnpm ${actualVersion || '(empty version output)'}.`,
+      `Expected pnpm ${expectedVersion}, but this command is running pnpm ${actualVersion === '' ? '(empty version output)' : actualVersion}.`,
       `Install or activate the pnpm version pinned in ${protoToolsPath} before publishing.`,
     ].join('\n')
   );
