@@ -43,6 +43,7 @@ snapshots.
 | `AccountStore.projection.test.ts` | Tree building, sibling sorting, balances and roll-ups, zero-activity accounts declared via `accountPaths`                                                 |
 | `AccountStore.scale.test.ts`      | Positional invariants over a 10 110-account tree (10×10×100 + implied groups)                                                                             |
 | `EntryStore.ingest.test.ts`       | Chunked async ingest: equivalence to sync adds, async-generator sources, scheduler tasks, whole-chunk abort atomicity, dedupe accounting, mutation events |
+| `EntryStore.ordering.test.ts`     | Merge-insert invariant: incremental out-of-order batches leave the list in exact (date, id) order, identical to one sorted insert                         |
 | `EntryStore.register.test.ts`     | Register rows with running balances, filters, mutation invalidation                                                                                       |
 | `money.balance.test.ts`           | Minor-unit arithmetic, per-currency sums, balance checks, safe-integer guard                                                                              |
 | `scheduler.test.ts`               | Cooperative scheduler: slicing under a deadline, `timeRemaining` countdown, abort, queue-full errors, overrun metrics                                     |

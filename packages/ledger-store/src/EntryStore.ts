@@ -53,6 +53,45 @@ function compareEntries(a: LedgerEntry, b: LedgerEntry): number {
   return a.id > b.id ? 1 : 0;
 }
 
+// Merges a batch of new entries into an already-sorted list in one linear
+// pass, returning a fresh sorted array. The batch is sorted on its own first
+// (O(k log k) over just the additions), then the two sorted runs are merged
+// (O(n + k)) — so a bulk ingest that arrives in chunks pays O(k log k) per
+// chunk instead of re-sorting the whole growing list (O(n log n)) every time.
+// Stable at ties by construction: entry ids are unique per store, so no two
+// entries ever compare equal.
+function mergeSortedEntries(
+  sorted: readonly LedgerEntry[],
+  added: LedgerEntry[]
+): LedgerEntry[] {
+  added.sort(compareEntries);
+  const merged: LedgerEntry[] = new Array(sorted.length + added.length);
+  let sortedIndex = 0;
+  let addedIndex = 0;
+  let mergedIndex = 0;
+  while (sortedIndex < sorted.length && addedIndex < added.length) {
+    if (compareEntries(sorted[sortedIndex], added[addedIndex]) <= 0) {
+      merged[mergedIndex] = sorted[sortedIndex];
+      sortedIndex += 1;
+    } else {
+      merged[mergedIndex] = added[addedIndex];
+      addedIndex += 1;
+    }
+    mergedIndex += 1;
+  }
+  while (sortedIndex < sorted.length) {
+    merged[mergedIndex] = sorted[sortedIndex];
+    sortedIndex += 1;
+    mergedIndex += 1;
+  }
+  while (addedIndex < added.length) {
+    merged[mergedIndex] = added[addedIndex];
+    addedIndex += 1;
+    mergedIndex += 1;
+  }
+  return merged;
+}
+
 // True when a posting on `account` belongs to the register of `path`.
 // `descendantPrefix` is the precomputed `path + ':'` so the hot loop does a
 // single startsWith instead of re-concatenating per posting.
@@ -238,8 +277,10 @@ export class EntryStore {
     if (added.length === 0) {
       return;
     }
-    this.entries.push(...added);
-    this.entries.sort(compareEntries);
+    // Merge the sorted batch into the already-sorted list instead of
+    // re-sorting the whole (growing) list — the difference between O(k log k)
+    // and O(n log n) per chunk on a bulk ingest.
+    this.entries = mergeSortedEntries(this.entries, added);
     this.emitMutation(
       added.map((entry) => entry.id),
       [added]
