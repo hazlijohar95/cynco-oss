@@ -6,6 +6,10 @@
   "name": "cynco-docs",
   "account_id": "9c006d850453ab5c068f5688d138521b",
   "compatibility_date": "2026-07-01",
+  // Custom domain on the cynco.dev zone (same account): Cloudflare manages
+  // the DNS record and certificate. The apex is reserved for the company
+  // projects index; each project lives on its own subdomain.
+  "routes": [{ "pattern": "ledger.cynco.dev", "custom_domain": true }],
   "assets": {
     "directory": "./out",
     "not_found_handling": "404-page",

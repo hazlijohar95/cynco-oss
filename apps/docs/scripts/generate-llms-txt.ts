@@ -31,7 +31,7 @@ const SITE: LlmsSite = {
     'chart-of-accounts tree (@cynco/accounts), and runtime theming with ' +
     'colorblind-safe role sets (@cynco/theming + @cynco/theme). Vanilla ' +
     'core, React adapters, SSR built in.',
-  baseUrl: 'https://cynco-docs.hazli-johar.workers.dev',
+  baseUrl: 'https://ledger.cynco.dev',
   githubUrl: 'https://github.com/hazlijohar95/cynco-oss',
   installCommand: 'pnpm add @cynco/journals @cynco/accounts',
   notes: [

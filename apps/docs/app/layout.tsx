@@ -30,7 +30,7 @@ export const viewport: Viewport = {
   ],
 };
 
-const siteUrl = 'https://cynco-docs.hazli-johar.workers.dev';
+const siteUrl = 'https://ledger.cynco.dev';
 const title = 'Cynco — ledger primitives for the web';
 const description =
   '@cynco/journals renders journal entries and virtualized registers; ' +
