@@ -404,14 +404,17 @@ function CloseScene({ scheme }: { scheme: FilmScheme }) {
       <div style={{ width: 940, maxWidth: '100%', textAlign: 'left' }}>
         <div
           style={{
-            fontSize: 40,
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 14,
             fontWeight: 500,
             letterSpacing: '-0.02em',
             opacity: wordmarkOpacity,
             transform: `translateY(${wordmarkY}px)`,
           }}
         >
-          cynco
+          <span style={{ fontSize: 40 }}>Accounting</span>
+          <span style={{ fontSize: 22, color: palette.muted }}>by Cynco</span>
         </div>
         <div
           aria-hidden
@@ -431,7 +434,7 @@ function CloseScene({ scheme }: { scheme: FilmScheme }) {
             opacity: lineOpacity,
           }}
         >
-          Modern accounting infrastructure.
+          Integer minor units. Balanced by construction.
         </div>
       </div>
     </AbsoluteFill>
@@ -732,7 +735,7 @@ function Watermark({ scheme }: { scheme: FilmScheme }) {
         opacity,
       }}
     >
-      cynco · integer minor units · balances by construction
+      Accounting by Cynco · integer minor units · balances by construction
     </div>
   );
 }

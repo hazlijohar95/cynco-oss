@@ -136,10 +136,13 @@ export function Header({ className }: HeaderProps) {
       <Link
         href="/"
         className="text-foreground flex flex-none items-center gap-2.5"
-        aria-label="Cynco home"
+        aria-label="Accounting by Cynco — home"
       >
         <CyncoMark />
-        <span className="text-[15px] leading-none font-semibold">cynco</span>
+        <span className="flex items-baseline gap-1.5 leading-none">
+          <span className="text-[15px] font-semibold">Accounting</span>
+          <span className="text-muted-foreground text-[12px]">by Cynco</span>
+        </span>
       </Link>
 
       <nav className="hidden min-w-0 flex-1 items-center justify-center md:flex">

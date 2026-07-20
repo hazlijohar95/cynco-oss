@@ -31,7 +31,7 @@ export const viewport: Viewport = {
 };
 
 const siteUrl = 'https://ledger.cynco.dev';
-const title = 'Cynco — ledger primitives for the web';
+const title = 'Accounting by Cynco — ledger primitives for the web';
 const description =
   '@cynco/journals renders journal entries and virtualized registers; ' +
   '@cynco/accounts renders the chart of accounts. Vanilla TypeScript core, ' +
