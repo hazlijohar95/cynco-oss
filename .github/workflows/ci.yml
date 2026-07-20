@@ -62,7 +62,7 @@ jobs:
         run: >-
           moon ci --include-relations --summary detailed :build demo:build
           docs:build :test :typecheck journals:test-e2e accounts:test-e2e
-          root:lint root:lint-css
+          root:lint root:lint-css root:assert-tiers
 
   # Independent fast lane so a pinning regression fails in seconds without
   # waiting on the build matrix.

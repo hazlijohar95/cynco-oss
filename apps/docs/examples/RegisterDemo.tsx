@@ -2,7 +2,7 @@
 
 import type { RegisterDensity } from '@cynco/journals';
 import { Register, type RegisterRowData } from '@cynco/journals/react';
-import { EntryStore } from '@cynco/ledger-store';
+import { EntryStore } from '@cynco/ledger-core';
 import {
   WORKLOAD_ENTRY_COUNTS,
   type WorkloadName,

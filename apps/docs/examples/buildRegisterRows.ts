@@ -1,5 +1,5 @@
 import type { MinorUnits, RegisterRowData } from '@cynco/journals';
-import type { EntryStore } from '@cynco/ledger-store';
+import type { EntryStore } from '@cynco/ledger-core';
 
 // Adapts EntryStore register rows to the shape @cynco/journals consumes.
 // The store returns one running balance number in the posting's own

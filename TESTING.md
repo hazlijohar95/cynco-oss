@@ -5,7 +5,7 @@ the substance — including the candid known-gaps audits:
 
 - [`packages/journals/test/README.md`](packages/journals/test/README.md)
 - [`packages/accounts/test/README.md`](packages/accounts/test/README.md)
-- [`packages/ledger-store/test/README.md`](packages/ledger-store/test/README.md)
+- [`packages/ledger-core/test/README.md`](packages/ledger-core/test/README.md)
 
 For benchmarks and browser profiling, see [`PERFORMANCE.md`](PERFORMANCE.md).
 
@@ -22,7 +22,7 @@ runner emits agent-friendly output.
 - **Unit** (`moonx <project>:test`, inherited `bun test` from
   `.moon/tasks/bun-common.yml`, dependency dists built first): bun + jsdom with
   stubbed scroll geometry for the DOM packages, pure-data assertions for
-  `ledger-store`, `theme`, and `theming`. Behavioral projections over snapshots;
+  `ledger-core`, `theme`, and `theming`. Behavioral projections over snapshots;
   the only snapshots are one full-fidelity canary per pure renderer (three in
   journals, one in accounts).
 - **E2e** (`moonx journals:test-e2e`, `moonx accounts:test-e2e`): Playwright
@@ -53,10 +53,10 @@ in a real browser (scrolling, focus, pointer input, computed styles) — an e2e
 fixture + spec alongside it. Suite sizes as of the last full runs (treat as a
 floor — suites only grow):
 
-| Project      | Unit tests | Files                          | E2e       |
-| ------------ | ---------- | ------------------------------ | --------- |
-| journals     | 280        | 30                             | 27 passed |
-| accounts     | 230        | 24                             | 27 passed |
-| ledger-store | 100        | 9                              | —         |
-| theme        | 219        | 4 (incl. contrast + CVD gates) | —         |
-| theming      | 31         | 4                              | —         |
+| Project     | Unit tests | Files                          | E2e       |
+| ----------- | ---------- | ------------------------------ | --------- |
+| journals    | 280        | 30                             | 27 passed |
+| accounts    | 230        | 24                             | 27 passed |
+| ledger-core | 100        | 9                              | —         |
+| theme       | 219        | 4 (incl. contrast + CVD gates) | —         |
+| theming     | 31         | 4                              | —         |

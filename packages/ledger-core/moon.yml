@@ -2,7 +2,7 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 
 language: 'typescript'
 layer: 'library'
-tags: ['tsdown']
+tags: ['tsdown', 'tier-engine']
 
 tasks:
   # Not targeted by any CI lane; runnable everywhere for local/agent use.

@@ -4,7 +4,7 @@ import type { AccountStatusEntry } from '@cynco/accounts';
 import { templateRender, useAccountTree } from '@cynco/accounts/react';
 import type { RegisterRowData } from '@cynco/journals';
 import { Register } from '@cynco/journals/react';
-import { EntryStore, getAccountLeafName } from '@cynco/ledger-store';
+import { EntryStore, getAccountLeafName } from '@cynco/ledger-core';
 import { workloads } from '@cynco/ledger-test-data';
 import { Table2 } from 'lucide-react';
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';

@@ -63,7 +63,7 @@
     "prepublishOnly": "moon run accounts:prepublish"
   },
   "dependencies": {
-    "@cynco/ledger-store": "workspace:*",
+    "@cynco/ledger-core": "workspace:*",
     "@cynco/theme": "workspace:*"
   },
   "devDependencies": {

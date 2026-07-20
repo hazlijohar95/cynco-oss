@@ -3,7 +3,7 @@
 // the xl workload takes noticeable time and memory to generate, and callers
 // that only need `small` must not pay for it.
 
-import type { LedgerEntry } from '@cynco/ledger-store';
+import type { LedgerEntry } from '@cynco/ledger-core';
 
 import { generateLedger } from './generateLedger';
 

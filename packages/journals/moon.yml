@@ -2,7 +2,7 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 
 language: 'typescript'
 layer: 'library'
-tags: ['tsdown', 'publishable']
+tags: ['tsdown', 'publishable', 'tier-domain']
 
 tasks:
   # No preset: presets force `runInCI: skip` and moon refuses to run such

@@ -2,7 +2,7 @@
 
 import type { RegisterRowData } from '@cynco/journals';
 import { Register } from '@cynco/journals/react';
-import { EntryStore } from '@cynco/ledger-store';
+import { EntryStore } from '@cynco/ledger-core';
 import { workloads } from '@cynco/ledger-test-data';
 import { AlignJustify, Rows3 } from 'lucide-react';
 import { useEffect, useState } from 'react';

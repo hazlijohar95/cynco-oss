@@ -12,17 +12,17 @@ All three are mitata suites with deterministic fixtures (seeded or
 formula-generated data; no `Math.random` at measurement time), runnable in agent
 shells (`runInCI: 'always'`) and never part of any CI lane.
 
-### `moonx ledger-store:benchmark`
+### `moonx ledger-core:benchmark`
 
-`packages/ledger-store/scripts/benchmark.ts`. Inlined fixture generation (local
+`packages/ledger-core/scripts/benchmark.ts`. Inlined fixture generation (local
 mulberry32; importing `@cynco/ledger-test-data` would create a workspace cycle):
 50 000 leaf accounts, 100 000 balanced entries.
 
-| Group                  | Measures                                                                                                                | Invariant guarded                                                                                                                                                                       |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AccountStore           | build; `getVisibleSlice` viewport of 100 (middle); expandAll/collapseAll rebuilds                                       | Slice reads are viewport-sized regardless of tree size (slice-first reads, `AccountStore.getVisibleSlice`)                                                                              |
-| AccountStore mutations | 100-move burst + ONE projection read; 1k `addAccounts` + read                                                           | A mutation burst amortizes to a single derived rebuild — `derived == null` IS the dirty flag (`packages/ledger-store/src/AccountStore.ts:64`), so cost scales with reads, not mutations |
-| EntryStore             | build (sort + id index); cold register build; warm slice read; descendants roll-up; `addEntriesAsync` 100k in 5k chunks | Warm register slices are index reads off cached per-account prefix sums — never a re-scan of the entry list (`packages/ledger-store/src/EntryStore.ts` header)                          |
+| Group                  | Measures                                                                                                                | Invariant guarded                                                                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AccountStore           | build; `getVisibleSlice` viewport of 100 (middle); expandAll/collapseAll rebuilds                                       | Slice reads are viewport-sized regardless of tree size (slice-first reads, `AccountStore.getVisibleSlice`)                                                                             |
+| AccountStore mutations | 100-move burst + ONE projection read; 1k `addAccounts` + read                                                           | A mutation burst amortizes to a single derived rebuild — `derived == null` IS the dirty flag (`packages/ledger-core/src/AccountStore.ts:64`), so cost scales with reads, not mutations |
+| EntryStore             | build (sort + id index); cold register build; warm slice read; descendants roll-up; `addEntriesAsync` 100k in 5k chunks | Warm register slices are index reads off cached per-account prefix sums — never a re-scan of the entry list (`packages/ledger-core/src/EntryStore.ts` header)                          |
 
 ### `moonx journals:benchmark`
 
@@ -133,7 +133,7 @@ typed arrays for hot per-row data. Concretely:
   one O(n) lowercase pass per data version, built on FIRST filter use and reused
   across query keystrokes; dropped on `setRows`.
 - **`derived == null` rebuild amortization.**
-  `packages/ledger-store/src/AccountStore.ts:64`: the derived struct-of-arrays
+  `packages/ledger-core/src/AccountStore.ts:64`: the derived struct-of-arrays
   topology is one nullable object; every mutation just nulls it, and the next
   read pays for exactly one rebuild. The `100-move burst + one projection read`
   benchmark exists to keep this honest.

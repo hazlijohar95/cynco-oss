@@ -3,7 +3,7 @@
 // rendering, expansion projection rebuilds, and search sessions.
 //
 // Fixtures come from @cynco/ledger-test-data (devDependency; no cycle — the
-// fixture package depends only on ledger-store) so every package in the
+// fixture package depends only on ledger-core) so every package in the
 // suite benchmarks against the same deterministic ledgers.
 
 import { workloads } from '@cynco/ledger-test-data';

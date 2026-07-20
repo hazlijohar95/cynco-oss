@@ -4,7 +4,7 @@
 // machines. Every generated entry is balanced by construction (per-currency
 // zero sum) and every amount is an exact integer in minor units.
 
-import type { EntryFlag, LedgerEntry, Posting } from '@cynco/ledger-store';
+import type { EntryFlag, LedgerEntry, Posting } from '@cynco/ledger-core';
 
 import { createSeededRandom, type SeededRandom } from './seededRandom';
 

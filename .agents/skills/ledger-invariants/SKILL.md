@@ -2,7 +2,7 @@
 name: ledger-invariants
 description:
   Use when touching monetary amounts, journal entries, postings, balancing,
-  account paths, or anything that reads from or writes to the ledger-store
+  account paths, or anything that reads from or writes to the ledger-core
   engine. These invariants are correctness-critical: violating them silently
   corrupts financial data.
 ---
@@ -46,13 +46,13 @@ style preferences — a violation is a data-integrity bug.
 
 ## The engine boundary
 
-- `@cynco/ledger-store` is a private engine. `@cynco/accounts` and
+- `@cynco/ledger-core` is a private engine. `@cynco/accounts` and
   `@cynco/journals` own the public product API.
 - Package code, published payloads, and published manifests must never import or
-  depend on `@cynco/ledger-store` or `@cynco/ledger-test-data`. The engine
-  source is inlined into `@cynco/accounts` at build time (tsdown `noExternal`)
-  and the leak is asserted after every build by
-  `packages/accounts/scripts/assert-no-ledger-store.ts`.
+  depend on `@cynco/ledger-core` or `@cynco/ledger-test-data`. The engine source
+  is inlined into `@cynco/accounts` at build time (tsdown `noExternal`) and the
+  leak is asserted after every build by
+  `packages/accounts/scripts/assert-no-ledger-core.ts`.
 - Do not "fix" a build/publish failure by re-adding the engine as a dependency.
   If the guard fires, the inlining or an import is wrong.
 
@@ -66,7 +66,7 @@ style preferences — a violation is a data-integrity bug.
 
 - `moonx accounts:test` / `moonx journals:test` — unit and integration suites
   that exercise balancing, canonical paths, and parsing.
-- `packages/accounts/build` runs `assert-no-ledger-store.ts` on every build.
+- `packages/accounts/build` runs `assert-no-ledger-core.ts` on every build.
 - The publish payload verification (`scripts/publish.ts`,
   `packages/accounts/scripts/assert-safe-publish.ts`) blocks any release that
   still references a private package.

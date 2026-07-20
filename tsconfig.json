@@ -3,7 +3,7 @@
   "files": [],
   "references": [
     { "path": "./packages/theme" },
-    { "path": "./packages/ledger-store" },
+    { "path": "./packages/ledger-core" },
     { "path": "./packages/ledger-test-data" },
     { "path": "./packages/journals" },
     { "path": "./packages/accounts" },

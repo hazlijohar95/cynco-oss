@@ -49,6 +49,19 @@ tasks:
       - 'scripts/**/*'
     options:
       runInCI: 'always'
+
+  # Architectural boundary guard: fails if any package's @cynco dependency
+  # violates the tier direction (domain → surface/engine → fixtures, never up
+  # or sideways). Reads each package's tier tag from its moon.yml plus its
+  # manifest deps; no build needed, so it runs everywhere including CI.
+  assert-tiers:
+    command: 'bun scripts/assert-tiers.ts'
+    inputs:
+      - 'scripts/assert-tiers.ts'
+      - 'packages/*/moon.yml'
+      - 'packages/*/package.json'
+    options:
+      runInCI: 'always'
   lint:
     command: 'oxlint --type-aware --tsconfig tsconfig.oxlint.json .'
     deps:

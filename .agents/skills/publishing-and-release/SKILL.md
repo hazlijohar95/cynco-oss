@@ -26,7 +26,7 @@ artifact that was checked.
 
 ## Why bare `pnpm publish` is blocked
 
-`@cynco/accounts` inlines `@cynco/ledger-store` and `@cynco/theme` into its dist
+`@cynco/accounts` inlines `@cynco/ledger-core` and `@cynco/theme` into its dist
 (tsdown `noExternal`), but its workspace manifest still declares them as
 dependencies so local resolution works. Publishing that manifest verbatim would
 break `pnpm add @cynco/accounts` — the engine is private and not on npm.
@@ -48,12 +48,12 @@ hold in the payload:
 - An `exports` entry points at a dist file that does not exist.
 - `README.md` or `LICENSE.md` is missing.
 
-`PRIVATE_PACKAGES` (`@cynco/ledger-store`, `@cynco/ledger-test-data`) may never
+`PRIVATE_PACKAGES` (`@cynco/ledger-core`, `@cynco/ledger-test-data`) may never
 appear in any published payload or manifest, in any package.
 
 ## When a guard fires
 
-- `assert-no-ledger-store` (runs on every `accounts:build`): a runtime or type
+- `assert-no-ledger-core` (runs on every `accounts:build`): a runtime or type
   import of the private engine survived bundling. Fix the import or the tsdown
   `noExternal` config — do not re-add the engine as a dependency.
 - `assert-safe-publish`: you ran a raw publish path. Use

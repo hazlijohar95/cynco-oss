@@ -3,7 +3,7 @@ import {
   type LedgerEntry,
   type MinorUnits,
 } from '@cynco/journals';
-import { isValidAccountPath } from '@cynco/ledger-store';
+import { isValidAccountPath } from '@cynco/ledger-core';
 
 export interface ParsedCsvLedger {
   entries: LedgerEntry[];

@@ -1,4 +1,4 @@
-import { isEntryBalanced, isValidAccountPath } from '@cynco/ledger-store';
+import { isEntryBalanced, isValidAccountPath } from '@cynco/ledger-core';
 import { describe, expect, test } from 'bun:test';
 
 import { CHART_OF_ACCOUNTS } from '../src/chartOfAccounts';

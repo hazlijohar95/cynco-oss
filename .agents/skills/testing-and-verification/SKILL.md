@@ -46,7 +46,7 @@ package and use `describe`, `test`, and `expect` from `bun:test`.
 ```bash
 moonx accounts:test
 moonx journals:test
-moonx ledger-store:test
+moonx ledger-core:test
 moon run :test               # every project's suite
 ```
 

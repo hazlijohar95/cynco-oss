@@ -33,7 +33,7 @@
     }
   },
   "dependencies": {
-    "@cynco/ledger-store": "workspace:*"
+    "@cynco/ledger-core": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

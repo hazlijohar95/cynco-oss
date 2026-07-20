@@ -23,7 +23,7 @@ import { join, relative, resolve } from 'node:path';
 // The load-bearing step is repacking the pnpm tarball after rewriting its
 // package.json, so the tarball we rehearse with --dry-run is byte-for-byte
 // the tarball we publish. Rewriting matters most for @cynco/accounts: its
-// dist inlines @cynco/ledger-store and @cynco/theme via tsdown noExternal,
+// dist inlines @cynco/ledger-core and @cynco/theme via tsdown noExternal,
 // but the workspace manifest still declares them as dependencies so local
 // resolution works. Publishing that manifest verbatim would break
 // `pnpm add @cynco/accounts` (the engine is private and never on npm).
@@ -49,10 +49,10 @@ export interface PackagePublishConfig {
  * Workspace packages that are never published to npm. No published payload
  * may import them and no published manifest may depend on them, in any
  * package — this is the repo-wide analogue of accounts' per-build
- * assert-no-ledger-store gate.
+ * assert-no-ledger-core gate.
  */
 export const PRIVATE_PACKAGES: readonly string[] = [
-  '@cynco/ledger-store',
+  '@cynco/ledger-core',
   '@cynco/ledger-test-data',
 ];
 
@@ -65,7 +65,7 @@ export const PRIVATE_PACKAGES: readonly string[] = [
 export const PUBLISH_CONFIGS: Record<string, PackagePublishConfig> = {
   '@cynco/accounts': {
     project: 'accounts',
-    inlinedDependencies: ['@cynco/ledger-store', '@cynco/theme'],
+    inlinedDependencies: ['@cynco/ledger-core', '@cynco/theme'],
   },
   '@cynco/journals': { project: 'journals', inlinedDependencies: [] },
   '@cynco/theme': { project: 'theme', inlinedDependencies: [] },
@@ -246,7 +246,7 @@ export interface PublishManifest {
  * the caller keeps the original for the dry-run diff.
  *
  * - Inlined workspace deps are removed: their code is already bundled into
- *   dist, and @cynco/ledger-store does not exist on npm at all.
+ *   dist, and @cynco/ledger-core does not exist on npm at all.
  * - `scripts` is dropped entirely: the only script is prepublishOnly, which
  *   points at the moon guard chain — meaningless (and for accounts,
  *   fail-by-design) inside the packed artifact.
@@ -312,7 +312,7 @@ export function findManifestDependencyOffenders(
  * Finds quoted module specifiers of forbidden packages (bare or subpath) in a
  * source text. Matching quoted specifiers instead of raw substrings is
  * deliberate: journals' d.ts output legitimately mentions
- * `@cynco/ledger-store` in a backticked doc comment, which resolves nothing
+ * `@cynco/ledger-core` in a backticked doc comment, which resolves nothing
  * at runtime — but any *quoted* occurrence is either an import/require/
  * dynamic-import specifier or close enough to one to fail the release. The
  * trailing boundary (quote or `/`) keeps `@cynco/theme` from matching
@@ -485,7 +485,7 @@ function preflight(flags: CliFlags): void {
 }
 
 // Runs the guard chain this script owns: the pnpm-version pin check plus the
-// package build (accounts' build already includes its assert-no-ledger-store
+// package build (accounts' build already includes its assert-no-ledger-core
 // dist gate). Deliberately NOT `moon run <project>:prepublish` — accounts'
 // prepublish contains assert-safe-publish, which fails by design while the
 // workspace manifest still carries inlined deps. That guard exists to block

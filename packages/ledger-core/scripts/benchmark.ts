@@ -1,4 +1,4 @@
-// mitata benchmarks for the ledger-store hot paths: AccountStore build and
+// mitata benchmarks for the ledger-core hot paths: AccountStore build and
 // visible-projection reads over 50k accounts, and EntryStore register
 // running-balance builds over 100k entries.
 //

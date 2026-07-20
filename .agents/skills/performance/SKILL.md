@@ -46,7 +46,7 @@ Hot paths have committed benchmarks. When you change one, run its benchmark and
 compare — a regression is as real as a failing test.
 
 ```bash
-moonx ledger-store:benchmark
+moonx ledger-core:benchmark
 moonx accounts:benchmark
 moonx journals:benchmark
 ```

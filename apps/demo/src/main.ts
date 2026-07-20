@@ -33,7 +33,7 @@ import {
   EntryStore,
   isEntryBalanced,
   type LedgerEntry,
-} from '@cynco/ledger-store';
+} from '@cynco/ledger-core';
 import {
   WORKLOAD_ENTRY_COUNTS,
   type WorkloadName,

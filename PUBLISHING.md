@@ -16,15 +16,15 @@ gets published.
 
 ## What is published (and what is not)
 
-| Package           | npm | Notes                                                     |
-| ----------------- | --- | --------------------------------------------------------- |
-| `@cynco/theme`    | yes | No workspace dependencies.                                |
-| `@cynco/theming`  | yes | Depends on `@cynco/theme` (real npm dependency).          |
-| `@cynco/journals` | yes | Depends on `@cynco/theme` (real npm dependency).          |
-| `@cynco/accounts` | yes | Inlines `@cynco/ledger-store` and `@cynco/theme` in dist. |
+| Package           | npm | Notes                                                    |
+| ----------------- | --- | -------------------------------------------------------- |
+| `@cynco/theme`    | yes | No workspace dependencies.                               |
+| `@cynco/theming`  | yes | Depends on `@cynco/theme` (real npm dependency).         |
+| `@cynco/journals` | yes | Depends on `@cynco/theme` (real npm dependency).         |
+| `@cynco/accounts` | yes | Inlines `@cynco/ledger-core` and `@cynco/theme` in dist. |
 
-`@cynco/ledger-store` and `@cynco/ledger-test-data` are **never** published. The
-ledger-store engine ships inside `@cynco/accounts`' `dist/` via tsdown's
+`@cynco/ledger-core` and `@cynco/ledger-test-data` are **never** published. The
+ledger-core engine ships inside `@cynco/accounts`' `dist/` via tsdown's
 `noExternal` bundling, so consumers only ever install `@cynco/accounts`. Because
 the workspace `package.json` of accounts still declares the inlined packages as
 dependencies (local resolution needs them), the publish script strips them from
@@ -61,8 +61,8 @@ To cut a release:
 Two layers protect a release:
 
 - **Build-time gate** (accounts only): `accounts:build` runs
-  `scripts/assert-no-ledger-store.ts` after every tsdown build, failing if any
-  dist runtime/type file still references `@cynco/ledger-store`. Inlining is
+  `scripts/assert-no-ledger-core.ts` after every tsdown build, failing if any
+  dist runtime/type file still references `@cynco/ledger-core`. Inlining is
   asserted, not assumed.
 - **prepublishOnly** (every published package): points at
   `moon run <project>:prepublish` (pnpm-version pin check + build). For accounts
@@ -155,7 +155,7 @@ Create a fresh consumer app **outside** the monorepo so workspace resolution
 cannot mask packaging bugs — either against the beta publish or by installing
 the final tarball path printed by `--dry-run`. Check at minimum:
 
-- `ls node_modules/@cynco` shows only published packages (no `ledger-store`, no
+- `ls node_modules/@cynco` shows only published packages (no `ledger-core`, no
   `ledger-test-data`).
 - Typecheck and production-build the consumer.
 - Exercise each subpath export (e.g. `@cynco/journals`, `/react`, `/ssr`,
@@ -182,7 +182,7 @@ leave the broken version stranded with its bad dist-tag.
 - [ ] `pnpm install` run, lockfile committed, release PR merged
 - [ ] `pnpm whoami` confirms publish access to `@cynco`
 - [ ] `moonx <pkg>:publish -- --dry-run` reviewed for each package (for
-      accounts: `@cynco/ledger-store` and `@cynco/theme` gone from
+      accounts: `@cynco/ledger-core` and `@cynco/theme` gone from
       `dependencies`, `scripts`/`devDependencies` gone everywhere)
 - [ ] published to `beta` in dependency order (`theme` first)
 - [ ] consumer smoke tests passed (no private packages in `node_modules`)

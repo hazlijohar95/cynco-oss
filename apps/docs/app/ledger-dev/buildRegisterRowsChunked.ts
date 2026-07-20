@@ -1,5 +1,5 @@
 import type { MinorUnits, RegisterRowData } from '@cynco/journals';
-import type { CooperativeScheduler, EntryStore } from '@cynco/ledger-store';
+import type { CooperativeScheduler, EntryStore } from '@cynco/ledger-core';
 
 // How many register rows one inner iteration pulls from the store before
 // re-checking the slice deadline. Small enough that a batch finishes well

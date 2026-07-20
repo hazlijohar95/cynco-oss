@@ -9,8 +9,8 @@ import {
   createCooperativeScheduler,
   EntryStore,
   SchedulerAbortedError,
-} from '@cynco/ledger-store';
-import type { CooperativeScheduler, LedgerEntry } from '@cynco/ledger-store';
+} from '@cynco/ledger-core';
+import type { CooperativeScheduler, LedgerEntry } from '@cynco/ledger-core';
 import {
   WORKLOAD_ENTRY_COUNTS,
   type WorkloadName,
@@ -190,7 +190,7 @@ export function LedgerDevClient() {
     if (runTokenRef.current !== token) return;
 
     // Phase 3 is cooperative: register rows and the account count run as
-    // time-sliced tasks (8ms slices) through @cynco/ledger-store's
+    // time-sliced tasks (8ms slices) through @cynco/ledger-core's
     // scheduler, so input and paint stay live during the biggest workloads.
     const scheduler = createCooperativeScheduler();
     schedulerRef.current = scheduler;

@@ -35,7 +35,7 @@ export interface LedgerEntry {
 /**
  * One line of a single-account register: the entry it came from, the posting
  * that touches this account, and the running balance after applying it.
- * Produced by a data layer (later `@cynco/ledger-store`); the components only
+ * Produced by a data layer (later `@cynco/ledger-core`); the components only
  * consume plain data.
  */
 export interface RegisterRowData {

@@ -7,7 +7,7 @@
     "@base-ui/react": "catalog:",
     "@cynco/accounts": "workspace:*",
     "@cynco/journals": "workspace:*",
-    "@cynco/ledger-store": "workspace:*",
+    "@cynco/ledger-core": "workspace:*",
     "@cynco/ledger-test-data": "workspace:*",
     "@cynco/theme": "workspace:*",
     "@remotion/player": "catalog:",

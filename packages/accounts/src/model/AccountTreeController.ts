@@ -1,4 +1,4 @@
-// Framework-free model for the account tree. Wraps @cynco/ledger-store's
+// Framework-free model for the account tree. Wraps @cynco/ledger-core's
 // AccountStore (the private engine, inlined into dist at build time): the
 // store owns topology, balances, expansion state, and the visible projection;
 // this controller layers everything view-shaped on top — selection, focus,
@@ -11,7 +11,7 @@ import {
   getAncestorAccountPaths,
   getParentAccountPath,
   isValidAccountPath,
-} from '@cynco/ledger-store';
+} from '@cynco/ledger-core';
 
 import {
   DEFAULT_CURRENCY,

@@ -3,7 +3,7 @@
 import { AccountTree } from '@cynco/accounts/react';
 import type { LedgerEntry, RegisterRowData } from '@cynco/journals';
 import { Register } from '@cynco/journals/react';
-import { EntryStore } from '@cynco/ledger-store';
+import { EntryStore } from '@cynco/ledger-core';
 import { workloads } from '@cynco/ledger-test-data';
 import { FileUp, Sparkles } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';

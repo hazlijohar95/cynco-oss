@@ -24,7 +24,7 @@ tasks:
       runInCI: 'skip'
 
   # Aggregator the prepublishOnly lifecycle hook points at. Projects append
-  # extra guards via dep merge (e.g. accounts adds assert-no-ledger-store).
+  # extra guards via dep merge (e.g. accounts adds assert-no-ledger-core).
   prepublish:
     command: 'noop'
     deps:

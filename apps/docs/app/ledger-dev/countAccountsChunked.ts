@@ -1,4 +1,4 @@
-import type { CooperativeScheduler, LedgerEntry } from '@cynco/ledger-store';
+import type { CooperativeScheduler, LedgerEntry } from '@cynco/ledger-core';
 
 // Entries scanned per inner iteration before re-checking the slice
 // deadline. Counting is a cheap Set insert per posting, so 10k entries

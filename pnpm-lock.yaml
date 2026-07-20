@@ -165,9 +165,9 @@ importers:
       '@cynco/journals':
         specifier: workspace:*
         version: link:../../packages/journals
-      '@cynco/ledger-store':
+      '@cynco/ledger-core':
         specifier: workspace:*
-        version: link:../../packages/ledger-store
+        version: link:../../packages/ledger-core
       '@cynco/ledger-test-data':
         specifier: workspace:*
         version: link:../../packages/ledger-test-data
@@ -199,9 +199,9 @@ importers:
       '@cynco/journals':
         specifier: workspace:*
         version: link:../../packages/journals
-      '@cynco/ledger-store':
+      '@cynco/ledger-core':
         specifier: workspace:*
-        version: link:../../packages/ledger-store
+        version: link:../../packages/ledger-core
       '@cynco/ledger-test-data':
         specifier: workspace:*
         version: link:../../packages/ledger-test-data
@@ -275,9 +275,9 @@ importers:
 
   packages/accounts:
     dependencies:
-      '@cynco/ledger-store':
+      '@cynco/ledger-core':
         specifier: workspace:*
-        version: link:../ledger-store
+        version: link:../ledger-core
       '@cynco/theme':
         specifier: workspace:*
         version: link:../theme
@@ -404,7 +404,7 @@ importers:
         specifier: 'catalog:'
         version: 8.1.0(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
 
-  packages/ledger-store:
+  packages/ledger-core:
     devDependencies:
       '@types/bun':
         specifier: 'catalog:'
@@ -421,9 +421,9 @@ importers:
 
   packages/ledger-test-data:
     dependencies:
-      '@cynco/ledger-store':
+      '@cynco/ledger-core':
         specifier: workspace:*
-        version: link:../ledger-store
+        version: link:../ledger-core
     devDependencies:
       '@types/bun':
         specifier: 'catalog:'

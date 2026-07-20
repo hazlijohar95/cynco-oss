@@ -7,9 +7,9 @@ and the packages adhere to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with a manual,
 human-driven bump policy (see `PUBLISHING.md` — no changesets, by design).
 
-Private workspace packages (`@cynco/ledger-store`, `@cynco/ledger-test-data`)
-are not tracked here: they never reach npm. The ledger-store engine ships
-inlined inside `@cynco/accounts`.
+Private workspace packages (`@cynco/ledger-core`, `@cynco/ledger-test-data`) are
+not tracked here: they never reach npm. The ledger-core engine ships inlined
+inside `@cynco/accounts`.
 
 ## [Unreleased]
 
@@ -67,5 +67,5 @@ resolve).
 - Account icons, row decorations, and lazy child loading backed by the engine's
   child-load state machine.
 - React and SSR subpath exports (`./react`, `./ssr`).
-- The private `@cynco/ledger-store` engine is inlined into `dist/` at build
-  time; a post-build gate asserts it never leaks as a runtime import.
+- The private `@cynco/ledger-core` engine is inlined into `dist/` at build time;
+  a post-build gate asserts it never leaks as a runtime import.

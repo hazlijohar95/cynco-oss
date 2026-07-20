@@ -1,5 +1,5 @@
 // Public types for @cynco/accounts. The ledger domain shapes are declared
-// locally (structurally identical to @cynco/ledger-store's) so the emitted
+// locally (structurally identical to @cynco/ledger-core's) so the emitted
 // declaration files never import the private engine package — the engine is
 // inlined into dist at build time and must not leak as a type import either.
 

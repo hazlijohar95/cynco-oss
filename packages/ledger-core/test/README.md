@@ -1,4 +1,4 @@
-# @cynco/ledger-store tests
+# @cynco/ledger-core tests
 
 Run from the package directory:
 
@@ -10,8 +10,8 @@ AGENT=1 bun test test/scheduler.test.ts                 # single file
 Or from anywhere in the repo:
 
 ```bash
-moonx ledger-store:test          # unit
-moonx ledger-store:benchmark     # mitata scale benchmarks
+moonx ledger-core:test          # unit
+moonx ledger-core:benchmark     # mitata scale benchmarks
 ```
 
 There is no e2e lane: this package is a pure data layer with no DOM, so

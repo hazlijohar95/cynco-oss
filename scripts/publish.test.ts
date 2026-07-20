@@ -116,7 +116,7 @@ describe('rewritePublishManifest', () => {
     name: '@cynco/accounts',
     version: '0.1.0-beta.1',
     dependencies: {
-      '@cynco/ledger-store': '0.1.0',
+      '@cynco/ledger-core': '0.1.0',
       '@cynco/theme': '0.1.0',
     },
     peerDependencies: { react: '^19.0.0' },
@@ -127,7 +127,7 @@ describe('rewritePublishManifest', () => {
 
   test('strips inlined deps, lifecycle scripts, and devDependencies', () => {
     const rewritten = rewritePublishManifest(accountsLike, [
-      '@cynco/ledger-store',
+      '@cynco/ledger-core',
       '@cynco/theme',
     ]);
     // Both inlined deps removed left dependencies empty, so the field itself
@@ -156,9 +156,9 @@ describe('rewritePublishManifest', () => {
   });
 
   test('does not mutate the input manifest', () => {
-    rewritePublishManifest(accountsLike, ['@cynco/ledger-store']);
+    rewritePublishManifest(accountsLike, ['@cynco/ledger-core']);
     expect(accountsLike.dependencies).toEqual({
-      '@cynco/ledger-store': '0.1.0',
+      '@cynco/ledger-core': '0.1.0',
       '@cynco/theme': '0.1.0',
     });
     expect(accountsLike.scripts).toEqual({
@@ -172,18 +172,18 @@ describe('findManifestDependencyOffenders', () => {
     const manifest: PublishManifest = {
       name: 'x',
       version: '0.0.0',
-      dependencies: { '@cynco/ledger-store': '0.1.0' },
+      dependencies: { '@cynco/ledger-core': '0.1.0' },
       peerDependencies: { '@cynco/ledger-test-data': '0.1.0' },
       optionalDependencies: { '@cynco/theme': '0.1.0' },
     };
     expect(
       findManifestDependencyOffenders(manifest, [
-        '@cynco/ledger-store',
+        '@cynco/ledger-core',
         '@cynco/ledger-test-data',
         '@cynco/theme',
       ])
     ).toEqual([
-      'dependencies: @cynco/ledger-store',
+      'dependencies: @cynco/ledger-core',
       'peerDependencies: @cynco/ledger-test-data',
       'optionalDependencies: @cynco/theme',
     ]);
@@ -207,40 +207,40 @@ describe('findManifestDependencyOffenders', () => {
 
 describe('findQuotedSpecifierOffenders', () => {
   test('catches static, dynamic, re-export, and require specifiers', () => {
-    const forbidden = ['@cynco/ledger-store'];
+    const forbidden = ['@cynco/ledger-core'];
     expect(
       findQuotedSpecifierOffenders(
-        `import { createStore } from '@cynco/ledger-store';`,
+        `import { createStore } from '@cynco/ledger-core';`,
         forbidden
       )
-    ).toEqual(['@cynco/ledger-store']);
+    ).toEqual(['@cynco/ledger-core']);
     expect(
       findQuotedSpecifierOffenders(
-        `export * from "@cynco/ledger-store";`,
+        `export * from "@cynco/ledger-core";`,
         forbidden
       )
-    ).toEqual(['@cynco/ledger-store']);
+    ).toEqual(['@cynco/ledger-core']);
     expect(
       findQuotedSpecifierOffenders(
-        `const mod = await import('@cynco/ledger-store/internal');`,
+        `const mod = await import('@cynco/ledger-core/internal');`,
         forbidden
       )
-    ).toEqual(['@cynco/ledger-store']);
+    ).toEqual(['@cynco/ledger-core']);
     expect(
       findQuotedSpecifierOffenders(
-        `const mod = require("@cynco/ledger-store")`,
+        `const mod = require("@cynco/ledger-core")`,
         forbidden
       )
-    ).toEqual(['@cynco/ledger-store']);
+    ).toEqual(['@cynco/ledger-core']);
   });
 
   test('ignores backticked doc-comment mentions', () => {
     // journals' dist d.ts legitimately says "Produced by a data layer (later
-    // `@cynco/ledger-store`)" in a doc comment; that must not fail a release.
+    // `@cynco/ledger-core`)" in a doc comment; that must not fail a release.
     expect(
       findQuotedSpecifierOffenders(
-        '/** Produced by a data layer (later `@cynco/ledger-store`); */',
-        ['@cynco/ledger-store']
+        '/** Produced by a data layer (later `@cynco/ledger-core`); */',
+        ['@cynco/ledger-core']
       )
     ).toEqual([]);
   });
@@ -293,7 +293,7 @@ describe('collectExportPaths', () => {
 describe('publish configuration invariants', () => {
   test('accounts is the only package with inlined dependencies, and they match its tsdown noExternal list', () => {
     expect(PUBLISH_CONFIGS['@cynco/accounts']?.inlinedDependencies).toEqual([
-      '@cynco/ledger-store',
+      '@cynco/ledger-core',
       '@cynco/theme',
     ]);
     for (const [name, config] of Object.entries(PUBLISH_CONFIGS)) {
@@ -304,7 +304,7 @@ describe('publish configuration invariants', () => {
   });
 
   test('every private package is covered by the payload scan', () => {
-    expect(PRIVATE_PACKAGES).toContain('@cynco/ledger-store');
+    expect(PRIVATE_PACKAGES).toContain('@cynco/ledger-core');
     expect(PRIVATE_PACKAGES).toContain('@cynco/ledger-test-data');
     // Private packages must never appear in the publishable allowlist.
     for (const name of PRIVATE_PACKAGES) {

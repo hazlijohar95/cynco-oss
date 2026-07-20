@@ -33,7 +33,7 @@ jobs:
       # Build the workspace package dists the docs app resolves against.
       - name: Build package dependencies
         run:
-          moon run journals:build accounts:build theme:build ledger-store:build
+          moon run journals:build accounts:build theme:build ledger-core:build
           ledger-test-data:build
 
       # This lane runs `next build` directly (not `moon run docs:build`), so
