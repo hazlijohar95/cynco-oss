@@ -1,0 +1,14 @@
+{
+  // Separate program for the bun-test suite: the app program (tsconfig.json)
+  // must not auto-include @types/bun globals, and `bun:test` only resolves
+  // when the bun types are loaded. Mirrors the root scripts/tsconfig.json
+  // pattern. The scripts/llms modules the tests import are pulled in by the
+  // compiler automatically; they are also checked by the app program.
+  "extends": "../../tsconfig.options.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "types": ["bun"]
+  },
+  "include": ["test/**/*.ts"]
+}

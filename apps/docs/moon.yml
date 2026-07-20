@@ -7,14 +7,14 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 language: 'typescript'
 layer: 'application'
 
-workspace:
-  inheritedTasks:
-    # No test suite in this app.
-    exclude: ['test']
-
 tasks:
+  # The llms.txt generator runs before every build so the static export
+  # always ships fresh /llms.txt + /llms-full.txt, assembled from the package
+  # READMEs with versions read live from each package.json. The generated
+  # files are gitignored build artifacts: declared as outputs, never inputs
+  # (inputs here are explicit, so they can't leak into the hash anyway).
   build:
-    command: 'next build'
+    script: 'bun scripts/generate-llms-txt.ts && next build'
     env:
       NEXT_TELEMETRY_DISABLED: '1'
     deps:
@@ -24,11 +24,44 @@ tasks:
       - 'components/**'
       - 'examples/**'
       - 'lib/**'
+      - 'scripts/**'
       - 'next.config.ts'
       - 'postcss.config.mjs'
       - 'tsconfig.json'
+      - '/packages/{journals,accounts,theming,theme}/README.md'
+      - '/packages/{journals,accounts,theming,theme}/package.json'
+      - '/packages/theme/ACCESSIBILITY.md'
     outputs:
       - '.next'
+      - 'public/llms.txt'
+      - 'public/llms-full.txt'
+
+  # Standalone regeneration for flows that run `next build` outside moon —
+  # the wrangler static-assets deploy documented in wrangler.jsonc. No graph
+  # edges, so runInCI 'always' is safe (it can never be pulled into CI).
+  generate-llms-txt:
+    command: 'bun scripts/generate-llms-txt.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Overrides the inherited single-program typecheck: the app program
+  # (tsconfig.json) excludes test/ because the bun-test suite needs
+  # @types/bun globals that must not leak into the Next app program, so the
+  # tests typecheck as a second program (tsconfig.test.json — same split as
+  # the root scripts/tsconfig.json). Deps and inputs mirror the inherited
+  # task from .moon/tasks/bun-common.yml.
+  typecheck:
+    script:
+      'tsgo --noEmit --pretty && tsgo --noEmit --pretty -p tsconfig.test.json'
+    deps:
+      - '^:build'
+    inputs:
+      - '**/*'
+      - '!node_modules/**'
+      - '!dist/**'
+      - '!.next/**'
+      - '!**/*.tsbuildinfo'
 
   # Build deps run to completion first so next resolves @cynco/* through
   # complete dists.

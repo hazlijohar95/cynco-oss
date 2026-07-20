@@ -1,6 +1,7 @@
 {
   // Cloudflare Workers static-assets deployment for the docs/marketing site.
-  // Build first with: NEXT_OUTPUT=export pnpm exec next build
+  // Build first with:
+  //   moonx docs:generate-llms-txt && NEXT_OUTPUT=export pnpm exec next build
   // Then deploy with: pnpm dlx wrangler@4 deploy
   "name": "cynco-docs",
   "account_id": "9c006d850453ab5c068f5688d138521b",

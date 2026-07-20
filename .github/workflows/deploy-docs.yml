@@ -36,6 +36,12 @@ jobs:
           moon run journals:build accounts:build theme:build ledger-store:build
           ledger-test-data:build
 
+      # This lane runs `next build` directly (not `moon run docs:build`), so
+      # the llms.txt generation baked into the moon task must run explicitly
+      # or the export ships stale/missing /llms.txt + /llms-full.txt.
+      - name: Generate llms.txt
+        run: moon run docs:generate-llms-txt
+
       - name: Build static export
         working-directory: apps/docs
         env:
