@@ -35,6 +35,13 @@ interface RegisterIndex {
   entryIndices: Int32Array;
   postingIndices: Int32Array;
   prefixSumsByCurrency: Map<string, Float64Array>;
+  // Currencies whose running balance crossed 2^53 while the prefix sums were
+  // accumulated. Postings are individually safe integers, but a long register
+  // can push the carry-forward total past the exactly-representable range,
+  // where the Float64Array silently loses integer precision. Surfaced via
+  // `hasRunningBalanceOverflow` (flag, never silently repair). Empty for every
+  // non-pathological register.
+  overflowCurrencies: Set<string>;
 }
 
 // Entries sort by (date, id); ISO dates compare correctly as strings. Ids
@@ -175,6 +182,37 @@ export class EntryStore {
   }
 
   // --- Register queries -----------------------------------------------------------
+
+  /**
+   * True when the running-balance column for an account's register left the
+   * exactly-representable integer range (2^53) while accumulating. Past that
+   * point running balances are no longer exact, so a caller needing
+   * authoritative figures should treat the affected currencies as flagged.
+   * Pass a currency to scope the check; omit it for "any currency overflowed".
+   *
+   * A surfacing mechanism, not a repair — the store never silently rewrites or
+   * rejects overflowed balances, matching the balance-integrity contract.
+   * Reflects the unfiltered register index (the same one that backs
+   * `getRegisterRows` without a filter).
+   */
+  hasRunningBalanceOverflow(
+    accountPath: string,
+    options: Pick<RegisterOptions, 'includeDescendants'> & {
+      currency?: string;
+    } = {}
+  ): boolean {
+    if (!isValidAccountPath(accountPath)) {
+      return false;
+    }
+    const index = this.getRegisterIndex(
+      accountPath,
+      options.includeDescendants === true
+    );
+    if (options.currency == null) {
+      return index.overflowCurrencies.size > 0;
+    }
+    return index.overflowCurrencies.has(options.currency);
+  }
 
   /**
    * Number of register rows (postings) for one account. Unfiltered counts
@@ -518,6 +556,7 @@ export class EntryStore {
     const rowCount = entryIndices.length;
     const prefixSumsByCurrency = new Map<string, Float64Array>();
     const runningByCurrency = new Map<string, number>();
+    const overflowCurrencies = new Set<string>();
     for (let row = 0; row < rowCount; row += 1) {
       const posting =
         this.entries[entryIndices[row]].postings[postingIndices[row]];
@@ -532,6 +571,12 @@ export class EntryStore {
       const nextRunning =
         (runningByCurrency.get(posting.currency) ?? 0) + posting.amount;
       runningByCurrency.set(posting.currency, nextRunning);
+      // A carry-forward running total can leave the safe-integer range even
+      // when every posting is individually safe; flag the currency so the
+      // overflow surfaces rather than silently poisoning the balance column.
+      if (!Number.isSafeInteger(nextRunning)) {
+        overflowCurrencies.add(posting.currency);
+      }
       for (const [currency, currencySums] of prefixSumsByCurrency) {
         currencySums[row] = runningByCurrency.get(currency) ?? 0;
       }
@@ -541,6 +586,7 @@ export class EntryStore {
       entryIndices: Int32Array.from(entryIndices),
       postingIndices: Int32Array.from(postingIndices),
       prefixSumsByCurrency,
+      overflowCurrencies,
     };
   }
 

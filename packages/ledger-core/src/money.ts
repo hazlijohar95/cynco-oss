@@ -35,26 +35,64 @@ export function addMinorUnits(a: MinorUnits, b: MinorUnits): MinorUnits {
 }
 
 /**
+ * True when a value is a minor-unit amount that has left the exactly-
+ * representable integer range. Individual postings are validated on ingest,
+ * but an *aggregate* of many individually-safe postings can still cross
+ * `Number.MAX_SAFE_INTEGER`, at which point plain `+` silently loses integer
+ * precision. Callers accumulating sums use this to surface the overflow
+ * (flag, never silently repair) instead of trusting a poisoned total.
+ */
+export function isMinorUnitsOverflow(n: number): boolean {
+  return !Number.isSafeInteger(n);
+}
+
+/**
  * Sums posting amounts grouped by currency code. Postings with non-integer
  * or unsafe amounts are skipped (graceful degradation: this runs over
  * user-authored ledger data), so the returned totals are always exact
- * integers. An empty posting list yields an empty map.
+ * integers unless the *aggregate* itself overflows 2^53. An empty posting
+ * list yields an empty map.
+ *
+ * When any per-currency running total leaves the safe-integer range the
+ * currency is recorded in `overflowCurrencies` on the returned object; the
+ * total for that currency is no longer exact and must be treated as flagged,
+ * not authoritative. Callers that only need exact totals can ignore the flag
+ * set — it is empty in every non-pathological ledger.
  */
 export function sumPostingsByCurrency(
   postings: readonly Posting[]
 ): Map<string, MinorUnits> {
+  return sumPostingsByCurrencyChecked(postings).totals;
+}
+
+export interface CheckedCurrencyTotals {
+  totals: Map<string, MinorUnits>;
+  /** Currencies whose running total crossed 2^53 during accumulation. */
+  overflowCurrencies: Set<string>;
+}
+
+/**
+ * Overflow-aware variant of `sumPostingsByCurrency`. Detects when a running
+ * per-currency total leaves the safe-integer range so aggregate overflow is
+ * surfaced rather than silently swallowed by float precision loss.
+ */
+export function sumPostingsByCurrencyChecked(
+  postings: readonly Posting[]
+): CheckedCurrencyTotals {
   const totals = new Map<string, MinorUnits>();
+  const overflowCurrencies = new Set<string>();
   for (const posting of postings) {
     if (!Number.isSafeInteger(posting.amount)) {
       continue;
     }
     const current = totals.get(posting.currency);
-    totals.set(
-      posting.currency,
-      current == null ? posting.amount : current + posting.amount
-    );
+    const next = current == null ? posting.amount : current + posting.amount;
+    totals.set(posting.currency, next);
+    if (isMinorUnitsOverflow(next)) {
+      overflowCurrencies.add(posting.currency);
+    }
   }
-  return totals;
+  return { totals, overflowCurrencies };
 }
 
 /**

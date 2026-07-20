@@ -4,7 +4,9 @@ import {
   addMinorUnits,
   assertSafeMinorUnits,
   isEntryBalanced,
+  isMinorUnitsOverflow,
   sumPostingsByCurrency,
+  sumPostingsByCurrencyChecked,
 } from '../src/money';
 import type { LedgerEntry, Posting } from '../src/types';
 
@@ -108,6 +110,36 @@ describe('sumPostingsByCurrency', () => {
 
   test('empty postings yield an empty map', () => {
     expect(sumPostingsByCurrency([]).size).toBe(0);
+  });
+});
+
+describe('sumPostingsByCurrencyChecked / aggregate overflow', () => {
+  test('flags a currency whose aggregate crosses 2^53', () => {
+    const half = Math.floor(Number.MAX_SAFE_INTEGER / 2) + 1;
+    // Two individually-safe postings whose sum leaves the safe range.
+    const { totals, overflowCurrencies } = sumPostingsByCurrencyChecked([
+      { account: 'a', amount: half, currency: 'MYR' },
+      { account: 'b', amount: half, currency: 'MYR' },
+      { account: 'c', amount: 100, currency: 'USD' },
+    ]);
+    expect(overflowCurrencies.has('MYR')).toBe(true);
+    expect(overflowCurrencies.has('USD')).toBe(false);
+    // The overflowed total is no longer trustworthy, but USD stays exact.
+    expect(totals.get('USD')).toBe(100);
+  });
+
+  test('exact aggregates report no overflow', () => {
+    const { overflowCurrencies } = sumPostingsByCurrencyChecked([
+      { account: 'a', amount: 1_000_000, currency: 'MYR' },
+      { account: 'b', amount: -400_000, currency: 'MYR' },
+    ]);
+    expect(overflowCurrencies.size).toBe(0);
+  });
+
+  test('isMinorUnitsOverflow detects values past the safe range', () => {
+    expect(isMinorUnitsOverflow(Number.MAX_SAFE_INTEGER)).toBe(false);
+    expect(isMinorUnitsOverflow(Number.MAX_SAFE_INTEGER + 1)).toBe(true);
+    expect(isMinorUnitsOverflow(-(Number.MAX_SAFE_INTEGER + 1))).toBe(true);
   });
 });
 

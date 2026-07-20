@@ -232,6 +232,39 @@ describe('EntryStore register', () => {
     );
     expect(store.getRegisterRowCount('')).toBe(0);
   });
+
+  test('normal registers report no running-balance overflow', () => {
+    const store = new EntryStore(ENTRIES);
+    expect(store.hasRunningBalanceOverflow('Assets:Cash')).toBe(false);
+    expect(
+      store.hasRunningBalanceOverflow('Assets:Cash', { currency: 'MYR' })
+    ).toBe(false);
+  });
+
+  test('a running balance past 2^53 is flagged, not silently poisoned', () => {
+    const half = Math.floor(Number.MAX_SAFE_INTEGER / 2) + 1;
+    // Two safe-integer debits to the same account whose carry-forward running
+    // balance crosses the exactly-representable range.
+    const store = new EntryStore([
+      makeEntry('big1', '2025-01-01', [
+        ['Assets:Cash', half],
+        ['Income:Sales', -half],
+      ]),
+      makeEntry('big2', '2025-01-02', [
+        ['Assets:Cash', half],
+        ['Income:Sales', -half],
+      ]),
+    ]);
+    expect(store.hasRunningBalanceOverflow('Assets:Cash')).toBe(true);
+    expect(
+      store.hasRunningBalanceOverflow('Assets:Cash', { currency: 'MYR' })
+    ).toBe(true);
+    expect(
+      store.hasRunningBalanceOverflow('Assets:Cash', { currency: 'USD' })
+    ).toBe(false);
+    // Invalid path stays graceful.
+    expect(store.hasRunningBalanceOverflow('')).toBe(false);
+  });
 });
 
 describe('EntryStore mutation', () => {

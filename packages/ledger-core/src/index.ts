@@ -11,8 +11,11 @@ export {
   addMinorUnits,
   assertSafeMinorUnits,
   isEntryBalanced,
+  isMinorUnitsOverflow,
   sumPostingsByCurrency,
+  sumPostingsByCurrencyChecked,
 } from './money';
+export type { CheckedCurrencyTotals } from './money';
 export {
   createCooperativeScheduler,
   SchedulerAbortedError,

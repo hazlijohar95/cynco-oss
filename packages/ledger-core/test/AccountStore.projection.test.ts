@@ -195,4 +195,58 @@ describe('AccountStore projection', () => {
     expect(store.hasAccount('Assets::Broken')).toBe(false);
     expect(store.getAccountCount()).toBe(2);
   });
+
+  test('normal ledgers report no balance overflow', () => {
+    const store = buildStore();
+    expect(store.hasBalanceOverflow()).toBe(false);
+    expect(store.hasBalanceOverflow('MYR')).toBe(false);
+    expect(store.hasBalanceOverflow('USD')).toBe(false);
+  });
+
+  test('own-balance aggregate past 2^53 is flagged, not silently poisoned', () => {
+    const half = Math.floor(Number.MAX_SAFE_INTEGER / 2) + 1;
+    const store = new AccountStore({
+      entries: [
+        // Two safe-integer postings to the same account whose sum overflows.
+        makeEntry('big1', '2025-01-01', [
+          ['Assets:Cash', half],
+          ['Equity:Opening', -half],
+        ]),
+        makeEntry('big2', '2025-01-02', [
+          ['Assets:Cash', half],
+          ['Equity:Opening', -half],
+        ]),
+      ],
+    });
+    expect(store.hasBalanceOverflow('MYR')).toBe(true);
+    expect(store.hasBalanceOverflow()).toBe(true);
+    expect(store.hasBalanceOverflow('USD')).toBe(false);
+  });
+
+  test('roll-up across siblings past 2^53 is flagged even when each own balance is safe', () => {
+    const near = Number.MAX_SAFE_INTEGER - 10;
+    const store = new AccountStore({
+      entries: [
+        // Two sibling leaf accounts, each individually safe, that overflow
+        // only when rolled into their shared parent.
+        makeEntry('s1', '2025-01-01', [
+          ['Assets:A', near],
+          ['Equity:Opening', -near],
+        ]),
+        makeEntry('s2', '2025-01-02', [
+          ['Assets:B', near],
+          ['Equity:Opening', -near],
+        ]),
+      ],
+    });
+    // Each leaf own-balance is safe...
+    expect(
+      Number.isSafeInteger(store.getOwnBalances('Assets:A')?.get('MYR') ?? 0)
+    ).toBe(true);
+    expect(
+      Number.isSafeInteger(store.getOwnBalances('Assets:B')?.get('MYR') ?? 0)
+    ).toBe(true);
+    // ...but the Assets roll-up crosses 2^53 and must be flagged.
+    expect(store.hasBalanceOverflow('MYR')).toBe(true);
+  });
 });

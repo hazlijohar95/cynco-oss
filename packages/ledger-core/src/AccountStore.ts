@@ -123,6 +123,16 @@ export class AccountStore {
   /** Sparse posting counts per path; absence means zero. */
   private readonly postingCountsByPath: Map<string, number>;
   /**
+   * Currencies whose accumulated own-balance (during ingest) left the
+   * exactly-representable integer range. Individual postings are validated as
+   * safe integers on ingest, but a large ledger can still push an aggregate
+   * past 2^53, where plain `+` silently loses precision. Tracked here so the
+   * overflow is surfaced (never silently repaired) via `hasBalanceOverflow`
+   * rather than returned as a plausible-but-wrong balance. Empty in every
+   * non-pathological ledger.
+   */
+  private readonly overflowCurrencies: Set<string>;
+  /**
    * Currency codes in first-seen order over constructor entries; index =
    * currency id in the derived balance columns. Persistent so column order
    * (and therefore balance-map iteration order) is stable across rebuilds.
@@ -168,6 +178,7 @@ export class AccountStore {
     this.childPathsByParent = new Map<string, Set<string>>();
     this.ownBalancesByPath = new Map<string, Map<string, MinorUnits>>();
     this.postingCountsByPath = new Map<string, number>();
+    this.overflowCurrencies = new Set<string>();
     this.currencyCodes = [];
     this.currencyIdByCode = new Map<string, number>();
     this.expandedPaths = new Set<string>();
@@ -214,10 +225,15 @@ export class AccountStore {
           balances = new Map<string, MinorUnits>();
           this.ownBalancesByPath.set(posting.account, balances);
         }
-        balances.set(
-          posting.currency,
-          (balances.get(posting.currency) ?? 0) + posting.amount
-        );
+        const nextBalance =
+          (balances.get(posting.currency) ?? 0) + posting.amount;
+        balances.set(posting.currency, nextBalance);
+        // A single safe-integer posting can still tip the running aggregate
+        // past 2^53; record the currency so the overflow surfaces instead of
+        // silently poisoning the balance.
+        if (!Number.isSafeInteger(nextBalance)) {
+          this.overflowCurrencies.add(posting.currency);
+        }
         this.postingCountsByPath.set(
           posting.account,
           (this.postingCountsByPath.get(posting.account) ?? 0) + 1
@@ -308,6 +324,31 @@ export class AccountStore {
   /** Postings directly on the account; 0 for unknown paths. */
   getPostingCount(path: string): number {
     return this.postingCountsByPath.get(path) ?? 0;
+  }
+
+  /**
+   * True when any balance in the store crossed the exactly-representable
+   * integer range (`Number.MAX_SAFE_INTEGER`, 2^53) during accumulation or
+   * roll-up. Past that point balances are no longer exact integers, so a
+   * caller that needs authoritative totals should treat the affected
+   * currencies as flagged rather than trusting the numbers. Pass a currency
+   * to scope the check; omit it to ask whether *any* currency overflowed.
+   *
+   * This is a surfacing mechanism, not a repair: the store never silently
+   * fixes or rejects overflowed data, matching the balance-integrity contract
+   * that bad input is flagged, never quietly rewritten. Rolled-up balances
+   * are only computed lazily, so this reflects overflow discovered up to the
+   * most recent balance read.
+   */
+  hasBalanceOverflow(currency?: string): boolean {
+    // Roll-up overflow is only detected once the derived tier is built, so
+    // ensure it exists before answering (own-balance overflow is already
+    // recorded at ingest regardless).
+    this.ensureTopology();
+    if (currency == null) {
+      return this.overflowCurrencies.size > 0;
+    }
+    return this.overflowCurrencies.has(currency);
   }
 
   // --- Topology mutations ------------------------------------------------------
@@ -1011,10 +1052,22 @@ export class AccountStore {
     // Rolled-up balances (own + descendants) in a single bottom-up pass:
     // preorder ids guarantee every child is finalized before its parent when
     // walking ids in reverse, so no recursion or explicit stack is needed.
-    const rolledBalanceColumns = ownBalanceColumns.map((own) => {
+    const rolledBalanceColumns = ownBalanceColumns.map((own, currencyId) => {
       const rolled = Float64Array.from(own);
+      let overflowed = false;
       for (let id = nodeCount - 1; id >= 1; id -= 1) {
-        rolled[parentIds[id]] += rolled[id];
+        const parent = parentIds[id];
+        rolled[parent] += rolled[id];
+        // Any intermediate roll-up can cross 2^53 — including one that later
+        // cancels back into a safe root total — so every accumulation is
+        // checked, not just the grand total. One safe-integer branch per node
+        // per currency; overflow flags rather than silently poisons.
+        if (!overflowed && !Number.isSafeInteger(rolled[parent])) {
+          overflowed = true;
+        }
+      }
+      if (overflowed) {
+        this.overflowCurrencies.add(this.currencyCodes[currencyId]);
       }
       return rolled;
     });
