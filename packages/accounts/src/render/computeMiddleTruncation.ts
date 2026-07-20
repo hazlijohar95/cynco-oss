@@ -21,26 +21,35 @@ export function computeMiddleTruncation(
   fullWidth: number,
   availableWidth: number
 ): string | null {
+  // Slicing must be by Unicode code point, not by UTF-16 code unit:
+  // `.length` and `.slice` count code units, so a raw slice through an astral
+  // character (emoji, extended CJK) would split a surrogate pair and emit a
+  // replacement glyph. `Array.from` iterates by code point, so every slice
+  // boundary lands between whole characters. (Combining marks / full grapheme
+  // clusters are a deeper problem not solved here, but surrogate splitting —
+  // the source of visible mojibake — is.)
+  const chars = Array.from(fullText);
+  const charCount = chars.length;
   if (
     fullWidth <= availableWidth ||
     availableWidth <= 0 ||
     fullWidth <= 0 ||
-    fullText.length < 3
+    charCount < 3
   ) {
     return null;
   }
-  const averageCharWidth = fullWidth / fullText.length;
+  const averageCharWidth = fullWidth / charCount;
   // One character of budget pays for the ellipsis itself.
   const budget = Math.floor(availableWidth / averageCharWidth) - 1;
-  if (budget >= fullText.length) {
+  if (budget >= charCount) {
     return null;
   }
   if (budget < 2) {
     // Degenerate widths: keep the last character so the row never renders
     // a bare ellipsis with nothing identifying.
-    return `…${fullText.slice(-1)}`;
+    return `…${chars[charCount - 1]}`;
   }
   const headLength = Math.max(1, Math.floor(budget / 4));
   const tailLength = budget - headLength;
-  return `${fullText.slice(0, headLength)}…${fullText.slice(-tailLength)}`;
+  return `${chars.slice(0, headLength).join('')}…${chars.slice(charCount - tailLength).join('')}`;
 }

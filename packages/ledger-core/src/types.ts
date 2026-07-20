@@ -100,6 +100,15 @@ export interface AccountRow {
  * One virtualization-ready row of an account register, as returned by
  * `EntryStore.getRegisterRows`. A register lists every posting touching one
  * account (optionally including descendant accounts) in `(date, id)` order.
+ *
+ * Boundary contract with `@cynco/journals`: the renderer's `RegisterRowData`
+ * carries `runningBalance` as a per-currency `ReadonlyMap`, but it only ever
+ * reads the posting's own currency from it. This row therefore stores the
+ * single own-currency balance (the sole value the renderer needs), and
+ * `@cynco/journals` adapts it into the map shape at the wiring boundary via
+ * `toRegisterRowData`. Keep the two `runningBalance` semantics — "own-currency
+ * running total after this posting" — identical; they are the same number
+ * expressed in two container shapes.
  */
 export interface RegisterRow {
   /** The entry this posting belongs to (shared reference, not a copy). */

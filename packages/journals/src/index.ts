@@ -44,4 +44,5 @@ export * from './utils/proposeMatches';
 export * from './utils/renderAccountPathHTML';
 export * from './utils/renderFilterHighlightHTML';
 export * from './utils/SmoothScroller';
+export * from './utils/toRegisterRowData';
 export type * from './types';

@@ -35,8 +35,15 @@ export interface LedgerEntry {
 /**
  * One line of a single-account register: the entry it came from, the posting
  * that touches this account, and the running balance after applying it.
- * Produced by a data layer (later `@cynco/ledger-core`); the components only
- * consume plain data.
+ * Produced by a data layer (`@cynco/ledger-core`'s `RegisterRow`); the
+ * components only consume plain data.
+ *
+ * `runningBalance` is a per-currency map, but the renderer only reads the
+ * posting's own currency (`runningBalance.get(posting.currency)`). The map
+ * shape leaves room for surfacing other currencies later without a breaking
+ * change. `@cynco/ledger-core` returns the own-currency balance as a plain
+ * number; convert a `RegisterRow` to this shape with {@link toRegisterRowData}
+ * at the boundary rather than reshaping by hand, so the two stay in lockstep.
  */
 export interface RegisterRowData {
   entry: LedgerEntry;
