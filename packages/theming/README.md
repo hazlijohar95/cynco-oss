@@ -1,5 +1,7 @@
 # @cynco/theming
 
+Docs: <https://ledger.cynco.dev/docs/theming> · npm: [`@cynco/theming`](https://www.npmjs.com/package/@cynco/theming)
+
 Runtime theming for Cynco ledger UIs: a framework-agnostic theme controller
 (light / dark / system with OS-preference tracking), pluggable persistence, DOM
 application helpers, and a React hook. Pairs with the role sets and CSS variable

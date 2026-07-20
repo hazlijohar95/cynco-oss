@@ -3,20 +3,28 @@ MODERN ACCOUNTING INFRASTRUCTURE [TYPESCRIPT]
 
 ~~~
 
-SITE: HTTPS://CYNCO-DOCS.HAZLI-JOHAR.WORKERS.DEV
+SITE: HTTPS://LEDGER.CYNCO.DEV
+COMPANY: HTTPS://CYNCO.DEV
+NPM: HTTPS://WWW.NPMJS.COM/ORG/CYNCO
 CONTACT: CODING@HAZLI.DEV
 LOCATION: MALAYSIA
 STATUS: ONLINE
 
 ~~~
 
-OPEN SOURCE PACKAGES:
+OPEN SOURCE PACKAGES (ON NPM):
  - [@cynco/journals](packages/journals) — journal entries, registers,
    reconciliation, streaming. The diff library of ledgers.
  - [@cynco/accounts](packages/accounts) — the chart of accounts as a
    path-first virtualized tree.
+ - [@cynco/theming](packages/theming) — runtime theme controller:
+   light / dark / system, persistence, React bindings.
  - [@cynco/theme](packages/theme) — palettes and semantic roles for
-   ledger UIs.
+   ledger UIs, including CVD-safe sets.
+
+DOCS: HTTPS://LEDGER.CYNCO.DEV/DOCS/JOURNALS
+PERF LAB (1M ENTRIES, LIVE): HTTPS://LEDGER.CYNCO.DEV/LEDGER-DEV
+FOR AGENTS: HTTPS://LEDGER.CYNCO.DEV/LLMS.TXT
 
 ~~~
 
