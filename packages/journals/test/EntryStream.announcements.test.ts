@@ -96,7 +96,16 @@ describe('EntryStream announcements', () => {
       stream: createEntryStreamFromArray(makeEntries(1), { delayMs: 10 }),
     });
     const harness = createHarness(instance);
-    await wait(60);
+    // Settle by quiescence, not a fixed sleep (test/README.md known-gaps
+    // table: fixed waits race multi-stage async pipelines on loaded CI
+    // runners — this wait(60) flaked exactly that way). Poll for stream
+    // completion, deadline-bounded so a broken stream still fails fast,
+    // then yield one tick for the completion announcement to commit.
+    const deadline = Date.now() + 3000;
+    while (!instance.isDone() && Date.now() < deadline) {
+      await wait(10);
+    }
+    await wait(0);
     expect(harness.region()?.textContent).toBe('1 entry loaded');
     harness.cleanUp();
   });
