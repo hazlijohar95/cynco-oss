@@ -18,6 +18,9 @@ catalogs:
     '@playwright/test':
       specifier: 1.51.1
       version: 1.51.1
+    '@remotion/player':
+      specifier: 4.0.488
+      version: 4.0.488
     '@tailwindcss/postcss':
       specifier: 4.1.13
       version: 4.1.13
@@ -81,6 +84,9 @@ catalogs:
     postcss-nesting:
       specifier: 14.0.0
       version: 14.0.0
+    remotion:
+      specifier: 4.0.488
+      version: 4.0.488
     stylelint:
       specifier: 17.13.0
       version: 17.13.0
@@ -202,6 +208,9 @@ importers:
       '@cynco/theme':
         specifier: workspace:*
         version: link:../../packages/theme
+      '@remotion/player':
+        specifier: 'catalog:'
+        version: 4.0.488(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -220,6 +229,9 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      remotion:
+        specifier: 'catalog:'
+        version: 4.0.488(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.3.1
@@ -1429,6 +1441,12 @@ packages:
   '@quansync/fs@1.0.0':
     resolution: {integrity: sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ==}
 
+  '@remotion/player@4.0.488':
+    resolution: {integrity: sha512-bP9y6PFHtP79ikR2zxFiMwR11Cc5BoN9+PEP1YEdMXhkf4o+zDj6PzNw/Va2SjWhozrOTgVshgs1QZfQYleEkg==}
+    peerDependencies:
+      react: 19.2.7
+      react-dom: 19.2.7
+
   '@rolldown/binding-android-arm64@1.1.5':
     resolution: {integrity: sha512-lZg8fqIv2v7FF237bwMgzGZEJvGL79/s5knJ/i6FmsGF4XXlzccZ4jb+TrFIxtSSxFtIpdsgrPZeMk1I9AFcyQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2610,6 +2628,12 @@ packages:
     resolution: {integrity: sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ==}
     engines: {node: '>=0.10.0'}
 
+  remotion@4.0.488:
+    resolution: {integrity: sha512-V+2GQChZQkrBWrT2+bqpvu9Q/8mAri08vdZEdWsl5hy5j8/3z2DAr+Fw81K4RHmLKgKbZY21AJv7hUD+DKOdhA==}
+    peerDependencies:
+      react: 19.2.7
+      react-dom: 19.2.7
+
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
@@ -3667,6 +3691,12 @@ snapshots:
     dependencies:
       quansync: 1.0.0
 
+  '@remotion/player@4.0.488(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+    dependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+      remotion: 4.0.488(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+
   '@rolldown/binding-android-arm64@1.1.5':
     optional: true
 
@@ -4675,6 +4705,11 @@ snapshots:
       scheduler: 0.27.0
 
   react@19.2.7: {}
+
+  remotion@4.0.488(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
 
   require-from-string@2.0.2: {}
 

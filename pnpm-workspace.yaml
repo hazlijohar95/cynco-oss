@@ -46,6 +46,11 @@ catalog:
   '@paper-design/shaders': 0.0.77
   '@moonrepo/cli': '2.3.3'
   '@playwright/test': '1.51.1'
+  # Remotion Player (@remotion/player pins remotion to the same version):
+  # programmatic product film on the ledger.cynco.dev index. Company license
+  # applies to commercial use — see the film section notes.
+  '@remotion/player': '4.0.488'
+  'remotion': '4.0.488'
   '@base-ui/react': '1.6.0'
   '@tailwindcss/postcss': '4.1.13'
   '@tsdown/css': '0.22.3'

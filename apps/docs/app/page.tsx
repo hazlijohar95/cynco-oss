@@ -23,6 +23,7 @@ import {
   WORKSPACE_TREE_ID,
   WORKSPACE_TREE_OPTIONS,
 } from '@/examples/entries';
+import { LedgerFilmSection } from '@/examples/film/LedgerFilmSection';
 import { JournalEntryDemo } from '@/examples/JournalEntryDemo';
 import { ReconciliationDemo } from '@/examples/ReconciliationDemo';
 import { ReconciliationLegend } from '@/examples/ReconciliationLegend';
@@ -49,6 +50,7 @@ export default function Home() {
           <AccountTreeSection />
           <UnbalancedSection />
           <CyncoCompanySection />
+          <LedgerFilmSection />
         </main>
         <Footer />
       </div>
