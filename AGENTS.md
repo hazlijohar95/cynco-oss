@@ -38,6 +38,29 @@ themselves, unset the var: `CI= pnpm publish --dry-run`.
   arguments. Discover tasks with `moon tasks <project>`.
 - Preserve trailing newlines at the end of files.
 
+## Skills
+
+Domain-specific context and conventions live in `.agents/skills/`. Before
+starting any task:
+
+1. List `.agents/skills/*/SKILL.md`
+2. Read only each skill's frontmatter description to identify relevant skills
+3. Read only the full `SKILL.md` files relevant to your task
+
+Do not load skills that are not relevant to the task. The Money Invariants below
+are the load-bearing summary; `ledger-invariants` holds the full detail.
+
+## Agent Artifacts
+
+Write agent-only planning and scratch artifacts under `.agents/ignore/` by
+default:
+
+- Plans: `.agents/ignore/plans/YYYY-MM-DD-<topic>.md`
+- Specs: `.agents/ignore/specs/YYYY-MM-DD-<topic>.md`
+
+`.agents/ignore/` is gitignored. Do not put source files, tests, or committed
+documentation there.
+
 ## Money Invariants
 
 - Amounts are integer minor units (sen, cents) end to end. No floats touch
