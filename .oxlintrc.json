@@ -90,6 +90,7 @@
     "{packages,apps}/*/out/**",
     "{packages,apps}/*/build/**",
     "{packages,apps}/*/next-env.d.ts",
-    "{packages,apps}/*/.vercel/**"
+    "{packages,apps}/*/.vercel/**",
+    "apps/home/public/vendor/**"
   ]
 }

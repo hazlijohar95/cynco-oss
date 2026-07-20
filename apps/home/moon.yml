@@ -19,3 +19,12 @@ tasks:
       cache: false
       persistent: true
       runInCI: 'skip'
+
+  # Regenerates the committed public/vendor/paper-shaders.js bundle (the
+  # status-badge shaders). Manual: run after bumping @paper-design/shaders
+  # in the catalog; the deploy itself stays build-free.
+  bundle-shaders:
+    command: 'bun scripts/bundle-shaders.ts'
+    options:
+      cache: false
+      runInCI: 'skip'

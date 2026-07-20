@@ -44,6 +44,7 @@
     "apps/docs/next-env.d.ts",
     "packages/ledger-test-data/*-entries.json",
     "*.patch",
-    "README"
+    "README",
+    "apps/home/public/vendor"
   ]
 }

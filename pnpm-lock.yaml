@@ -12,6 +12,9 @@ catalogs:
     '@moonrepo/cli':
       specifier: 2.3.3
       version: 2.3.3
+    '@paper-design/shaders':
+      specifier: 0.0.77
+      version: 0.0.77
     '@playwright/test':
       specifier: 1.51.1
       version: 1.51.1
@@ -251,6 +254,9 @@ importers:
 
   apps/home:
     devDependencies:
+      '@paper-design/shaders':
+        specifier: 'catalog:'
+        version: 0.0.77
       wrangler:
         specifier: 'catalog:'
         version: 4.110.0
@@ -1402,6 +1408,9 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
+
+  '@paper-design/shaders@0.0.77':
+    resolution: {integrity: sha512-y0mR3brBu6qvVgbnvBdXX3zL/hajdamkECLt8NbexaEc1L46W3a+ZIEwxu1NJ2/bqwxAgjJC0o2+4CAii5wp/w==}
 
   '@playwright/test@1.51.1':
     resolution: {integrity: sha512-nM+kEaTSAoVlXmMPH10017vn3FSiFqr/bh4fKg9vmAdMfd9SDqRZNvPSiAHADc/itWak+qPvMPZQOPwCBW7k7Q==}
@@ -3635,6 +3644,8 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.70.0':
     optional: true
+
+  '@paper-design/shaders@0.0.77': {}
 
   '@playwright/test@1.51.1':
     dependencies:

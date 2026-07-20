@@ -41,6 +41,9 @@ minimumReleaseAgeExclude:
   - 'vite'
 
 catalog:
+  # Paper Shaders (Apache-2.0): WebGL status-badge shaders on the cynco.dev
+  # index; bundled into apps/home/public/vendor by home:bundle-shaders.
+  '@paper-design/shaders': 0.0.77
   '@moonrepo/cli': '2.3.3'
   '@playwright/test': '1.51.1'
   '@base-ui/react': '1.6.0'

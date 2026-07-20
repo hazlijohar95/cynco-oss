@@ -133,8 +133,23 @@
         color: var(--muted);
         border: 1px solid var(--line);
         padding: 1px 7px;
-        border-radius: 2px;
+        border-radius: 3px;
         white-space: nowrap;
+        /* Shader host: the pulsing-border canvas mounts inside and must
+           clip to the pill. The hairline pill IS the no-WebGL fallback. */
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+      }
+      .status canvas {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        width: 100%;
+        height: 100%;
+      }
+      .row:hover .status {
+        color: var(--fg);
       }
       .row.dim .name,
       .row.dim .desc {
@@ -283,5 +298,97 @@
         </span>
       </footer>
     </main>
+
+    <script type="module">
+      // Status badges get a Paper Shaders pulsing border (Apache-2.0,
+      // vendored at /vendor/paper-shaders.js — regenerate with
+      // `moonx home:bundle-shaders`). Progressive enhancement: any failure
+      // (no WebGL, blocked module, old browser) leaves the hairline pills
+      // exactly as they are.
+      import {
+        defaultObjectSizing,
+        getShaderColorFromString,
+        getShaderNoiseTexture,
+        PulsingBorderAspectRatios,
+        pulsingBorderFragmentShader,
+        ShaderFitOptions,
+        ShaderMount,
+      } from '/vendor/paper-shaders.js';
+
+      // Two spot colors per status, chosen to read on both #ffffff and
+      // #161616: BETA cool blue, ALPHA amber (work in progress), SOON
+      // neutral, LIVE green.
+      const SPOTS = {
+        BETA: ['#4d9fff', '#2b6fff'],
+        ALPHA: ['#ffb02e', '#ff7a2e'],
+        SOON: ['#a3a3a3', '#7a7a7a'],
+        LIVE: ['#3fb950', '#2ea043'],
+      };
+
+      const reducedMotion = matchMedia(
+        '(prefers-reduced-motion: reduce)'
+      ).matches;
+
+      // The shared noise texture is a data-URI image; ShaderMount refuses
+      // images that have not finished decoding, so wait for it up front
+      // (top-level await — the script is a module and nothing else blocks).
+      const noiseTexture = getShaderNoiseTexture();
+      if (noiseTexture !== undefined && !noiseTexture.complete) {
+        await noiseTexture.decode().catch(() => {});
+      }
+
+      // Per-badge try/catch: one failed mount must not stop the others, and
+      // the fallback pill needs no cleanup either way.
+      const badges = document.querySelectorAll('.status');
+      badges.forEach((el, index) => {
+        const colors = SPOTS[el.textContent.trim()];
+        if (colors === undefined) return;
+        try {
+          new ShaderMount(
+            el,
+            pulsingBorderFragmentShader,
+            {
+              u_colorBack: getShaderColorFromString('#00000000'),
+              u_colors: colors.map(getShaderColorFromString),
+              u_colorsCount: colors.length,
+              u_roundness: 0.5,
+              u_thickness: 0.25,
+              u_softness: 1,
+              u_marginLeft: 0,
+              u_marginRight: 0,
+              u_marginTop: 0,
+              u_marginBottom: 0,
+              u_aspectRatio: PulsingBorderAspectRatios.auto,
+              u_intensity: 0.45,
+              u_bloom: 0.45,
+              u_spots: 3,
+              u_spotSize: 0.7,
+              u_pulse: 0.4,
+              u_smoke: 0.35,
+              u_smokeSize: 0.5,
+              u_noiseTexture: noiseTexture,
+              u_fit: ShaderFitOptions[defaultObjectSizing.fit],
+              u_rotation: defaultObjectSizing.rotation,
+              u_scale: 1,
+              u_offsetX: defaultObjectSizing.offsetX,
+              u_offsetY: defaultObjectSizing.offsetY,
+              u_originX: defaultObjectSizing.originX,
+              u_originY: defaultObjectSizing.originY,
+              u_worldWidth: defaultObjectSizing.worldWidth,
+              u_worldHeight: defaultObjectSizing.worldHeight,
+            },
+            undefined,
+            // Reduced motion stops the render loop entirely (speed 0 skips
+            // rAF), leaving one static shader frame. Frame offsets desync
+            // the pills so they do not pulse in unison.
+            reducedMotion ? 0 : 1,
+            index * 4321
+          );
+        } catch (error) {
+          // Fallback pill stays; log so a systematic failure is visible.
+          console.warn('status shader skipped:', el.textContent.trim(), error);
+        }
+      });
+    </script>
   </body>
 </html>
