@@ -104,6 +104,25 @@ describe('renderRegisterRowHTML', () => {
     const row = parse(renderRegisterRowHTML(rows[0], 0, true));
     expect(row.getAttribute('data-row-selected')).toBe('true');
   });
+
+  test('escapes a malicious flag from an untyped host (XSS)', () => {
+    const entry = makeEntry({
+      flag: '"><img src=x onerror=alert(1)>' as never,
+    });
+    const rowData: RegisterRowData = {
+      entry,
+      posting: entry.postings[0],
+      runningBalance: new Map([['MYR', 10_000]]),
+    };
+    const row = parse(renderRegisterRowHTML(rowData, 0, false));
+    expect(row.querySelector('img')).toBeNull();
+    expect(row.getAttribute('data-flag')).toBe(
+      '"><img src=x onerror=alert(1)>'
+    );
+    expect(
+      row.querySelector('[data-flag-dot]')?.getAttribute('data-flag')
+    ).toBe('"><img src=x onerror=alert(1)>');
+  });
 });
 
 describe('renderRegisterRowsHTML', () => {
@@ -166,5 +185,33 @@ describe('renderRegisterHTML', () => {
     expect(section.querySelector('[data-balance-amount]')?.textContent).toBe(
       '375.08 MYR'
     );
+  });
+
+  test('maxSsrRows caps the emitted flat rows without touching the header balance or rowcount', () => {
+    const rows = makeRows(5);
+    const section = parse(
+      renderRegisterHTML(rows, { account: ACCOUNT, maxSsrRows: 2 })
+    );
+    // Only the first two rows are painted...
+    expect(section.querySelectorAll('[data-row]').length).toBe(2);
+    const indices = Array.from(section.querySelectorAll('[data-row]')).map(
+      (row) => row.getAttribute('data-row-index')
+    );
+    expect(indices).toEqual(['0', '1']);
+    // ...but aria-rowcount still reflects the FULL register (the client
+    // re-windows to the rest on hydration), and the header balance is the
+    // full running balance, not a sum of the two painted rows.
+    expect(section.getAttribute('aria-rowcount')).toBe('5');
+    expect(section.querySelector('[data-balance-amount]')?.textContent).toBe(
+      '375.08 MYR'
+    );
+  });
+
+  test('maxSsrRows larger than the row count renders every row', () => {
+    const rows = makeRows(3);
+    const section = parse(
+      renderRegisterHTML(rows, { account: ACCOUNT, maxSsrRows: 1000 })
+    );
+    expect(section.querySelectorAll('[data-row]').length).toBe(3);
   });
 });

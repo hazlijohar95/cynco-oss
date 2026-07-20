@@ -71,6 +71,22 @@ export interface RegisterRenderOptions {
    */
   filter?: RegisterFilter;
   /**
+   * Caps how many rows the SSR pass emits into the initial HTML. The server
+   * cannot know the viewport, so by default it renders every row — fine for
+   * ordinary registers, but an unbounded string build for the very large
+   * ledgers this library targets (hundreds of thousands of rows). Set this to
+   * a value comfortably larger than any first-paint viewport (a few hundred)
+   * to bound the SSR payload: the client re-windows on its first virtualized
+   * pass regardless, and the hydration `rows` come from JS, not the DOM, so
+   * capped output hydrates to the identical result — only the pre-hydration
+   * paint shows fewer rows.
+   *
+   * Ignored when a filter or grouping is active (those models are already
+   * bounded by the match/group set and must render in full so hydration
+   * adopts the exact structure). Values `<= 0` or absent mean "render all".
+   */
+  maxSsrRows?: number;
+  /**
    * Sticky current-period label for grouped registers. Default ON whenever
    * `groupBy !== 'none'` (new surface, so no back-compat concern): a slim
    * aria-hidden mirror strip pinned just below the register's sticky header
@@ -179,7 +195,7 @@ export function renderRegisterRowHTML(
     `<div data-row data-row-index="${index}" role="row"` +
     ` aria-rowindex="${ariaRowIndex}" aria-selected="${selected}"${idAttribute}` +
     ` data-amount="${direction}"` +
-    ` data-flag="${entry.flag}"${selectedAttribute}>`;
+    ` data-flag="${escapeHtml(entry.flag)}"${selectedAttribute}>`;
   const dateHTML =
     filter != null && filter.fields.has('date')
       ? renderFilterHighlightHTML(entry.date, filter.lowerQuery)
@@ -447,9 +463,17 @@ export function renderRegisterHTML(
       filter
     );
   } else {
+    // Bound the flat SSR payload when asked. The client owns the real
+    // windowing; capping here only trims the initial paint, and since the
+    // spacers stay 0px (the client recomputes them on the first pass) the
+    // hydrated result is identical whether or not the cap fired.
+    const ssrEnd =
+      options.maxSsrRows != null && options.maxSsrRows > 0
+        ? Math.min(rows.length, options.maxSsrRows)
+        : rows.length;
     html += renderRegisterRowsHTML(
       rows,
-      { start: 0, end: rows.length },
+      { start: 0, end: ssrEnd },
       null,
       options.id
     );

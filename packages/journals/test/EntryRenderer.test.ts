@@ -154,6 +154,32 @@ describe('renderEntryHTML', () => {
     );
   });
 
+  // An untyped JS host can bypass the EntryFlag union and hand us an arbitrary
+  // string. The flag lands unescaped-looking in three attributes plus the
+  // article's data-flag, so it must be escaped the same way every text field
+  // is — otherwise it breaks out of the attribute and injects markup.
+  test('escapes a malicious flag from an untyped host (XSS)', () => {
+    const root = parse(
+      renderEntryHTML(
+        makeEntry({
+          flag: '"><img src=x onerror=alert(1)>' as never,
+        })
+      )
+    );
+    expect(root.querySelector('img')).toBeNull();
+    expect(root.getAttribute('data-flag')).toBe(
+      '"><img src=x onerror=alert(1)>'
+    );
+    const dot = root.querySelector('[data-flag-dot]');
+    expect(dot?.getAttribute('data-flag')).toBe(
+      '"><img src=x onerror=alert(1)>'
+    );
+    expect(dot?.getAttribute('title')).toBe('"><img src=x onerror=alert(1)>');
+    expect(dot?.getAttribute('aria-label')).toBe(
+      '"><img src=x onerror=alert(1)>'
+    );
+  });
+
   // Single full-fidelity canary: any intentional markup change must update
   // this snapshot, everything else stays behavioral projections.
   test('full HTML snapshot canary', () => {

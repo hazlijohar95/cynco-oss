@@ -26,7 +26,7 @@ export function renderEntryHTML(
   const lineNumbersAttribute = showLineNumbers ? ' data-line-numbers' : '';
   let html =
     `<article data-entry data-entry-id="${escapeHtml(entry.id)}"` +
-    ` data-flag="${entry.flag}"${lineNumbersAttribute}>`;
+    ` data-flag="${escapeHtml(entry.flag)}"${lineNumbersAttribute}>`;
   html += renderEntryHeaderHTML(entry);
   html += '<div data-postings>';
   for (const [index, posting] of entry.postings.entries()) {
@@ -63,9 +63,15 @@ function renderEntryHeaderHTML(entry: LedgerEntry): string {
 
 // The flag is a colored dot (not an emoji glyph): a single ● whose color is
 // driven purely by the [data-flag] attribute in CSS, keeping the markup
-// identical across flags.
+// identical across flags. `flag` is typed as an EntryFlag union, but this
+// renderer is also reachable from untyped JS hosts and from diff data whose
+// before/after values are arbitrary strings, so the value is escaped before
+// it lands in three attributes — matching the escaping discipline every other
+// field in this renderer already follows. Unknown flags still render (the CSS
+// simply has no color rule for them).
 export function renderFlagDotHTML(flag: LedgerEntry['flag']): string {
-  return `<span data-flag-dot data-flag="${flag}" title="${flag}" aria-label="${flag}">\u25cf</span>`;
+  const escaped = escapeHtml(flag);
+  return `<span data-flag-dot data-flag="${escaped}" title="${escaped}" aria-label="${escaped}">\u25cf</span>`;
 }
 
 // One posting row in the entry grid: optional number gutter, account path,
