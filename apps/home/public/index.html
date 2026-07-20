@@ -6,160 +6,144 @@
     <title>Cynco — accounting infrastructure</title>
     <meta
       name="description"
-      content="Cynco builds accounting infrastructure: integer minor units end to end, entries that balance by construction, rendering that holds at six-figure row counts."
+      content="Cynco builds accounting software and the open-source infrastructure under it. Integer minor units end to end; entries balance by construction."
     />
     <link rel="canonical" href="https://cynco.dev/" />
     <meta property="og:title" content="Cynco — accounting infrastructure" />
     <meta
       property="og:description"
-      content="Cynco builds accounting infrastructure: integer minor units end to end, entries that balance by construction, rendering that holds at six-figure row counts."
+      content="Cynco builds accounting software and the open-source infrastructure under it. Integer minor units end to end; entries balance by construction."
     />
     <meta property="og:url" content="https://cynco.dev/" />
     <meta property="og:site_name" content="Cynco" />
     <meta property="og:type" content="website" />
-    <meta
-      name="theme-color"
-      content="#ffffff"
-      media="(prefers-color-scheme: light)"
-    />
-    <meta
-      name="theme-color"
-      content="#161616"
-      media="(prefers-color-scheme: dark)"
-    />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#161616" media="(prefers-color-scheme: dark)" />
     <style>
-      /* Company index for cynco.dev. One static file, no build step: the
-         page is a ledger — projects are entries, hairline rules are the
-         ruling, statuses sit in the credit column. Colors mirror the ledger
-         app's light-dark pair (#ffffff/#161616). */
+      /* Company index for cynco.dev. One static file, no build step.
+         Monochrome, hairline rules, monospace — the page reads like a
+         ledger: projects are entries, statuses sit in the credit column.
+         Spacing sits on an 8px baseline; rules are exactly 1px. */
       :root {
         color-scheme: light dark;
         --bg: light-dark(#ffffff, #161616);
-        --fg: light-dark(#161616, #ffffff);
-        --muted: light-dark(#6b6b6b, #9a9a9a);
-        --faint: light-dark(#8f8f8f, #6f6f6f);
-        --line: light-dark(#e4e4e4, #2e2e2e);
-        --hover: light-dark(#f6f6f6, #1f1f1f);
+        --fg: light-dark(#161616, #f2f2f2);
+        --muted: light-dark(#666666, #9c9c9c);
+        --faint: light-dark(#999999, #6a6a6a);
+        --line: light-dark(#e6e6e6, #2c2c2c);
       }
       * {
         box-sizing: border-box;
       }
-      html,
-      body {
-        margin: 0;
-        padding: 0;
+      html {
+        height: 100%;
       }
       body {
+        margin: 0;
+        min-height: 100%;
         background: var(--bg);
         color: var(--fg);
         font-family:
           ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas,
           'Liberation Mono', monospace;
         font-size: 14px;
-        line-height: 1.6;
+        line-height: 24px;
         -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+      ::selection {
+        background: var(--fg);
+        color: var(--bg);
       }
       main {
-        max-width: 720px;
+        max-width: 680px;
         margin: 0 auto;
-        padding: 72px 24px 48px;
+        padding: 96px 24px 64px;
       }
       .mark {
-        font-size: 13px;
-        letter-spacing: 0.4em;
-        font-weight: 600;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.44em;
+        /* Optical: tracking adds a trailing space; nudge back. */
+        margin-right: -0.44em;
       }
       .tag {
         color: var(--muted);
         margin-top: 4px;
       }
-      p.lede {
+      .lede {
         color: var(--muted);
-        margin: 40px 0 0;
-        max-width: 56ch;
+        margin: 48px 0 0;
+        max-width: 58ch;
+      }
+      .lede strong {
+        color: var(--fg);
+        font-weight: 500;
       }
       h2 {
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 600;
-        letter-spacing: 0.2em;
+        letter-spacing: 0.24em;
         color: var(--faint);
-        margin: 56px 0 0;
+        margin: 64px 0 8px;
       }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 12px;
-      }
-      tr {
+      /* Project register: name | description | status. Rows are hairline-
+         ruled; the whole row is the link where one exists. */
+      .register {
         border-top: 1px solid var(--line);
       }
-      tr:last-child {
+      .row {
+        display: grid;
+        grid-template-columns: 128px 1fr max-content;
+        gap: 0 24px;
+        align-items: baseline;
+        padding: 14px 0;
         border-bottom: 1px solid var(--line);
+        color: inherit;
+        text-decoration: none;
       }
-      td {
-        padding: 12px 16px 12px 0;
-        vertical-align: top;
-      }
-      td:last-child {
-        padding-right: 0;
-        text-align: right;
+      .row .name {
+        font-weight: 600;
         white-space: nowrap;
       }
-      a {
-        color: var(--fg);
-        text-decoration: none;
-        border-bottom: 1px solid var(--line);
-      }
-      a:hover {
-        border-bottom-color: var(--fg);
-      }
-      .name a {
-        font-weight: 600;
-        border-bottom: none;
-      }
-      .name a:hover {
-        border-bottom: 1px solid var(--fg);
-      }
-      .desc {
+      .row .desc {
         color: var(--muted);
+      }
+      a.row:hover .name {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      a.row:focus-visible,
+      a:focus-visible {
+        outline: 1px solid var(--fg);
+        outline-offset: 3px;
       }
       .status {
+        font-size: 11px;
+        line-height: 16px;
+        letter-spacing: 0.12em;
         color: var(--muted);
-        font-size: 12px;
-        letter-spacing: 0.08em;
+        border: 1px solid var(--line);
+        padding: 1px 7px;
+        border-radius: 2px;
+        white-space: nowrap;
       }
-      .status::before {
-        content: '';
-        display: inline-block;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: light-dark(#1a7f37, #3fb950);
-        margin-right: 8px;
-        vertical-align: 1px;
+      .row.dim .name,
+      .row.dim .desc {
+        color: var(--faint);
       }
-      ul.pkgs {
-        list-style: none;
-        margin: 12px 0 0;
-        padding: 0;
-      }
-      ul.pkgs li {
+      /* Package list: name | one-line purpose. */
+      .pkgs {
         border-top: 1px solid var(--line);
-        padding: 10px 0;
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        flex-wrap: wrap;
       }
-      ul.pkgs li:last-child {
-        border-bottom: 1px solid var(--line);
+      .pkgs .row {
+        grid-template-columns: max-content 1fr;
       }
-      ul.pkgs .desc {
+      .pkgs .desc {
         text-align: right;
-        flex: 1;
       }
       footer {
-        margin-top: 72px;
+        margin-top: 96px;
         padding-top: 16px;
         border-top: 1px solid var(--line);
         color: var(--faint);
@@ -171,13 +155,44 @@
       }
       footer a {
         color: var(--muted);
+        text-decoration: none;
       }
-      @media (max-width: 560px) {
+      footer a:hover {
+        color: var(--fg);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      @media (max-width: 600px) {
         main {
-          padding-top: 48px;
+          padding: 64px 20px 48px;
         }
-        td.desc-cell {
-          display: none;
+        /* Name and status share the first line; description wraps below.
+           Explicit placement — auto-flow would push the status (third in
+           source order) onto its own full-width row. */
+        .row {
+          grid-template-columns: 1fr max-content;
+          gap: 2px 16px;
+        }
+        .row .name {
+          grid-row: 1;
+          grid-column: 1;
+        }
+        .row .status {
+          grid-row: 1;
+          grid-column: 2;
+          justify-self: end;
+          align-self: center;
+        }
+        .row .desc {
+          grid-row: 2;
+          grid-column: 1 / -1;
+        }
+        .pkgs .row {
+          grid-template-columns: 1fr;
+        }
+        .pkgs .desc {
+          grid-row: 2;
+          text-align: left;
         }
       }
     </style>
@@ -190,51 +205,62 @@
       </header>
 
       <p class="lede">
-        Built the way systems engineers build databases: integer minor units end
-        to end, entries that balance by construction, rendering that holds at
-        six-figure row counts. Open source, TypeScript.
+        We build accounting software and the open-source infrastructure under
+        it. <strong>Integer minor units end to end. Entries balance by
+        construction.</strong> TypeScript.
       </p>
 
       <h2>PROJECTS</h2>
-      <table>
-        <tbody>
-          <tr>
-            <td class="name"><a href="https://ledger.cynco.dev">ledger</a></td>
-            <td class="desc desc-cell">
-              Ledger UI primitives — journal entries, virtualized registers,
-              reconciliation, and the chart of accounts. Vanilla core, React
-              adapters, SSR.
-            </td>
-            <td><span class="status">ONLINE</span></td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="register">
+        <a class="row" href="https://www.cynco.io">
+          <span class="name">cynco</span>
+          <span class="desc">Accounting that runs itself. The platform.</span>
+          <span class="status">BETA</span>
+        </a>
+        <a class="row" href="https://ledger.cynco.dev">
+          <span class="name">ledger</span>
+          <span class="desc">
+            Open-source ledger UI: journals, registers, reconciliation, chart
+            of accounts. Virtualized to 1M entries.
+          </span>
+          <span class="status">ALPHA</span>
+        </a>
+        <div class="row dim">
+          <span class="name">labs</span>
+          <span class="desc">
+            Research on accounting and tax systems. labs.cynco.io.
+          </span>
+          <span class="status">SOON</span>
+        </div>
+        <a class="row" href="https://opentaxation.my">
+          <span class="name">opentax</span>
+          <span class="desc">
+            Malaysian tax calculator: Enterprise vs Sdn Bhd, LHDN YA2025
+            rates. Side project.
+          </span>
+          <span class="status">LIVE</span>
+        </a>
+      </div>
 
       <h2>PACKAGES</h2>
-      <ul class="pkgs">
-        <li>
-          <a href="https://www.npmjs.com/package/@cynco/journals"
-            >@cynco/journals</a
-          >
+      <div class="pkgs">
+        <a class="row" href="https://www.npmjs.com/package/@cynco/journals">
+          <span class="name">@cynco/journals</span>
           <span class="desc">journal entries and account registers</span>
-        </li>
-        <li>
-          <a href="https://www.npmjs.com/package/@cynco/accounts"
-            >@cynco/accounts</a
-          >
+        </a>
+        <a class="row" href="https://www.npmjs.com/package/@cynco/accounts">
+          <span class="name">@cynco/accounts</span>
           <span class="desc">chart-of-accounts tree</span>
-        </li>
-        <li>
-          <a href="https://www.npmjs.com/package/@cynco/theming"
-            >@cynco/theming</a
-          >
+        </a>
+        <a class="row" href="https://www.npmjs.com/package/@cynco/theming">
+          <span class="name">@cynco/theming</span>
           <span class="desc">runtime theme controller</span>
-        </li>
-        <li>
-          <a href="https://www.npmjs.com/package/@cynco/theme">@cynco/theme</a>
+        </a>
+        <a class="row" href="https://www.npmjs.com/package/@cynco/theme">
+          <span class="name">@cynco/theme</span>
           <span class="desc">palettes and CVD-safe role sets</span>
-        </li>
-      </ul>
+        </a>
+      </div>
 
       <footer>
         <span>&copy; 2026 Cynco</span>
