@@ -16,6 +16,7 @@ const LIBRARY_LINKS: readonly FooterLink[] = [
   { href: '/docs/accounts', label: 'Accounts' },
   { href: '/docs/theming', label: 'Theming' },
   { href: '/playground', label: 'Playground' },
+  { href: '/ledger-dev', label: 'Perf lab' },
 ];
 
 const RESOURCE_LINKS: readonly FooterLink[] = [

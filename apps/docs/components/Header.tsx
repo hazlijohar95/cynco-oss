@@ -17,6 +17,7 @@ const NAV_LINKS = [
   { href: '/docs/accounts', label: 'Accounts' },
   { href: '/docs/theming', label: 'Theming' },
   { href: '/playground', label: 'Playground' },
+  { href: '/ledger-dev', label: 'Perf lab' },
 ] as const;
 
 // Cynco's own two-tone ledger glyph: a solid journal page beside a

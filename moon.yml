@@ -91,6 +91,7 @@ tasks:
       - '!**/node_modules/**'
       - '!**/dist/**'
       - '!**/.next/**'
+      - '!apps/docs/out/**'
       - 'stylelint.config.js'
     options:
       runInCI: 'always'
