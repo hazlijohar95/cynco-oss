@@ -1,0 +1,22 @@
+version: 2
+
+updates:
+  # Keep the SHA-pinned actions fresh: Dependabot rewrites both the commit SHA
+  # and the trailing `# vX.Y.Z` comment, grouped into a single weekly PR so
+  # the actions-pinned CI guard stays satisfied without per-action churn.
+  # `directory: /` scans .github/workflows; this repo has no local composite
+  # actions, so no extra directories are needed.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+    commit-message:
+      prefix: '[ci]'
+
+  # npm is intentionally excluded: workspace dependencies are managed through
+  # the pnpm catalog in pnpm-workspace.yaml with a 7-day minimumReleaseAge
+  # policy, which Dependabot would bypass by proposing day-zero releases.
