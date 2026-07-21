@@ -1337,6 +1337,47 @@
     border-color: var(--journals-accent);
   }
 
+  /* Reconciliation verdict motion */
+  /* ----------------------------- */
+  /* A verdict that removes rows (rejecting a pair, undoing back into a
+   * pair) marks them [data-leaving] and defers the rebuild so the row can
+   * visibly dissolve instead of popping out. The duration below and
+   * RECON_VERDICT_LEAVE_MS in constants.ts MUST agree: JS times the DOM
+   * commit, CSS draws the fade/collapse, and a mismatch either cuts the
+   * fade short or parks a fully-faded row. block-size endpoints are pinned
+   * inline by the component (auto → px → 0; `auto` does not interpolate),
+   * but the transition itself — duration, easing, the opacity target —
+   * lives here, driven purely by the attribute. */
+  [data-reconciliation] {
+    --journals-verdict-duration: 180ms;
+  }
+
+  [data-recon-row][data-leaving] {
+    opacity: 0;
+    min-height: 0;
+    border-bottom-width: 0;
+    overflow: clip;
+    /* A dying row must not take another verdict click. */
+    pointer-events: none;
+    transition:
+      opacity var(--journals-verdict-duration) ease-out,
+      block-size var(--journals-verdict-duration) ease-out,
+      border-bottom-width var(--journals-verdict-duration) ease-out;
+  }
+
+  /* Rows a verdict introduced fade in after the rebuild. Animation (not
+   * transition) so it plays once on insertion with no end-state bookkeeping,
+   * and purely decorative: the row is interactive from the first frame. */
+  [data-recon-row][data-entering] {
+    animation: journals-verdict-enter var(--journals-verdict-duration) ease-out;
+  }
+
+  @keyframes journals-verdict-enter {
+    from {
+      opacity: 0;
+    }
+  }
+
   /* Entry stream */
   /* ------------ */
   [data-entry-stream] [data-stream-entries] {
@@ -1390,7 +1431,11 @@
    * stylesheet. The media query itself still evaluates against the user's
    * OS preference inside a shadow root. Every transition above is a color/
    * opacity fade (hover tints, recon action reveals, stream state), so they
-   * snap rather than animate — none of them carries meaning through motion. */
+   * snap rather than animate — none of them carries meaning through motion.
+   * The verdict leave/enter pair snaps too; its JS twin (the deferred DOM
+   * commit in Reconciliation.commitVerdict) checks the same media query and
+   * commits instantly, so reduced-motion users never wait out a timer for
+   * an animation this block has silenced. */
   @media (prefers-reduced-motion: reduce) {
     [data-tag],
     [data-link],
@@ -1398,8 +1443,13 @@
     [data-row],
     [data-recon-row],
     [data-recon-action],
-    [data-stream-state] {
+    [data-stream-state],
+    [data-recon-row][data-leaving] {
       transition: none;
+    }
+
+    [data-recon-row][data-entering] {
+      animation: none;
     }
   }
 }

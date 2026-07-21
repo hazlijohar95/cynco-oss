@@ -43,6 +43,7 @@ import {
   type RegisterFilterCorpus,
 } from '../utils/buildRegisterFilterCorpus';
 import { buildRegisterRowModel } from '../utils/buildRegisterRowModel';
+import { commitRegisterRowsHTML } from '../utils/commitRegisterRowsHTML';
 import { computeGroupedRowWindow } from '../utils/computeGroupedRowWindow';
 import { computeRegisterFilterMatches } from '../utils/computeRegisterFilterMatches';
 import { computeRowModelOffsets } from '../utils/computeRowModelOffsets';
@@ -983,10 +984,13 @@ export class Register implements VirtualizedInstance {
     });
   }
 
-  // Commits a row window: one innerHTML write for the rows plus two spacer
-  // height writes. Rebuilding the whole window is intentionally simple — the
-  // window is bounded (~viewport + 2 * overscan rows), so no element pooling
-  // is needed to stay comfortably within frame budget.
+  // Commits a row window: one keyed morph for the rows plus two spacer
+  // height writes. The window HTML is still rendered as one string (the
+  // SSR/worker/client byte-parity contract lives in the renderers), but the
+  // commit reconciles it per row so elements survive overlapping window
+  // moves — see commitRegisterRowsHTML for the design. The window stays
+  // bounded (~viewport + 2 * overscan rows), so the per-row comparison is
+  // comfortably within frame budget.
   private applyWindow(range: RowRange): void {
     const { spacerBefore, rowsElement, spacerAfter } = this;
     if (spacerBefore == null || rowsElement == null || spacerAfter == null) {
@@ -1027,7 +1031,7 @@ export class Register implements VirtualizedInstance {
 
     const pool = this.options.workerPool;
     if (pool == null || !pool.isWorkingPool()) {
-      rowsElement.innerHTML = this.renderWindowHTMLSync(range);
+      commitRegisterRowsHTML(rowsElement, this.renderWindowHTMLSync(range));
       this.patchFocusAttributes();
       return;
     }
@@ -1089,7 +1093,7 @@ export class Register implements VirtualizedInstance {
           ) {
             return;
           }
-          this.rowsElement.innerHTML = html;
+          commitRegisterRowsHTML(this.rowsElement, html);
           this.patchFocusAttributes();
         });
       })
@@ -1099,7 +1103,10 @@ export class Register implements VirtualizedInstance {
         if (version !== this.windowRenderVersion || this.rowsElement == null) {
           return;
         }
-        this.rowsElement.innerHTML = this.renderWindowHTMLSync(range);
+        commitRegisterRowsHTML(
+          this.rowsElement,
+          this.renderWindowHTMLSync(range)
+        );
         this.patchFocusAttributes();
       });
   }
@@ -1434,8 +1441,10 @@ export class Register implements VirtualizedInstance {
     }
   }
 
-  // Re-applies focus state to a freshly committed window: innerHTML writes
-  // rebuild rows without the (deliberately un-baked) data-focused attribute,
+  // Re-applies focus state to a freshly committed window: window HTML never
+  // bakes the (deliberately un-baked) data-focused attribute, so rows that
+  // were rebuilt or re-entered by the keyed commit need it patched back on
+  // (reused rows keep theirs — the morph masks the attribute when comparing),
   // and eviction/re-entry must also update aria-activedescendant.
   private patchFocusAttributes(): void {
     if (this.focusedIndex != null) {

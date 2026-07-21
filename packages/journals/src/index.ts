@@ -21,6 +21,7 @@ export * from './utils/areVirtualWindowSpecsEqual';
 export * from './utils/buildFilteredRegisterRowModel';
 export * from './utils/buildRegisterFilterCorpus';
 export * from './utils/buildRegisterRowModel';
+export * from './utils/commitRegisterRowsHTML';
 export * from './utils/computeGroupedRowWindow';
 export * from './utils/computeRegisterFilterMatches';
 export * from './utils/computeRowModelOffsets';

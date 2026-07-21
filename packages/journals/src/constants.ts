@@ -61,6 +61,16 @@ export const DEFAULT_REGISTER_EMPTY_LABEL = 'No transactions in this view';
 export const REGISTER_EMPTY_EXTRA_HEIGHT = 56;
 
 /**
+ * How long a reconciliation row's leave animation runs before the verdict's
+ * DOM commit lands, in ms. Must match `--journals-verdict-duration` in
+ * style.css (the JS timer delays the rebuild; the CSS transition draws the
+ * fade/collapse) or rows either vanish mid-fade or sit fully faded waiting
+ * for removal. Skipped entirely — instant commit — under
+ * prefers-reduced-motion.
+ */
+export const RECON_VERDICT_LEAVE_MS = 180;
+
+/**
  * Cap on the character length of a header field eligible for word-level
  * diffing. Fields longer than this on either side skip the O(words²) LCS and
  * render as wholly changed instead.

@@ -168,6 +168,20 @@ export function computeReconciliationTotals(
   return { statement, cleared, difference };
 }
 
+/**
+ * Stable identity for one visual row across state changes: the row type plus
+ * the id of the data it presents (statement line id, or the first grouped
+ * posting's entry:index key for book rows). The client component diffs
+ * consecutive row projections with it to decide which rows LEAVE and which
+ * ENTER on a verdict, driving the leave/enter animations. Deliberately not
+ * baked into markup — renderer output bytes are unchanged — and the type is
+ * part of the key on purpose: a pair dissolving into a statement-only row
+ * for the same line is a removal plus an insertion, not a mutation.
+ */
+export function getReconciliationRowKey(row: ReconciliationRow): string {
+  return `${row.type}:${getRowIdentity(row)}`;
+}
+
 // Full section HTML: sticky header with the three mono figures, then the
 // two-column split body with a center action gutter.
 export function renderReconciliationHTML(

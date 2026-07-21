@@ -10,6 +10,7 @@ import {
   installDom,
   makeBookPosting,
   makeStatementLine,
+  wait,
 } from './domHarness';
 
 let dom: DomHandle;
@@ -136,13 +137,18 @@ describe('Reconciliation interaction', () => {
     harness.cleanUp();
   });
 
-  test('rejecting dissolves the pair into unmatched rows on both sides', () => {
+  test('rejecting dissolves the pair into unmatched rows on both sides', async () => {
     const harness = createHarness(makeFullyMatchedOptions([]));
     expect(
       harness.section().querySelectorAll('[data-row-type="pair"]').length
     ).toBe(2);
 
     harness.clickAction('reject', 'm-s1-e1-0');
+    // The DOM dissolve is deferred behind the row's ~180ms leave animation
+    // (Reconciliation.commitVerdict); state flips synchronously, and the
+    // pre-commit DOM is covered by the verdict-animation suite. Wait out
+    // the commit before asserting the dissolved structure.
+    await wait(250);
     const section = harness.section();
     expect(section.querySelectorAll('[data-row-type="pair"]').length).toBe(1);
     expect(

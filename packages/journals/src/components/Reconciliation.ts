@@ -1,8 +1,11 @@
-import { JOURNALS_TAG_NAME } from '../constants';
+import { JOURNALS_TAG_NAME, RECON_VERDICT_LEAVE_MS } from '../constants';
 import { queueRender } from '../managers/UniversalRenderingManager';
 import {
+  computeReconciliationRows,
   computeReconciliationTotals,
+  getReconciliationRowKey,
   type ReconciliationRenderState,
+  type ReconciliationRow,
   renderReconciliationHTML,
 } from '../renderers/ReconciliationRenderer';
 import type {
@@ -15,6 +18,7 @@ import type {
 import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import { createLiveRegion, type LiveRegion } from '../utils/createLiveRegion';
 import { formatMinorUnits } from '../utils/formatMinorUnits';
+import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { proposeMatches } from '../utils/proposeMatches';
 import type { WorkerPoolManager } from '../worker/WorkerPoolManager';
 import { JournalsContainerLoaded } from './web-components';
@@ -69,7 +73,13 @@ export interface ReconciliationOptions {
   disableAnnouncements?: boolean;
   /** Fired after a match flips to `accepted` (via button or `acceptMatch`). */
   onAccept?(match: ReconciliationMatch): void;
-  /** Fired after a match flips to `rejected`; the pair dissolves visually. */
+  /**
+   * Fired after a match flips to `rejected`; the pair row fades and
+   * collapses out before dissolving into its two unmatched halves (or
+   * instantly under prefers-reduced-motion). The callback and `getState()`
+   * always reflect the new state synchronously — only the DOM commit waits
+   * for the leave animation.
+   */
   onReject?(match: ReconciliationMatch): void;
   /** Fired after an accepted/rejected match returns to `proposed`. */
   onUndo?(match: ReconciliationMatch): void;
@@ -129,6 +139,20 @@ export class Reconciliation {
   private readonly workerInstanceId: string = `recon-${++reconInstanceCount}`;
   /** Bumped per data change; stale async proposal results are dropped. */
   private proposalsVersion = 0;
+  /**
+   * In-flight verdict commit: the DOM rebuild deferred behind a row leave
+   * animation. At most one exists — a second verdict (or any other rebuild)
+   * jumps it straight to the final state first, so animations can never
+   * queue up behind each other. `frame`/`timer` are the cancel handles for
+   * the rAF-chained timeout; `commit` performs the rebuild immediately.
+   */
+  private pendingVerdict:
+    | {
+        frame: number | null;
+        timer: ReturnType<typeof setTimeout> | null;
+        commit(): void;
+      }
+    | undefined;
 
   constructor(
     public options: ReconciliationOptions,
@@ -229,6 +253,9 @@ export class Reconciliation {
   }
 
   cleanUp(): void {
+    // Drop (never run) a deferred verdict commit: the DOM it would rebuild
+    // is being torn down, and a timer firing after cleanUp must not touch it.
+    this.cancelPendingVerdict();
     this.section?.removeEventListener('click', this.handleClick);
     this.liveRegion?.cleanUp();
     this.liveRegion = undefined;
@@ -297,9 +324,14 @@ export class Reconciliation {
   }
 
   // Match sets are small (a statement page), so state changes re-render the
-  // whole section in one innerHTML write — the same wholesale-window
-  // strategy the Register uses, without the virtualization.
+  // whole section in one innerHTML write — the same wholesale strategy the
+  // Register used before its keyed commits, without the virtualization.
+  // Rebuilding always presents the LATEST state, so any verdict commit still
+  // pending behind a leave animation is redundant by construction and is
+  // dropped here — this is what makes mid-animation data changes "jump
+  // straight to the final state" instead of double-committing later.
   private rerender(): void {
+    this.cancelPendingVerdict();
     if (this.section == null) {
       return;
     }
@@ -313,6 +345,29 @@ export class Reconciliation {
     this.adoptSection(next);
   }
 
+  // Drops the deferred commit without running it (rerender is about to
+  // present the same final state). Safe on already-fired handles.
+  private cancelPendingVerdict(): void {
+    const pending = this.pendingVerdict;
+    if (pending == null) {
+      return;
+    }
+    this.pendingVerdict = undefined;
+    if (pending.frame != null) {
+      cancelAnimationFrame(pending.frame);
+    }
+    if (pending.timer != null) {
+      clearTimeout(pending.timer);
+    }
+  }
+
+  // Runs the deferred commit NOW: a second verdict arriving mid-animation
+  // must land on a DOM that reflects the previous verdict, never on a
+  // half-faded intermediate (no queue buildup, by design).
+  private flushPendingVerdict(): void {
+    this.pendingVerdict?.commit();
+  }
+
   private transitionMatch(
     id: string,
     status: ReconciliationMatch['status'],
@@ -323,6 +378,11 @@ export class Reconciliation {
     if (current == null || current.status === status) {
       return;
     }
+    this.flushPendingVerdict();
+    // The previous projection must be captured BEFORE the state change (and
+    // after the flush above, so it describes the committed DOM): diffing it
+    // against the next projection is what identifies leaving/entering rows.
+    const previousRows = computeReconciliationRows(this.getRenderState());
     // Matches are replaced immutably so callers can hold getState()
     // snapshots without seeing them mutate underneath.
     const next: ReconciliationMatch = { ...current, status };
@@ -331,9 +391,112 @@ export class Reconciliation {
       next,
       ...this.matches.slice(index + 1),
     ];
-    this.rerender();
+    this.commitVerdict(previousRows);
+    // State, announcement, and callback are all synchronous: only the DOM
+    // rebuild may wait for the leave animation, so hosts and assistive tech
+    // never observe a lagging model.
     this.announceDifference();
     callback?.(next);
+  }
+
+  // Commits a verdict's DOM update. Rows the verdict removes (a rejected
+  // pair; the unmatched halves an undo re-pairs) first fade and collapse via
+  // [data-leaving], and the wholesale rebuild lands when the animation ends;
+  // verdicts that only mutate a surviving row (accept, undo of an accepted
+  // match) rebuild immediately. Rows the verdict introduces fade in via
+  // [data-entering] after the rebuild — decorative only, never delaying
+  // interactivity.
+  private commitVerdict(previousRows: readonly ReconciliationRow[]): void {
+    const nextRows = computeReconciliationRows(this.getRenderState());
+    const previousKeys = new Set(previousRows.map(getReconciliationRowKey));
+    const nextKeys = new Set(nextRows.map(getReconciliationRowKey));
+    const enteringKeys = new Set(
+      [...nextKeys].filter((key) => !previousKeys.has(key))
+    );
+    // Leaving elements resolve positionally: the renderer emits exactly one
+    // element per projected row, in projection order, so previousRows[i] IS
+    // body.children[i]. A length mismatch means foreign DOM — skip the
+    // animation rather than guess.
+    const body = this.getBodyElement();
+    const leavingElements: HTMLElement[] = [];
+    if (body != null && body.children.length === previousRows.length) {
+      for (const [rowIndex, row] of previousRows.entries()) {
+        if (nextKeys.has(getReconciliationRowKey(row))) {
+          continue;
+        }
+        const element = body.children[rowIndex];
+        if (element instanceof HTMLElement) {
+          leavingElements.push(element);
+        }
+      }
+    }
+    // Reduced motion is checked at ANIMATION time, not construction, so an
+    // OS-level toggle mid-session is honored. The stylesheet's rPM block
+    // silences the visuals, but the JS must also skip the delay — otherwise
+    // the commit would lag RECON_VERDICT_LEAVE_MS with nothing animating.
+    if (leavingElements.length === 0 || prefersReducedMotion()) {
+      this.rerender();
+      this.markEnteringRows(nextRows, enteringKeys);
+      return;
+    }
+    for (const element of leavingElements) {
+      // block-size cannot transition from `auto`: pin the current height
+      // inline, then drive it to 0 on the next frame. The transition itself
+      // (duration, easing, opacity target) lives in the stylesheet under
+      // [data-leaving], keyed off this attribute.
+      element.style.blockSize = `${element.getBoundingClientRect().height}px`;
+      element.setAttribute('data-leaving', '');
+    }
+    const commit = (): void => {
+      // rerender() clears pendingVerdict (and its handles) itself.
+      this.rerender();
+      this.markEnteringRows(nextRows, enteringKeys);
+    };
+    const pending: NonNullable<typeof this.pendingVerdict> = {
+      frame: null,
+      timer: null,
+      commit,
+    };
+    this.pendingVerdict = pending;
+    // rAF-chained timeout: the frame starts the collapse (so the pinned
+    // start height has been laid out), the timer lands the rebuild when the
+    // CSS transition of the same duration finishes. Both handles are
+    // cancelable, which is what makes flush/cancel race-free.
+    pending.frame = requestAnimationFrame(() => {
+      pending.frame = null;
+      for (const element of leavingElements) {
+        element.style.blockSize = '0px';
+      }
+      pending.timer = setTimeout(commit, RECON_VERDICT_LEAVE_MS);
+    });
+  }
+
+  // Fade-in for rows a verdict introduced (an undo restoring a pair, a
+  // rejected pair dissolving into its two halves). The attribute only drives
+  // a CSS animation — the element is live and clickable the moment it lands,
+  // and the rPM stylesheet block disables the animation for users who asked
+  // for no motion.
+  private markEnteringRows(
+    nextRows: readonly ReconciliationRow[],
+    enteringKeys: ReadonlySet<string>
+  ): void {
+    if (enteringKeys.size === 0) {
+      return;
+    }
+    const body = this.getBodyElement();
+    if (body == null || body.children.length !== nextRows.length) {
+      return;
+    }
+    for (const [rowIndex, row] of nextRows.entries()) {
+      if (enteringKeys.has(getReconciliationRowKey(row))) {
+        body.children[rowIndex]?.setAttribute('data-entering', '');
+      }
+    }
+  }
+
+  private getBodyElement(): HTMLElement | null {
+    const body = this.section?.querySelector('[data-reconciliation-body]');
+    return body instanceof HTMLElement ? body : null;
   }
 
   private handleClick = (event: Event): void => {
