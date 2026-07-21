@@ -11,6 +11,7 @@ export const SITE_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/docs/journals', label: 'Journals' },
   { href: '/docs/accounts', label: 'Accounts' },
+  { href: '/docs/statements', label: 'Statements' },
   { href: '/docs/theming', label: 'Theming' },
   { href: '/playground', label: 'Playground' },
   { href: '/ledger-dev', label: 'Performance lab' },
@@ -20,5 +21,6 @@ export const SITE_LINKS = [
 export const DOCS_LINKS = [
   { href: '/docs/journals', label: 'Journals' },
   { href: '/docs/accounts', label: 'Accounts' },
+  { href: '/docs/statements', label: 'Statements' },
   { href: '/docs/theming', label: 'Theming' },
 ] as const;

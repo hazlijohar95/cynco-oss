@@ -40,6 +40,17 @@ import {
   workloads,
 } from '@cynco/ledger-test-data';
 import {
+  BalanceSheet,
+  createAccountTaxonomy,
+  deriveBalanceSheet,
+  deriveIncomeStatement,
+  deriveTrialBalance,
+  IncomeStatement,
+  type StatementDate,
+  type StatementPeriod,
+  TrialBalance,
+} from '@cynco/statements';
+import {
   connectThemeController,
   createThemeController,
   defaultCatalog,
@@ -140,6 +151,13 @@ const treeSearchNext = mustGetElement('tree-search-next', HTMLButtonElement);
 const treeSearchState = mustGetElement('tree-search-state', HTMLElement);
 const streamHost = mustGetElement('stream-host', HTMLElement);
 const streamRestart = mustGetElement('stream-restart', HTMLButtonElement);
+const trialBalanceHost = mustGetElement('trial-balance-host', HTMLElement);
+const incomeStatementHost = mustGetElement(
+  'income-statement-host',
+  HTMLElement
+);
+const balanceSheetHost = mustGetElement('balance-sheet-host', HTMLElement);
+const statementsReadout = mustGetElement('statements-readout', HTMLElement);
 
 // --- Theme / chrome controls -------------------------------------------------
 
@@ -152,7 +170,9 @@ const themeController = createThemeController({
   catalog: defaultCatalog,
   initialMode: 'dark',
 });
-connectThemeController(themeController, stage);
+connectThemeController(themeController, stage, {
+  prefixes: ['journals', 'accounts', 'statements'],
+});
 
 // Demo-specific reactions the generic connector doesn't cover: the toolbar
 // select mirrors the active theme, the page chrome class follows the
@@ -891,6 +911,105 @@ function reportReconciliation(
     `difference ${differenceText === '' ? '0.00' : differenceText}`;
 }
 
+// --- Financial statements ------------------------------------------------------
+
+let trialBalanceView: TrialBalance | undefined;
+let incomeStatementView: IncomeStatement | undefined;
+let balanceSheetView: BalanceSheet | undefined;
+
+// The generated chart follows the default five-root convention, so the stock
+// taxonomy classifies every workload account. One override demonstrates the
+// escape hatch: marketplace commissions are contra revenue — an income
+// account whose normal balance is debit — so classifying it contra keeps the
+// P&L presentation right (a negative income line) and stops the abnormal-
+// balance flag from firing on correct data. One shared instance across
+// workloads: classification is path-based and memoized per taxonomy.
+const statementsTaxonomy = createAccountTaxonomy({
+  overrides: {
+    'Income:Sales:Marketplace-Commissions': { contra: true },
+  },
+});
+
+// Distinct calendar years present in the entries, ascending. The statement
+// demos compare the last two, so comparative columns always carry real data
+// regardless of the workload's generated date span.
+function getEntryYears(entries: readonly LedgerEntry[]): string[] {
+  const years = new Set<string>();
+  for (const entry of entries) {
+    years.add(entry.date.slice(0, 4));
+  }
+  return [...years].sort();
+}
+
+// Derives and renders all three statements from the current workload's
+// entries. Components are created once and re-rendered with fresh derived
+// data (the data-reference fast path makes redundant renders free); the
+// readout narrates the two proofs — the trial balance tie and the
+// accounting equation — which hold on every generated workload because the
+// generator only emits balanced entries.
+function renderStatements(entries: readonly LedgerEntry[]): void {
+  const years = getEntryYears(entries).slice(-2);
+  if (years.length === 0) {
+    statementsReadout.textContent = 'No entries to derive statements from.';
+    return;
+  }
+  const periods: StatementPeriod[] = years.map((year) => ({
+    label: `FY${year}`,
+    dateFrom: `${year}-01-01`,
+    dateTo: `${year}-12-31`,
+  }));
+  const dates: StatementDate[] = years.map((year) => ({
+    label: `31 Dec ${year}`,
+    asOf: `${year}-12-31`,
+    fiscalYearStart: `${year}-01-01`,
+  }));
+  const lastYear = years[years.length - 1];
+
+  const trialBalanceData = deriveTrialBalance(entries, {
+    taxonomy: statementsTaxonomy,
+    asOf: `${lastYear}-12-31`,
+  });
+  trialBalanceView ??= new TrialBalance({});
+  trialBalanceView.render({
+    data: trialBalanceData,
+    parentNode: trialBalanceHost,
+  });
+
+  const incomeStatementData = deriveIncomeStatement(entries, {
+    periods,
+    taxonomy: statementsTaxonomy,
+  });
+  incomeStatementView ??= new IncomeStatement({});
+  incomeStatementView.render({
+    data: incomeStatementData,
+    parentNode: incomeStatementHost,
+  });
+
+  const balanceSheetData = deriveBalanceSheet(entries, {
+    dates,
+    taxonomy: statementsTaxonomy,
+  });
+  balanceSheetView ??= new BalanceSheet({});
+  balanceSheetView.render({
+    data: balanceSheetData,
+    parentNode: balanceSheetHost,
+  });
+
+  const rowCount = trialBalanceData.sections.reduce(
+    (total, section) => total + section.rows.length,
+    0
+  );
+  const tie = trialBalanceData.sections.every((section) => section.balanced);
+  const equation = balanceSheetData.sections.every((section) =>
+    section.balancedByDate.every(Boolean)
+  );
+  statementsReadout.textContent =
+    `${rowCount.toLocaleString('en-MY')} trial balance rows · ` +
+    `debits ${tie ? '=' : '≠'} credits · ` +
+    `accounting equation ${equation ? 'holds' : 'BROKEN'} · ` +
+    `columns ${years.map((year) => `FY${year}`).join(' / ')}`;
+}
+
 // Rebuilds every data-driven view for the current workload/density selection
 // and refreshes the toolbar stats line.
 function rebuildDataViews(): void {
@@ -904,6 +1023,7 @@ function rebuildDataViews(): void {
   renderRegister(registerRows, density);
   renderLedgerView(store, density);
   renderAccountTree();
+  renderStatements(getEntries(workload));
   registerReadout.textContent = 'No row selected.';
   ledgerReadout.textContent = 'No row selected.';
   accountsReadout.textContent = 'No account selected.';

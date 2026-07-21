@@ -28,8 +28,8 @@ tasks:
       - 'next.config.ts'
       - 'postcss.config.mjs'
       - 'tsconfig.json'
-      - '/packages/{journals,accounts,theming,theme}/README.md'
-      - '/packages/{journals,accounts,theming,theme}/package.json'
+      - '/packages/{journals,accounts,statements,theming,theme}/README.md'
+      - '/packages/{journals,accounts,statements,theming,theme}/package.json'
       - '/packages/theme/ACCESSIBILITY.md'
     outputs:
       - '.next'

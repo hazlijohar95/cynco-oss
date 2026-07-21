@@ -197,6 +197,27 @@
         <div id="ledger-host"></div>
         <p id="ledger-readout" class="readout">No row selected.</p>
       </section>
+
+      <section>
+        <h2>Financial statements</h2>
+        <p class="section-note">
+          <code>@cynco/statements</code> deriving the trial balance, income
+          statement, and balance sheet from the same workload entries in one
+          linear pass each. The trial balance proves its tie under the double
+          rule; the P&amp;L compares the workload&rsquo;s calendar years; the
+          balance sheet balances through <em>virtual closing</em> &mdash;
+          retained and current-year earnings are computed per column, never
+          booked. Unclassified accounts and imbalances render flagged, never
+          plugged.
+        </p>
+        <h3 class="statement-heading">Trial balance</h3>
+        <div id="trial-balance-host"></div>
+        <h3 class="statement-heading">Income statement</h3>
+        <div id="income-statement-host"></div>
+        <h3 class="statement-heading">Balance sheet</h3>
+        <div id="balance-sheet-host"></div>
+        <p id="statements-readout" class="readout">No statements derived.</p>
+      </section>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

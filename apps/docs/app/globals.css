@@ -455,18 +455,21 @@ accounts-container {
  * above: explicit .light/.dark classes first, then the prefers-color-scheme
  * fallback for class-less loads. */
 .light journals-container,
-.light accounts-container {
+.light accounts-container,
+.light statements-container {
   color-scheme: light;
 }
 
 .dark journals-container,
-.dark accounts-container {
+.dark accounts-container,
+.dark statements-container {
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not(.light) journals-container,
-  :root:not(.light) accounts-container {
+  :root:not(.light) accounts-container,
+  :root:not(.light) statements-container {
     color-scheme: dark;
   }
 }

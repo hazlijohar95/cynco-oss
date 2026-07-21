@@ -9,6 +9,7 @@
     "@cynco/journals": "workspace:*",
     "@cynco/ledger-core": "workspace:*",
     "@cynco/ledger-test-data": "workspace:*",
+    "@cynco/statements": "workspace:*",
     "@cynco/theme": "workspace:*",
     "@remotion/player": "catalog:",
     "class-variance-authority": "catalog:",

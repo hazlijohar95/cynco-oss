@@ -137,6 +137,14 @@ select:focus-visible {
   max-width: 48rem;
 }
 
+/* Sub-headings between the three statement demos. */
+.statement-heading {
+  margin: 24px 0 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted-fg);
+}
+
 /* JournalEntry gallery cards. */
 .entry-gallery {
   display: grid;

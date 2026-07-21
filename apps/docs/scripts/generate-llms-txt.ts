@@ -63,6 +63,7 @@ interface PackageDocSource {
 const PACKAGE_SOURCES: readonly PackageDocSource[] = [
   { dir: 'journals', docsPath: '/docs/journals', extraDocs: [] },
   { dir: 'accounts', docsPath: '/docs/accounts', extraDocs: [] },
+  { dir: 'statements', docsPath: '/docs/statements', extraDocs: [] },
   { dir: 'theming', docsPath: '/docs/theming', extraDocs: [] },
   { dir: 'theme', docsPath: null, extraDocs: ['ACCESSIBILITY.md'] },
 ];
@@ -80,6 +81,12 @@ const DOCS_PAGES: readonly LlmsDocsPage[] = [
     url: `${SITE.baseUrl}/docs/accounts`,
     description:
       '@cynco/accounts — vanilla and React APIs, SSR hydration, theming, and virtualization for the chart-of-accounts tree',
+  },
+  {
+    label: 'Statements docs',
+    url: `${SITE.baseUrl}/docs/statements`,
+    description:
+      '@cynco/statements — trial balance, income statement, and balance sheet derivations plus vanilla and React renderers, per currency, flagged never plugged',
   },
   {
     label: 'Theming docs',
