@@ -1,0 +1,57 @@
+{
+  "name": "@cynco/importers",
+  "version": "0.1.0-beta.1",
+  "description": "Cynco importers: bank statement parsers (CSV, OFX) producing statement lines and draft ledger entries",
+  "keywords": [
+    "accounting",
+    "bank-statement",
+    "csv",
+    "cynco",
+    "importer",
+    "ledger",
+    "ofx",
+    "reconciliation"
+  ],
+  "homepage": "https://github.com/hazlijohar95/cynco-oss/tree/main/packages/importers",
+  "bugs": {
+    "url": "https://github.com/hazlijohar95/cynco-oss/issues"
+  },
+  "license": "MIT",
+  "author": "Hazli Johar <coding@hazli.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hazlijohar95/cynco-oss.git",
+    "directory": "packages/importers"
+  },
+  "files": [
+    "dist",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/*"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run importers:prepublish"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}

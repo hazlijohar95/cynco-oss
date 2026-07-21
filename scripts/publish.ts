@@ -67,6 +67,7 @@ export const PUBLISH_CONFIGS: Record<string, PackagePublishConfig> = {
     project: 'accounts',
     inlinedDependencies: ['@cynco/ledger-core', '@cynco/theme'],
   },
+  '@cynco/importers': { project: 'importers', inlinedDependencies: [] },
   '@cynco/journals': { project: 'journals', inlinedDependencies: [] },
   '@cynco/statements': {
     project: 'statements',
