@@ -12,6 +12,14 @@ projects:
     # Repo-wide tooling (lint, format, clean) lives on the root project.
     root: '.'
 
+# Codegen templates (`moon generate <template>`): the package scaffold lives
+# here so new packages/* start from the house conventions instead of a
+# hand-copy of an existing package (see CONTRIBUTING.md "Creating a new
+# package" for the post-generate wiring checklist codegen cannot do itself).
+generator:
+  templates:
+    - '.moon/templates'
+
 vcs:
   client: 'git'
   defaultBranch: 'main'

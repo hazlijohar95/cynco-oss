@@ -1,0 +1,49 @@
+# {{ name | capitalize }}, from Cynco
+
+{% if publishable -%}
+Docs: <https://ledger.cynco.dev/docs/{{ name }}> · npm:
+[`@cynco/{{ name }}`](https://www.npmjs.com/package/@cynco/{{ name }})
+{%- else -%}
+Docs: <https://ledger.cynco.dev/docs/{{ name }}>
+{%- endif %}
+
+`@cynco/{{ name }}` — {{ description }}
+
+## Features
+
+- TODO
+
+{% if publishable -%}
+## Install
+
+```bash
+pnpm add @cynco/{{ name }}
+```
+
+{% endif -%}
+## Development
+
+We use pnpm for workspace package management and Bun for tests.
+
+```bash
+# From the root of the monorepo: setup dependencies
+pnpm install
+
+# Run tests from within the package directory
+bun test
+
+# Type checking
+moonx {{ name }}:typecheck
+```
+{% if publishable %}
+## Publishing
+
+**Applicable to the Cynco team only.**
+
+```bash
+# Always run publish from within the package directory.
+cd packages/{{ name }}
+pnpm publish
+# In a CI-marked shell: CI= pnpm publish
+```
+{% endif -%}

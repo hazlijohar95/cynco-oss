@@ -14,6 +14,7 @@ import type {
   IncomeStatementSection,
 } from '../types';
 import { escapeHtml } from '../utils/escapeHtml';
+import { warnIfInvalidIncomeStatementAmounts } from '../utils/minorUnitsBoundary';
 import {
   renderAmountCellsHTML,
   renderGroupHeaderHTML,
@@ -42,6 +43,10 @@ export function renderIncomeStatementHTML(
   data: IncomeStatementData,
   options: IncomeStatementRenderOptions = {}
 ): string {
+  // Boundary check on the data crossing into rendering (see the note in
+  // renderTrialBalanceHTML): console side channel only, output bytes are
+  // identical whether or not the warning fires.
+  warnIfInvalidIncomeStatementAmounts('renderIncomeStatementHTML', data);
   let html = '<div data-income-statement>';
   for (const section of data.sections) {
     html += renderSectionHTML(

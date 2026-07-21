@@ -1,0 +1,12 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# {{ description }}
+#
+# The tags wire up the shared task chains: `tsdown` provides build/dev,
+# `publishable` (when present) the guarded publish flow through
+# $workspaceRoot/scripts/publish.ts, and `tier-*` feeds the root
+# assert-tiers boundary guard (domain -> surface/engine -> fixtures, never
+# up or sideways).
+language: 'typescript'
+layer: 'library'
+tags: ['tsdown', {% if publishable %}'publishable', {% endif %}'tier-{{ tier }}']

@@ -6,6 +6,7 @@ import {
 import type { ColorScheme, LedgerEntry, Posting } from '../types';
 import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import { areEntriesEqual } from '../utils/areEntriesEqual';
+import { warnIfInvalidEntryAmounts } from '../utils/minorUnitsBoundary';
 import { JournalsContainerLoaded } from './web-components';
 
 export interface JournalEntryOptions extends EntryRenderOptions {
@@ -86,6 +87,10 @@ export class JournalEntry {
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const existing = shadowRoot.querySelector('[data-entry]');
     if (existing instanceof HTMLElement) {
+      // Hydration adoption ingests the entry without going through render's
+      // boundary check, so it runs here too (the fallback below reaches it
+      // via render). Same context, so at most one warning fires overall.
+      warnIfInvalidEntryAmounts('JournalEntry', entry);
       this.entryElement = existing;
       this.renderedEntry = entry;
       this.renderedShowLineNumbers = this.options.showLineNumbers ?? false;
@@ -116,6 +121,11 @@ export class JournalEntry {
       this.renderAnnotations();
       return;
     }
+    // New entry data crossing the boundary (the canSkip fast path above
+    // keeps unchanged re-renders out): a float posting amount would degrade
+    // into truncated visual garbage; warn once, never throw, never touch
+    // the rendered bytes.
+    warnIfInvalidEntryAmounts('JournalEntry', entry);
 
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });

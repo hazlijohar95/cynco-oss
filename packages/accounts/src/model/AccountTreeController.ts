@@ -43,6 +43,7 @@ import type {
   RowRange,
   SelectPathOptions,
 } from '../types';
+import { warnIfInvalidLedgerEntries } from '../utils/minorUnitsBoundary';
 import {
   isChildLoadPlaceholderPath,
   makeChildLoadPlaceholderPath,
@@ -1545,6 +1546,13 @@ export class AccountTreeController {
     entries: readonly LedgerEntry[],
     accounts: readonly string[]
   ): AccountStore {
+    // Boundary check: buildStore is the single choke point where ledger
+    // data enters the controller (constructor, setEntries, and child-load
+    // rebuilds all pass through here), and it already walks every posting —
+    // the capped integer scan is a constant factor on top. A float amount
+    // (major units like 12.5) would degrade into truncated balance output;
+    // warn once, never throw, never touch the rendered bytes.
+    warnIfInvalidLedgerEntries('AccountTree', entries);
     const all = new Set<string>();
     const collect = (path: string): void => {
       if (!isValidAccountPath(path) || all.has(path)) {

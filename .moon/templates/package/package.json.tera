@@ -1,0 +1,58 @@
+{
+  "name": "@cynco/{{ name }}",
+  "version": "0.1.0-beta.1",
+{%- if not publishable %}
+  "private": true,
+{%- endif %}
+  "description": "{{ description }}",
+  "keywords": [
+    "accounting",
+    "cynco",
+    "ledger",
+    "{{ name }}"
+  ],
+  "homepage": "https://github.com/hazlijohar95/cynco-oss/tree/main/packages/{{ name }}",
+  "bugs": {
+    "url": "https://github.com/hazlijohar95/cynco-oss/issues"
+  },
+  "license": "MIT",
+  "author": "Hazli Johar <coding@hazli.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hazlijohar95/cynco-oss.git",
+    "directory": "packages/{{ name }}"
+  },
+  "files": [
+    "dist",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/*"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+{%- if publishable %}
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run {{ name }}:prepublish"
+  },
+{%- endif %}
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}

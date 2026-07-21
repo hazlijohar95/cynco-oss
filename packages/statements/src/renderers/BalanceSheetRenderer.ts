@@ -18,6 +18,7 @@ import type {
 } from '../types';
 import { escapeHtml } from '../utils/escapeHtml';
 import { formatMinorUnits } from '../utils/formatMinorUnits';
+import { warnIfInvalidBalanceSheetAmounts } from '../utils/minorUnitsBoundary';
 import {
   renderAmountCellsHTML,
   renderGroupHeaderHTML,
@@ -46,6 +47,10 @@ export function renderBalanceSheetHTML(
   data: BalanceSheetData,
   options: BalanceSheetRenderOptions = {}
 ): string {
+  // Boundary check on the data crossing into rendering (see the note in
+  // renderTrialBalanceHTML): console side channel only, output bytes are
+  // identical whether or not the warning fires.
+  warnIfInvalidBalanceSheetAmounts('renderBalanceSheetHTML', data);
   let html = '<div data-balance-sheet>';
   for (const section of data.sections) {
     html += renderSectionHTML(section, data.dates, options.amountFormat);

@@ -1,0 +1,5 @@
+// Public types for @cynco/{{ name }}. House rule: amounts are integer minor
+// units end to end — no floats touch money (CONTRIBUTING.md "Rules").
+
+/** Placeholder options bag — replace with the package's real public types. */
+export type {{ name | pascal_case }}Options = Record<string, never>;

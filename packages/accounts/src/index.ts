@@ -12,5 +12,6 @@ export * from './utils/applyHostColorScheme';
 export * from './utils/escapeHtml';
 export * from './utils/formatMinorUnits';
 export * from './utils/isComposingEvent';
+export * from './utils/minorUnitsBoundary';
 export * from './utils/resolveAmountFormat';
 export type * from './types';

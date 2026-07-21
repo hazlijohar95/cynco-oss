@@ -51,6 +51,7 @@ import { computeRowWindow } from '../utils/computeRowWindow';
 import { findFirstRowOnOrAfterDate } from '../utils/findFirstRowOnOrAfterDate';
 import { findRowIndexAtOffset } from '../utils/findRowIndexAtOffset';
 import { isComposingEvent } from '../utils/isComposingEvent';
+import { warnIfInvalidRegisterRows } from '../utils/minorUnitsBoundary';
 import { SmoothScroller } from '../utils/SmoothScroller';
 import type { WorkerPoolManager } from '../worker/WorkerPoolManager';
 import { type VirtualizedInstance, Virtualizer } from './Virtualizer';
@@ -411,6 +412,10 @@ export class Register implements VirtualizedInstance {
     }
     this.scroller = scroller;
     this.adoptSection(section);
+    // Hydration bypasses setRows (no reference bail-out to reuse), so the
+    // ingestion boundary check runs here too — same context, so at most one
+    // warning fires across all entry points.
+    warnIfInvalidRegisterRows('Register', rows);
     this.rows = rows;
     this.rebuildRowModel();
     // adoptSection ran before rows existed; refresh aria-rowcount now.
@@ -442,6 +447,8 @@ export class Register implements VirtualizedInstance {
     this.virtualizer = virtualizer;
     this.ownsVirtualizer = false;
     this.disconnectVirtualizer = virtualizer.connect(section, this);
+    // Section hydration also bypasses setRows; see the hydrate note.
+    warnIfInvalidRegisterRows('Register', rows);
     this.rows = rows;
     this.rebuildRowModel();
     // adoptSection ran before rows existed; refresh aria-rowcount now.
@@ -458,6 +465,11 @@ export class Register implements VirtualizedInstance {
     if (rows === this.rows) {
       return;
     }
+    // Boundary check on the way in — the reference bail-out above keeps it
+    // O(new data). Floats here (major units like 12.5) would otherwise
+    // degrade into silent visual garbage downstream; warn once, never
+    // throw, never touch the rendered bytes.
+    warnIfInvalidRegisterRows('Register', rows);
     this.rows = rows;
     this.rowsVersion += 1;
     // The lazy filter corpus is positional over the rows array, so any data

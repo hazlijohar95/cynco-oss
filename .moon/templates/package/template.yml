@@ -1,0 +1,42 @@
+$schema: 'https://moonrepo.dev/schemas/template.json'
+
+title: 'Cynco package'
+description: |
+  Scaffolds a new packages/* library with the house conventions: pnpm
+  manifest (catalog: devDependencies, exports map, sideEffects false),
+  moon.yml tier tags, tsdown build config, tsconfig, src/test stubs,
+  README, and LICENSE.
+
+  Codegen writes only the new package directory — it cannot edit other
+  files, so finish the wiring by hand (the root wiring guard turns
+  forgetting these into a red test):
+    1. Add the project name to `dependsOn` in the root moon.yml.
+    2. Publishable packages: add an entry to PUBLISH_CONFIGS in
+       scripts/publish.ts (see PUBLISHING.md for the release table).
+    3. Run `pnpm install` to register the workspace package and refresh
+       pnpm-lock.yaml.
+  Full checklist: CONTRIBUTING.md "Creating a new package".
+
+destination: 'packages/[name]'
+
+variables:
+  name:
+    type: 'string'
+    default: ''
+    required: true
+    prompt: 'Package name (unscoped, e.g. "importers")?'
+  description:
+    type: 'string'
+    default: 'TODO: one-line description'
+    prompt: 'One-line package description?'
+  tier:
+    type: 'enum'
+    values: ['domain', 'surface', 'engine', 'fixtures']
+    default: 'domain'
+    prompt:
+      'Tier (domain = product surface, surface = shared UI infra, engine =
+      private data engine, fixtures = test data)?'
+  publishable:
+    type: 'boolean'
+    default: true
+    prompt: 'Published to npm?'

@@ -40,6 +40,7 @@ export * from './utils/getEntryImbalances';
 export * from './utils/getRegisterPeriodKey';
 export * from './utils/isComposingEvent';
 export * from './utils/journalsThemeVariables';
+export * from './utils/minorUnitsBoundary';
 export * from './utils/prefersReducedMotion';
 export * from './utils/proposeMatches';
 export * from './utils/renderAccountPathHTML';

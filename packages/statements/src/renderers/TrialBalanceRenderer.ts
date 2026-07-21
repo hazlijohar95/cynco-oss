@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import { escapeHtml } from '../utils/escapeHtml';
 import { formatMinorUnits } from '../utils/formatMinorUnits';
+import { warnIfInvalidTrialBalanceAmounts } from '../utils/minorUnitsBoundary';
 
 export interface TrialBalanceRenderOptions {
   /**
@@ -37,6 +38,14 @@ export function renderTrialBalanceHTML(
   data: TrialBalanceData,
   options: TrialBalanceRenderOptions = {}
 ): string {
+  // Boundary check on the data crossing into rendering: this renderer is
+  // the single choke point derived data passes through (the TrialBalance
+  // component reference-gates its calls, so this runs once per new data;
+  // direct/SSR callers pay one capped integer scan on a function that
+  // already walks every row). A console side channel only — the returned
+  // string is byte-identical whether or not the warning fires, so the
+  // pure-string-builder/byte-parity contract holds.
+  warnIfInvalidTrialBalanceAmounts('renderTrialBalanceHTML', data);
   const showClassification = options.showClassification ?? false;
   const asOfAttribute =
     data.asOf == null ? '' : ` data-as-of="${escapeHtml(data.asOf)}"`;

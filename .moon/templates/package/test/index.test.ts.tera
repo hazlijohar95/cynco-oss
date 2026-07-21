@@ -1,0 +1,11 @@
+import { describe, expect, test } from 'bun:test';
+
+import * as api from '../src/index';
+
+// Placeholder suite so `moonx {{ name }}:test` is green from the first
+// commit — replace with real coverage as the public surface grows.
+describe('@cynco/{{ name }} public API', () => {
+  test('the package surface is importable', () => {
+    expect(api).toBeDefined();
+  });
+});
