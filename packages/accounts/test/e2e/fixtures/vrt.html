@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>accounts visual-regression fixture</title>
+    <style>
+      /* The page opts into both schemes so the UA canvas follows the
+         emulated prefers-color-scheme: element shots include the container
+         edges, and a stuck-light page background would leak into the dark
+         captures. */
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        display: grid;
+        gap: 24px;
+        justify-items: start;
+      }
+      /* Fixed wrapper widths: captures must never depend on viewport-width
+         rounding, so every subject gets an explicit box. */
+      .tree-slot {
+        width: 480px;
+      }
+      accounts-container {
+        height: 480px;
+      }
+      #tree-loading accounts-container,
+      #tree-error accounts-container {
+        /* Only a handful of rows around the placeholder; a tall box would
+           bake dead space into the baseline. */
+        height: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="tree-slot" id="tree-default"></div>
+    <div class="tree-slot" id="tree-compact"></div>
+    <div class="tree-slot" id="tree-relaxed"></div>
+    <div class="tree-slot" id="tree-selection"></div>
+    <div class="tree-slot" id="tree-sticky"></div>
+    <div class="tree-slot" id="tree-loading"></div>
+    <div class="tree-slot" id="tree-error"></div>
+
+    <script type="module">
+      import { AccountTree } from '/dist/index.js';
+
+      // Deterministic chart with real activity so the balance column shows
+      // stable non-zero figures (a zero-only column would leave the amount
+      // typography unprotected). Utilities is the zero-activity row.
+      const entries = [
+        {
+          id: 'e-1',
+          date: '2026-07-01',
+          flag: 'cleared',
+          payee: 'Tech Ventures Sdn Bhd',
+          narration: 'Invoice for goods delivered',
+          tags: [],
+          links: [],
+          postings: [
+            {
+              account: 'Assets:Current:Cash-Maybank',
+              amount: 50000,
+              currency: 'MYR',
+            },
+            { account: 'Income:Sales', amount: -50000, currency: 'MYR' },
+          ],
+        },
+        {
+          id: 'e-2',
+          date: '2026-07-02',
+          flag: 'cleared',
+          payee: 'Delima Trading',
+          narration: 'DuitNow inbound',
+          tags: [],
+          links: [],
+          postings: [
+            {
+              account: 'Assets:Current:Cash-CIMB',
+              amount: 12345,
+              currency: 'MYR',
+            },
+            { account: 'Income:Sales', amount: -12345, currency: 'MYR' },
+          ],
+        },
+        {
+          id: 'e-3',
+          date: '2026-07-03',
+          flag: 'cleared',
+          payee: 'Landlord',
+          narration: 'July rent',
+          tags: [],
+          links: [],
+          postings: [
+            { account: 'Expenses:Rent', amount: 8000, currency: 'MYR' },
+            {
+              account: 'Assets:Current:Cash-Maybank',
+              amount: -8000,
+              currency: 'MYR',
+            },
+          ],
+        },
+        {
+          id: 'e-4',
+          date: '2026-07-04',
+          flag: 'cleared',
+          payee: 'Machinery Supplier',
+          narration: 'Workshop equipment',
+          tags: [],
+          links: [],
+          postings: [
+            {
+              account: 'Assets:Fixed:Equipment',
+              amount: 150000,
+              currency: 'MYR',
+            },
+            {
+              account: 'Liabilities:Payables',
+              amount: -150000,
+              currency: 'MYR',
+            },
+          ],
+        },
+      ];
+      const accounts = ['Expenses:Utilities'];
+
+      // --- Densities: three independent instances over identical data so
+      // the only variable between the three shots is the density preset ----
+      for (const [slot, density] of [
+        ['tree-default', 'default'],
+        ['tree-compact', 'compact'],
+        ['tree-relaxed', 'relaxed'],
+      ]) {
+        new AccountTree({
+          entries,
+          accounts,
+          initialExpansion: 'all',
+          density,
+        }).render(document.getElementById(slot));
+      }
+
+      // --- Selection + focus ring treatments, driven through the
+      // controller (never pointer hover) so rows stay in their at-rest
+      // state apart from the treatments under test --------------------------
+      const selectionTree = new AccountTree({
+        entries,
+        accounts,
+        initialExpansion: 'all',
+      });
+      selectionTree.render(document.getElementById('tree-selection'));
+      window.__applySelection = () => {
+        const controller = selectionTree.getController();
+        controller.selectPath('Assets:Current:Cash-Maybank');
+        controller.selectPath('Assets:Fixed:Equipment', { additive: true });
+        // Focus lands on Equipment: the shot shows the selected-only
+        // surface (Cash-Maybank) and the selected+focused mixed ring
+        // (Equipment) side by side.
+        controller.setFocusedPath('Assets:Fixed:Equipment');
+      };
+
+      // --- Sticky ancestor header: generated chart deep enough that a
+      // mid-scroll position puts a group's children on screen with the
+      // group row itself evicted above the window ---------------------------
+      const generated = [];
+      for (let top = 0; top < 4; top += 1) {
+        for (let mid = 0; mid < 6; mid += 1) {
+          for (let leaf = 0; leaf < 8; leaf += 1) {
+            generated.push(
+              `Group${top}:Mid${String(mid).padStart(2, '0')}:Leaf${String(
+                leaf
+              ).padStart(2, '0')}`
+            );
+          }
+        }
+      }
+      const stickyTree = new AccountTree({
+        accounts: generated,
+        initialExpansion: 'all',
+        showBalances: false,
+      });
+      stickyTree.render(document.getElementById('tree-sticky'));
+      const stickyHost = document.querySelector(
+        '#tree-sticky accounts-container'
+      );
+      const stickyController = stickyTree.getController();
+      window.__stickyScroller =
+        stickyHost.shadowRoot.querySelector('[data-scroller]');
+      window.__stickyRowHeight = stickyController.getRowHeight();
+      window.__stickyRowIndex = (path) => stickyController.getPathIndex(path);
+      window.__stickyReadout = () => {
+        const header = window.__stickyScroller.querySelector(
+          '[data-sticky-header]'
+        );
+        return {
+          hidden: header?.hidden ?? true,
+          name:
+            header?.querySelector('[data-row] [data-name]')?.textContent ??
+            null,
+        };
+      };
+
+      // --- Child-load placeholder rows: one loader that never settles (the
+      // loading dots stay up forever — deterministic by construction) and
+      // one that rejects (the error + Retry row) ---------------------------
+      const loadingTree = new AccountTree({
+        accounts: ['Assets:Cash', 'Assets:Pending', 'Expenses:Rent'],
+        initialExpansion: 'all',
+        initiallyUnloaded: ['Assets:Pending'],
+        showBalances: false,
+        loadChildren: () => new Promise(() => {}),
+      });
+      loadingTree.render(document.getElementById('tree-loading'));
+      window.__startLoading = () => {
+        loadingTree.getController().setExpanded('Assets:Pending', true);
+      };
+
+      const errorTree = new AccountTree({
+        accounts: ['Assets:Cash', 'Assets:Pending', 'Expenses:Rent'],
+        initialExpansion: 'all',
+        initiallyUnloaded: ['Assets:Pending'],
+        showBalances: false,
+        loadChildren: () => Promise.reject(new Error('network unreachable')),
+      });
+      errorTree.render(document.getElementById('tree-error'));
+      window.__startError = () => {
+        errorTree.getController().setExpanded('Assets:Pending', true);
+      };
+
+      window.__vrtReady = true;
+    </script>
+  </body>
+</html>

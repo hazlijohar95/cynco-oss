@@ -33,6 +33,29 @@ tasks:
       # the primary checkout, which keeps the default e2e port.
       envFile: '/.env.worktree'
 
+  # Visual-regression lane: Playwright toHaveScreenshot against the
+  # committed per-platform baselines in test/e2e/__screenshots__/. Modeled
+  # on test-e2e (self-healing Chromium install, same webServer task on the
+  # lane's own port) but strictly local-only: runInCI 'always' with NO graph
+  # edges — no deps, no dependents — so per the root moon.yml header it can
+  # never become affected and never joins `moon ci` uninvited. The dist
+  # freshness test-e2e gets from deps:['build'] comes instead from the
+  # nested `moon run`, the same in-process spawn pattern the playwright
+  # webServer already uses for test-e2e-server. cache: false because the
+  # task's real output is a pixel comparison against baseline files, not a
+  # cacheable artifact — a re-run must always re-capture.
+  test-vrt:
+    script:
+      'moon run journals:build && (bun ./test/e2e/check-playwright-binary.ts ||
+      pnpm exec playwright install chromium) && pnpm exec playwright test -c
+      test/e2e/playwright.vrt.config.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+      # Worktree port offset for playwright (see scripts/wt.ts); missing in
+      # the primary checkout, which keeps the default VRT port.
+      envFile: '/.env.worktree'
+
   # Spawned by playwright's webServer (also under CI); JOURNALS_E2E_PORT is
   # provided by the caller, with a worktree-offset default for manual runs.
   test-e2e-server:

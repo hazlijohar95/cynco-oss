@@ -33,8 +33,59 @@ runner emits agent-friendly output.
   raise a ready flag the specs await. E2e owns everything jsdom cannot do: real
   scrolling and sticky positioning, trusted input, computed styles, shadow style
   isolation, font measurement, and a real module worker.
+- **Visual regression** (`moonx journals:test-vrt`, `moonx accounts:test-vrt`):
+  never in CI; see below.
 - **Benchmarks** (`moonx <project>:benchmark`): never in CI; see
   `PERFORMANCE.md`.
+
+## Visual regression (VRT)
+
+Playwright `toHaveScreenshot` suites (`test/e2e/visual.vrt.ts`, own config
+`test/e2e/playwright.vrt.config.ts`, dedicated fixture
+`test/e2e/fixtures/vrt.html`) protect the pixel craft the functional lanes
+cannot: focus rings, empty states, density modes, sticky headers, and
+reconciliation verdict states — each subject captured in **both** color schemes,
+since `light-dark()` theming is a core feature.
+
+- **journals** (9 subjects × light/dark = 18 shots): register in comfortable and
+  compact density, register empty state, grouped register with the sticky period
+  label engaged mid-scroll, journal entry card balanced and flagged+unbalanced
+  (imbalance bar), reconciliation with proposed matches, reconciliation after
+  accept + reject verdicts, and the entry diff for a modified entry.
+- **accounts** (7 subjects × light/dark = 14 shots): tree in default, compact,
+  and relaxed density, selected + focused ring treatments, sticky ancestor
+  header engaged mid-scroll, child-load loading placeholder row, and the
+  child-load error + Retry row.
+
+Determinism is enforced, not hoped for: fixed 1280×800 viewport with
+`deviceScaleFactor: 1`, `reducedMotion: 'reduce'` (the packages' own
+`prefers-reduced-motion` rules neutralize transitions at the source),
+`colorScheme` pinned per shot via `page.emulateMedia`, deterministic
+index-derived fixture data, and every capture waits for `document.fonts.ready`
+plus a settled double-rAF. Nothing is masked. Comparison allows
+`maxDiffPixelRatio: 0.001` — enough to absorb sub-pixel anti-aliasing jitter
+across Chromium point releases, far too small to hide real drift.
+
+**Baselines are per-platform.** Font rasterization differs per OS, so baselines
+live under `test/e2e/__screenshots__/{platform}/` and only darwin baselines are
+committed. On another platform the first run fails with Playwright's "snapshot
+doesn't exist" error (and writes the local baseline); that is the expected
+signal, not a bug. For the same reason the VRT tasks are local-only:
+`runInCI: 'always'` with zero graph edges (the root `moon.yml` header
+convention), so they can never join the CI pipeline.
+
+**Updating baselines** must be an intentional act:
+
+```sh
+VRT_UPDATE_SNAPSHOTS=1 moonx journals:test-vrt
+VRT_UPDATE_SNAPSHOTS=1 moonx accounts:test-vrt
+```
+
+(The env var — rather than `-- --update-snapshots` — because moon `script` tasks
+do not forward passthrough arguments.) **Review rule: a diff means LOOK at it.**
+Open the actual/expected/diff attachments under
+`/tmp/cynco-<project>-vrt-results*/`, decide whether the change is intended, and
+only then update. Blind-updating baselines deletes the lane's entire value.
 
 ## CI
 
@@ -53,10 +104,10 @@ in a real browser (scrolling, focus, pointer input, computed styles) — an e2e
 fixture + spec alongside it. Suite sizes as of the last full runs (treat as a
 floor — suites only grow):
 
-| Project     | Unit tests | Files                          | E2e       |
-| ----------- | ---------- | ------------------------------ | --------- |
-| journals    | 280        | 30                             | 27 passed |
-| accounts    | 230        | 24                             | 27 passed |
-| ledger-core | 100        | 9                              | —         |
-| theme       | 219        | 4 (incl. contrast + CVD gates) | —         |
-| theming     | 31         | 4                              | —         |
+| Project     | Unit tests | Files                          | E2e       | VRT shots |
+| ----------- | ---------- | ------------------------------ | --------- | --------- |
+| journals    | 280        | 30                             | 27 passed | 18        |
+| accounts    | 230        | 24                             | 27 passed | 14        |
+| ledger-core | 100        | 9                              | —         | —         |
+| theme       | 219        | 4 (incl. contrast + CVD gates) | —         | —         |
+| theming     | 31         | 4                              | —         | —         |

@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>journals visual-regression fixture</title>
+    <style>
+      /* The page opts into both schemes so the UA canvas follows the
+         emulated prefers-color-scheme: element shots include the container
+         edges, and a stuck-light page background would leak into the dark
+         captures. */
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        display: grid;
+        gap: 24px;
+        justify-items: start;
+      }
+      /* Fixed wrapper widths: captures must never depend on viewport-width
+         rounding, so every subject gets an explicit box. */
+      .register-slot {
+        width: 960px;
+      }
+      .card-slot {
+        width: 640px;
+      }
+      journals-container {
+        /* Custom elements default to inline; without block the heights
+           below would not constrain the scrollers. */
+        display: block;
+      }
+      .register-slot journals-container {
+        height: 480px;
+      }
+      #register-empty journals-container {
+        /* The empty state has no scrollable body; a tighter box keeps the
+           shot focused on the header + guidance block. */
+        height: 160px;
+      }
+      #reconciliation journals-container {
+        /* Header + three pair rows (one later dissolved into two halves)
+           fit comfortably; a taller box would just bake dead space into
+           every baseline. */
+        height: 320px;
+      }
+      .card-slot journals-container {
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="register-slot" id="register-comfortable"></div>
+    <div class="register-slot" id="register-compact"></div>
+    <div class="register-slot" id="register-empty"></div>
+    <div class="register-slot" id="register-grouped"></div>
+    <div class="card-slot" id="entry-balanced"></div>
+    <div class="card-slot" id="entry-unbalanced"></div>
+    <div class="register-slot" id="reconciliation"></div>
+    <div class="card-slot" id="entry-diff"></div>
+
+    <script type="module">
+      import {
+        EntryDiff,
+        JournalEntry,
+        Reconciliation,
+        Register,
+      } from '/dist/index.js';
+
+      const account = 'Assets:Current:Cash-Maybank';
+
+      // Deterministic rows, same recipe as the e2e fixtures: every field
+      // derives from the index, so re-renders are byte-identical and the
+      // committed baselines never see data churn.
+      function makeRows(count, dateForIndex) {
+        const rows = [];
+        let balance = 0;
+        for (let index = 0; index < count; index += 1) {
+          const amount = (index % 2 === 0 ? 1 : -1) * (1000 + (index % 7) * 25);
+          balance += amount;
+          const posting = { account, amount, currency: 'MYR' };
+          rows.push({
+            entry: {
+              id: `e-${index}`,
+              date: dateForIndex(index),
+              flag: 'cleared',
+              payee: `Payee ${index}`,
+              narration: `Narration ${index}`,
+              tags: [],
+              links: [],
+              postings: [
+                posting,
+                { account: 'Income:Sales', amount: -amount, currency: 'MYR' },
+              ],
+            },
+            posting,
+            runningBalance: new Map([['MYR', balance]]),
+          });
+        }
+        return rows;
+      }
+
+      const julyDate = (index) =>
+        `2026-07-${String((index % 28) + 1).padStart(2, '0')}`;
+
+      // --- Register: comfortable / compact / empty ----------------------
+      new Register({ account }).render({
+        rows: makeRows(60, julyDate),
+        parentNode: document.getElementById('register-comfortable'),
+      });
+
+      new Register({ account, density: 'compact' }).render({
+        rows: makeRows(60, julyDate),
+        parentNode: document.getElementById('register-compact'),
+      });
+
+      new Register({ account }).render({
+        rows: [],
+        parentNode: document.getElementById('register-empty'),
+      });
+
+      // --- Grouped register: 120 rows across Jan..Jun 2026 so the sticky
+      // period label has real month boundaries to engage against ----------
+      const groupedRegister = new Register({
+        account: 'Assets:Grouped',
+        groupBy: 'month',
+      });
+      groupedRegister.render({
+        rows: makeRows(120, (index) => {
+          const month = String(Math.floor(index / 20) + 1).padStart(2, '0');
+          return `2026-${month}-15`;
+        }),
+        parentNode: document.getElementById('register-grouped'),
+      });
+      const groupedHost = document.querySelector(
+        '#register-grouped journals-container'
+      );
+      window.__groupedRegister = groupedRegister;
+      window.__groupedScroller =
+        groupedHost.shadowRoot.querySelector('[data-scroller]');
+      window.__stickyReadout = () => {
+        const sticky = groupedHost.shadowRoot.querySelector(
+          '[data-group-sticky]'
+        );
+        return {
+          hidden: sticky == null ? null : sticky.hidden,
+          label:
+            sticky?.querySelector('[data-group-label]')?.textContent ?? null,
+        };
+      };
+
+      // --- Journal entry cards: balanced and flagged/unbalanced ---------
+      new JournalEntry().render({
+        entry: {
+          id: 'card-balanced',
+          date: '2026-07-01',
+          flag: 'cleared',
+          payee: 'Tech Ventures Sdn Bhd',
+          narration: 'Invoice for goods delivered',
+          tags: ['invoice'],
+          links: ['inv-2026-041'],
+          postings: [
+            { account, amount: 50000, currency: 'MYR' },
+            { account: 'Income:Sales', amount: -50000, currency: 'MYR' },
+          ],
+        },
+        parentNode: document.getElementById('entry-balanced'),
+      });
+
+      // Postings deliberately do not sum to zero: the card must show the
+      // imbalance treatment (checker bar + signed residual) with the
+      // flagged flag dot.
+      new JournalEntry().render({
+        entry: {
+          id: 'card-unbalanced',
+          date: '2026-07-02',
+          flag: 'flagged',
+          payee: 'Delima Trading',
+          narration: 'Part-paid supplier invoice',
+          tags: [],
+          links: [],
+          postings: [
+            { account, amount: -32050, currency: 'MYR' },
+            { account: 'Expenses:Supplies', amount: 30000, currency: 'MYR' },
+          ],
+        },
+        parentNode: document.getElementById('entry-unbalanced'),
+      });
+
+      // --- Reconciliation: three exact matches, same recipe as the e2e
+      // interaction fixture, so accept/reject drives visible verdicts ------
+      const makeEntry = (id, date, payee, amount) => ({
+        id,
+        date,
+        flag: 'cleared',
+        payee,
+        narration: 'Book entry',
+        tags: [],
+        links: [],
+        postings: [
+          { account, amount, currency: 'MYR' },
+          { account: 'Income:Sales', amount: -amount, currency: 'MYR' },
+        ],
+      });
+
+      const recon = new Reconciliation({
+        account,
+        periodLabel: 'Jul 2026',
+        statementLines: [
+          {
+            id: 'l-1',
+            date: '2026-07-01',
+            description: 'CHEQUE DEPOSIT',
+            amount: 50000,
+            currency: 'MYR',
+          },
+          {
+            id: 'l-2',
+            date: '2026-07-02',
+            description: 'ONLINE TRANSFER TNB',
+            amount: -20000,
+            currency: 'MYR',
+          },
+          {
+            id: 'l-3',
+            date: '2026-07-03',
+            description: 'DUITNOW INBOUND',
+            amount: 12345,
+            currency: 'MYR',
+          },
+        ],
+        postings: [
+          {
+            entry: makeEntry(
+              'e-1',
+              '2026-07-01',
+              'Tech Ventures Sdn Bhd',
+              50000
+            ),
+            postingIndex: 0,
+          },
+          {
+            entry: makeEntry('e-2', '2026-07-02', 'TNB', -20000),
+            postingIndex: 0,
+          },
+          {
+            entry: makeEntry('e-3', '2026-07-03', 'Delima Trading', 12345),
+            postingIndex: 0,
+          },
+        ],
+      });
+      recon.render({ parentNode: document.getElementById('reconciliation') });
+      // Own hook name (not __recon): the e2e interaction spec declares
+      // __recon with a different shape on the shared Window type, and both
+      // specs typecheck in one TS program.
+      window.__applyVerdicts = () => {
+        const [first, second] = recon
+          .getState()
+          .matches.map((match) => match.id);
+        recon.acceptMatch(first);
+        recon.rejectMatch(second);
+        return first;
+      };
+
+      // --- Entry diff: modified entry exercising word-level payee /
+      // narration highlights, amount-changed and added postings, tag pills --
+      new EntryDiff().render({
+        before: {
+          id: 'diff-1',
+          date: '2026-07-05',
+          flag: 'pending',
+          payee: 'Tech Ventures Sdn Bhd',
+          narration: 'Deposit for July delivery',
+          tags: ['deposit'],
+          links: [],
+          postings: [
+            { account, amount: 25000, currency: 'MYR' },
+            { account: 'Income:Sales', amount: -25000, currency: 'MYR' },
+          ],
+        },
+        after: {
+          id: 'diff-1',
+          date: '2026-07-06',
+          flag: 'cleared',
+          payee: 'Tech Ventures Sdn Bhd',
+          narration: 'Full payment for July delivery',
+          tags: ['deposit', 'settled'],
+          links: [],
+          postings: [
+            { account, amount: 50000, currency: 'MYR' },
+            { account: 'Income:Sales', amount: -48000, currency: 'MYR' },
+            { account: 'Income:Delivery', amount: -2000, currency: 'MYR' },
+          ],
+        },
+        parentNode: document.getElementById('entry-diff'),
+      });
+
+      window.__vrtReady = true;
+    </script>
+  </body>
+</html>
