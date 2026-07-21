@@ -1,3 +1,5 @@
+import { DEFAULT_CURRENCY_EXPONENTS } from '@cynco/ledger-core';
+
 import type { AccountTreeDensity } from './types';
 
 export const ACCOUNTS_TAG_NAME = 'accounts-container' as const;
@@ -72,11 +74,11 @@ export const MINUS_SIGN = '\u2212';
 /**
  * ISO 4217 minor-unit exceptions. Currencies not listed here use 2 decimal
  * places. Commodity codes (stock tickers, points) also fall back to 2.
+ *
+ * Aliased from the engine's canonical table so the tree and the statements
+ * package always scale the same ledger identically — a local copy drifted
+ * once (5 exceptions vs the engine's ~26) and mis-scaled zero- and
+ * three-decimal currencies 100×/10× relative to `@cynco/statements`.
  */
-export const CURRENCY_DECIMALS: Readonly<Record<string, number>> = {
-  BHD: 3,
-  JPY: 0,
-  KRW: 0,
-  KWD: 3,
-  OMR: 3,
-};
+export const CURRENCY_DECIMALS: Readonly<Record<string, number>> =
+  DEFAULT_CURRENCY_EXPONENTS;

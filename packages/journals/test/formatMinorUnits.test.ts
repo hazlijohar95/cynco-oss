@@ -20,6 +20,22 @@ describe('getCurrencyDecimals', () => {
     expect(getCurrencyDecimals('KWD')).toBe(3);
     expect(getCurrencyDecimals('OMR')).toBe(3);
   });
+
+  // The table once drifted to a 5-entry subset of the engine's canonical
+  // exponents, mis-scaling these currencies 100×/10× relative to
+  // @cynco/statements. Locks the full mirror in place.
+  test('matches the engine table beyond the common exceptions', () => {
+    expect(getCurrencyDecimals('VND')).toBe(0);
+    expect(getCurrencyDecimals('CLP')).toBe(0);
+    expect(getCurrencyDecimals('ISK')).toBe(0);
+    expect(getCurrencyDecimals('XOF')).toBe(0);
+    expect(getCurrencyDecimals('IQD')).toBe(3);
+    expect(getCurrencyDecimals('JOD')).toBe(3);
+    expect(getCurrencyDecimals('TND')).toBe(3);
+    expect(getCurrencyDecimals('CLF')).toBe(4);
+    expect(formatMinorUnits(1234, 'VND')).toBe('1,234');
+    expect(formatMinorUnits(1234, 'IQD')).toBe('1.234');
+  });
 });
 
 describe('formatMinorUnits', () => {

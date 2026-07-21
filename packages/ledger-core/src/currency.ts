@@ -13,6 +13,10 @@
  * and unknown codes also fall back to 2 — graceful degradation over
  * throwing, consistent with the suite's parser rules; callers with exotic
  * commodities pass explicit overrides instead.
+ *
+ * `CURRENCY_DECIMALS` in `@cynco/journals/src/constants.ts` mirrors this
+ * table by hand (journals carries no engine dependency) — keep both in sync
+ * when editing.
  */
 export const DEFAULT_CURRENCY_EXPONENTS: Readonly<Record<string, number>> = {
   // Zero-decimal currencies: the minor unit is the whole unit.
