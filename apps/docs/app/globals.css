@@ -72,7 +72,8 @@
   --radius: 0.375rem;
 
   /* The motion system, written down: 150ms standard-curve color fades on
-   * inline affordances, 200ms ease-out for surfaces (popovers, menus).
+   * inline affordances, 200ms ease-out for surfaces (popovers, menus), and
+   * one scroll-driven entrance (.section-reveal below) for landing slabs.
    * Tailwind's duration-150/duration-200 utilities align with these; the
    * hand-written rules below reference the tokens directly. */
   --motion-duration-fast: 150ms;
@@ -121,7 +122,10 @@
 }
 
 /* Motion is decorative here (menu fades, hover transitions); collapse it
- * for users who ask for reduced motion. */
+ * for users who ask for reduced motion. Scroll-driven animations ignore
+ * animation-duration (progress comes from scroll position, not the clock),
+ * so this clamp cannot silence them — .section-reveal gates itself behind
+ * prefers-reduced-motion: no-preference instead. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -173,6 +177,34 @@
     0 0 0 0.5px light-dark(#0000001f, #ffffff1f),
     0 1px 2px -1px light-dark(#00000014, #00000052),
     0 2px 4px light-dark(#0000000a, #0000003d);
+}
+
+/* Scroll-entrance for landing slabs: opacity 0→1 with a 12px rise as the
+ * wrapper enters the viewport, easing out over the leading third of entry —
+ * at a normal scroll pace that reads as a ~500ms settle. Driven entirely by
+ * animation-timeline: view(), so it needs no JavaScript and can never strand
+ * content hidden: outside the @supports/@media gates (no view-timeline
+ * support, reduced motion, no JS — irrelevant either way) the base state is
+ * simply fully visible. The class goes on an inner wrapper, never on the
+ * bordered <section>, so only content fades and rises while the slab's top
+ * hairline stays pinned against the container's side borders. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .section-reveal {
+      animation-name: section-reveal-rise;
+      animation-timing-function: ease-out;
+      animation-fill-mode: both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 30%;
+    }
+  }
+}
+
+@keyframes section-reveal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
 }
 
 /* The 6px pixel-checker ornament band from /data: a layer-2 fill masked by

@@ -36,6 +36,14 @@ import { cn } from '@/lib/utils';
 // with 6rem vertical padding inside a hairline-framed 80rem container.
 const SECTION = 'border-border border-t px-6 py-16 md:px-10 md:py-24 lg:px-12';
 
+// Below-the-fold slabs wrap their content in .section-reveal (globals.css),
+// a CSS-only scroll-driven fade/rise. The class must sit on this inner
+// wrapper rather than the <section> itself: translating the section would
+// drag its top hairline out of register with the container's side borders.
+// The hero and the workspace centerpiece are exempt — they own the first
+// viewport and must paint at full strength immediately.
+const REVEAL = 'section-reveal space-y-8';
+
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col font-mono">
@@ -63,8 +71,10 @@ export default function Home() {
 // preload functions return shadow-root HTML that the React components adopt
 // during hydration without re-rendering.
 
-// The workspace centerpiece sits directly under the hero, mirroring the
-// reference placement (the first chart section right after the hero).
+// The workspace centerpiece completes the hero: with the headline stack
+// tightened above, the top padding here is trimmed so the live window's
+// chrome, sidebar tree, and first register rows land inside the first
+// viewport on a ~900px desktop — the product performing above the fold.
 async function WorkspaceSection() {
   const ssrHTML = await preloadAccountTreeHTML({
     id: WORKSPACE_TREE_ID,
@@ -76,7 +86,7 @@ async function WorkspaceSection() {
     // defaults; a raw template literal would leave both classes in and let
     // stylesheet order pick the winner.
     <section
-      className={cn(SECTION, 'relative py-12 max-md:overflow-x-clip md:py-16')}
+      className={cn(SECTION, 'relative py-8 max-md:overflow-x-clip md:py-10')}
     >
       <WorkspaceDemo ssrHTML={ssrHTML} />
     </section>
@@ -88,70 +98,76 @@ async function JournalEntrySection() {
     showLineNumbers: true,
   });
   return (
-    <section className={`${SECTION} space-y-8`}>
-      <FeatureHeader
-        id="journal-entries"
-        title="Journal entries, server-rendered"
-        description={
-          <>
-            A six-posting payroll run — split across EPF and SOCSO,
-            Malaysia&apos;s statutory payroll funds — rendered on the server as
-            declarative shadow DOM and adopted at hydration, with no client
-            re-render. Every color resolves through the{' '}
-            <code>@cynco/theme</code> chain: override → role → default, per
-            color scheme.
-          </>
-        }
-      />
-      <JournalEntryDemo ssrHTML={ssrHTML} />
+    <section className={SECTION}>
+      <div className={REVEAL}>
+        <FeatureHeader
+          id="journal-entries"
+          title="Journal entries, server-rendered"
+          description={
+            <>
+              A six-posting payroll run — split across EPF and SOCSO,
+              Malaysia&apos;s statutory payroll funds — rendered on the server
+              as declarative shadow DOM and adopted at hydration, with no client
+              re-render. Every color resolves through the{' '}
+              <code>@cynco/theme</code> chain: override → role → default, per
+              color scheme.
+            </>
+          }
+        />
+        <JournalEntryDemo ssrHTML={ssrHTML} />
+      </div>
     </section>
   );
 }
 
 function RegisterSection() {
   return (
-    <section className={`${SECTION} space-y-8`}>
-      <FeatureHeader
-        id="virtualized-register"
-        title="A register that scales"
-        description={
-          <>
-            10,000 seeded entries against one cash account. Fixed row heights
-            reduce windowing to arithmetic — no measurement, no layout thrash —
-            so the register mounts the same number of DOM nodes at 100 rows or
-            100,000.
-          </>
-        }
-      />
-      <RegisterDemo />
-      <RegisterComparison />
-      <Footnote>
-        Registers also take a projection-level filter: <code>setFilter</code>{' '}
-        reshapes the visible rows in place — group summaries recomputed over the
-        matched rows, matched substrings highlighted — while selection and every
-        public index stay in full-data space.
-      </Footnote>
+    <section className={SECTION}>
+      <div className={REVEAL}>
+        <FeatureHeader
+          id="virtualized-register"
+          title="A register that scales"
+          description={
+            <>
+              10,000 seeded entries against one cash account. Fixed row heights
+              reduce windowing to arithmetic — no measurement, no layout thrash
+              — so the register mounts the same number of DOM nodes at 100 rows
+              or 100,000.
+            </>
+          }
+        />
+        <RegisterDemo />
+        <RegisterComparison />
+        <Footnote>
+          Registers also take a projection-level filter: <code>setFilter</code>{' '}
+          reshapes the visible rows in place — group summaries recomputed over
+          the matched rows, matched substrings highlighted — while selection and
+          every public index stay in full-data space.
+        </Footnote>
+      </div>
     </section>
   );
 }
 
 function ReconciliationSection() {
   return (
-    <section className={`${SECTION} space-y-8`}>
-      <FeatureHeader
-        id="reconciliation"
-        title="Reconciliation as conflict resolution"
-        description={
-          <>
-            Statement lines left, book postings right, proposed matches as
-            tinted pairs. Accept or reject each pair from the center gutter,
-            like resolving a merge conflict. The difference is integer
-            arithmetic and reads reconciled only at exactly zero.
-          </>
-        }
-      />
-      <ReconciliationDemo />
-      <ReconciliationLegend />
+    <section className={SECTION}>
+      <div className={REVEAL}>
+        <FeatureHeader
+          id="reconciliation"
+          title="Reconciliation as conflict resolution"
+          description={
+            <>
+              Statement lines left, book postings right, proposed matches as
+              tinted pairs. Accept or reject each pair from the center gutter,
+              like resolving a merge conflict. The difference is integer
+              arithmetic and reads reconciled only at exactly zero.
+            </>
+          }
+        />
+        <ReconciliationDemo />
+        <ReconciliationLegend />
+      </div>
     </section>
   );
 }
@@ -162,32 +178,34 @@ async function EntryDiffSection() {
     FIT_OUT_ENTRY_AFTER
   );
   return (
-    <section className={`${SECTION} space-y-8`}>
-      <FeatureHeader
-        id="entry-diff"
-        title="Every edit, diffed like code"
-        description={
-          <>
-            Two versions of one entry rendered as an audit-trail diff — word
-            highlights on the narration, tag and link pills added, postings
-            aligned by account and currency with exact before/after amounts.
-            Server-rendered via <code>preloadEntryDiffHTML</code> and adopted at
-            hydration, like every card on this page.
-          </>
-        }
-      />
-      <div className="demo-container">
-        <EntryDiff
-          before={FIT_OUT_ENTRY_BEFORE}
-          after={FIT_OUT_ENTRY_AFTER}
-          ssrHTML={ssrHTML}
+    <section className={SECTION}>
+      <div className={REVEAL}>
+        <FeatureHeader
+          id="entry-diff"
+          title="Every edit, diffed like code"
+          description={
+            <>
+              Two versions of one entry rendered as an audit-trail diff — word
+              highlights on the narration, tag and link pills added, postings
+              aligned by account and currency with exact before/after amounts.
+              Server-rendered via <code>preloadEntryDiffHTML</code> and adopted
+              at hydration, like every card on this page.
+            </>
+          }
         />
+        <div className="demo-container">
+          <EntryDiff
+            before={FIT_OUT_ENTRY_BEFORE}
+            after={FIT_OUT_ENTRY_AFTER}
+            ssrHTML={ssrHTML}
+          />
+        </div>
+        <Footnote>
+          The revised quote splits out a delivery leg — both versions balance to
+          exactly zero, and the diff is pure data from{' '}
+          <code>diffEntryVersions</code>.
+        </Footnote>
       </div>
-      <Footnote>
-        The revised quote splits out a delivery leg — both versions balance to
-        exactly zero, and the diff is pure data from{' '}
-        <code>diffEntryVersions</code>.
-      </Footnote>
     </section>
   );
 }
@@ -200,21 +218,23 @@ async function AccountTreeSection() {
     initialExpansion: 'top-level',
   });
   return (
-    <section className={`${SECTION} space-y-8`}>
-      <FeatureHeader
-        id="chart-of-accounts"
-        title="The chart of accounts as a tree"
-        description={
-          <>
-            Canonical colon-delimited paths —{' '}
-            <code>Assets:Current:Cash-Maybank</code> — materialize into a
-            keyboard-navigable tree with rolled-up balances and status dots. A
-            file tree with git status, for accounts.
-          </>
-        }
-      />
-      <AccountTreeDemo ssrHTML={ssrHTML} />
-      <AccountTreeComparison />
+    <section className={SECTION}>
+      <div className={REVEAL}>
+        <FeatureHeader
+          id="chart-of-accounts"
+          title="The chart of accounts as a tree"
+          description={
+            <>
+              Canonical colon-delimited paths —{' '}
+              <code>Assets:Current:Cash-Maybank</code> — materialize into a
+              keyboard-navigable tree with rolled-up balances and status dots. A
+              file tree with git status, for accounts.
+            </>
+          }
+        />
+        <AccountTreeDemo ssrHTML={ssrHTML} />
+        <AccountTreeComparison />
+      </div>
     </section>
   );
 }
@@ -222,25 +242,27 @@ async function AccountTreeSection() {
 async function UnbalancedSection() {
   const ssrHTML = await preloadJournalEntryHTML(UNBALANCED_ENTRY);
   return (
-    <section className={`${SECTION} space-y-8`}>
-      <FeatureHeader
-        id="unbalanced-entries"
-        title="Honest about imbalance"
-        description={
-          <>
-            The store never repairs a broken entry. When postings don&apos;t sum
-            to zero per currency, the renderer flags the entry and reports the
-            exact residual.
-          </>
-        }
-      />
-      <div className="demo-container">
-        <JournalEntry entry={UNBALANCED_ENTRY} ssrHTML={ssrHTML} />
+    <section className={SECTION}>
+      <div className={REVEAL}>
+        <FeatureHeader
+          id="unbalanced-entries"
+          title="Honest about imbalance"
+          description={
+            <>
+              The store never repairs a broken entry. When postings don&apos;t
+              sum to zero per currency, the renderer flags the entry and reports
+              the exact residual.
+            </>
+          }
+        />
+        <div className="demo-container">
+          <JournalEntry entry={UNBALANCED_ENTRY} ssrHTML={ssrHTML} />
+        </div>
+        <Footnote>
+          The cash leg above is exactly RM&nbsp;1.00 short — rendered, flagged,
+          never repaired.
+        </Footnote>
       </div>
-      <Footnote>
-        The cash leg above is exactly RM&nbsp;1.00 short — rendered, flagged,
-        never repaired.
-      </Footnote>
     </section>
   );
 }

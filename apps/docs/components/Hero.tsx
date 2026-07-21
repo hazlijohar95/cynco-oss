@@ -7,13 +7,17 @@ import { GITHUB_URL } from '@/lib/site';
 const INSTALL_COMMAND = 'pnpm add @cynco/journals @cynco/accounts';
 
 // Hero in the opencode /data style: an oversized headline and right-aligned
-// summary knocked out of a 6px pixel-pattern band, followed by a layer-2
-// install chip and the glossy contrast/neutral button pair. A server
-// component — the copy chip is the only client leaf — so the version read
-// from package.json never ships to the browser bundle.
+// summary knocked out of a 6px pixel-pattern band, followed by one wrapping
+// action row (layer-2 install chip, the glossy contrast/neutral button pair,
+// and a quiet anchor down to the closing film). A server component — the
+// copy chip is the only client leaf — so the version read from package.json
+// never ships to the browser bundle. Vertical rhythm is deliberately tight:
+// the hero cedes the rest of the first viewport to the live workspace demo
+// directly below it, so the product is performing above the fold instead of
+// a static headline stack.
 export function Hero() {
   return (
-    <section className="flex flex-col gap-6 px-6 pt-20 pb-10 md:gap-5 md:px-10 md:pt-24 md:pb-8 lg:px-12">
+    <section className="flex flex-col gap-6 px-6 pt-12 pb-8 md:gap-5 md:px-10 md:pt-14 md:pb-6 lg:px-12">
       {/* The knockout canvas: on desktop the h1 (top-left) and summary
        * (bottom-right) sit on page-background plates layered over the
        * centered pattern band, exactly like the /data hero. The stack
@@ -36,22 +40,33 @@ export function Hero() {
         </p>
       </div>
 
-      {/* Install chip, styled like the /data hero-meta ticker chip. Wraps
-       * on narrow viewports so the command is never truncated. */}
-      <InstallCommand command={INSTALL_COMMAND} />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Link href="/docs/journals" className="btn-data btn-data-contrast">
-          <strong>Get started</strong>
-        </Link>
+      {/* The install chip (styled like the /data hero-meta ticker chip; it
+       * wraps on narrow viewports so the command is never truncated) shares
+       * a row with the CTAs and the film anchor — merging the original
+       * stacked rows buys the workspace demo another two rows of first
+       * viewport. The anchor targets the Remotion film's h2, which carries
+       * scroll-mt to clear the sticky header. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <InstallCommand command={INSTALL_COMMAND} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/docs/journals" className="btn-data btn-data-contrast">
+            <strong>Get started</strong>
+          </Link>
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-data btn-data-neutral"
+          >
+            <strong>GitHub</strong>
+            <span>[MIT]</span>
+          </a>
+        </div>
         <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-data btn-data-neutral"
+          href="#the-film"
+          className="hero-link text-foreground text-[13px] leading-none"
         >
-          <strong>GitHub</strong>
-          <span>[MIT]</span>
+          Watch the ninety-second film <span aria-hidden="true">↓</span>
         </a>
       </div>
 
