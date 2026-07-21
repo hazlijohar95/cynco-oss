@@ -33,10 +33,9 @@ export function Hero() {
           className="pixel-pattern order-2 w-full max-md:h-4 md:absolute md:top-1/2 md:left-1/2 md:h-[351px] md:w-[1280px] md:-translate-x-1/2 md:-translate-y-1/2"
         />
         <p className="text-muted-foreground md:bg-background order-3 text-base leading-normal md:absolute md:right-0 md:bottom-0 md:z-[1] md:w-[min(563px,100%)] md:pt-3 md:pl-4 md:text-right">
-          <code>@cynco/journals</code> renders journal entries and virtualized
-          registers. <code>@cynco/accounts</code> renders the chart of accounts.
-          Vanilla TypeScript core, React adapters, declarative shadow DOM SSR.
-          Amounts are integer minor units — no floats, anywhere.
+          Registers, reconciliation, the chart of accounts. One virtualizer, a
+          million rows, byte-identical SSR. Vanilla TypeScript, React adapters.
+          Integer minor units — no floats, anywhere.
         </p>
       </div>
 
