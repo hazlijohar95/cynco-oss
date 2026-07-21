@@ -34,8 +34,8 @@ export function Hero() {
         />
         <p className="text-muted-foreground md:bg-background order-3 text-base leading-normal md:absolute md:right-0 md:bottom-0 md:z-[1] md:w-[min(563px,100%)] md:pt-3 md:pl-4 md:text-right">
           Registers, reconciliation, the chart of accounts. One virtualizer, a
-          million rows, byte-identical SSR. Vanilla TypeScript, React adapters.
-          Integer minor units — no floats, anywhere.
+          million rows, byte-identical SSR. Integer minor units — no floats,
+          anywhere.
         </p>
       </div>
 
