@@ -67,6 +67,42 @@ tasks:
       - 'packages/*/package.json'
     options:
       runInCI: 'always'
+
+  # Wiring guard: every hand-maintained package list (this file's dependsOn,
+  # PUBLISH_CONFIGS/PRIVATE_PACKAGES in scripts/publish.ts, the deploy-docs
+  # build step) must match the actual workspace, and every publishable
+  # package must carry README/LICENSE/sideEffects. Reads manifests and
+  # workflow text only; no build needed, so it runs everywhere including CI.
+  assert-wiring:
+    command: 'bun scripts/assert-wiring.ts'
+    inputs:
+      - 'scripts/assert-wiring.ts'
+      - 'scripts/publish.ts'
+      - 'moon.yml'
+      - 'packages/*/moon.yml'
+      - 'packages/*/package.json'
+      - 'packages/*/README.md'
+      - 'packages/*/LICENSE.md'
+      - 'apps/docs/package.json'
+      - '.github/workflows/deploy-docs.yml'
+    options:
+      runInCI: 'always'
+
+  # Lockstep guard: the deliberately duplicated types/tables across packages
+  # (currency exponent table, AmountFormat + presets, importers' copies of
+  # the entry shapes, CSS px ↔ JS constants) are compared as normalized
+  # source text against a central registry — the mechanical form of every
+  # "MUST mirror" comment. Reads sources as text; no build needed.
+  assert-lockstep:
+    command: 'bun scripts/assert-lockstep.ts'
+    inputs:
+      - 'scripts/assert-lockstep.ts'
+      - 'packages/*/src/types.ts'
+      - 'packages/*/src/constants.ts'
+      - 'packages/ledger-core/src/currency.ts'
+      - 'packages/*/src/style.css'
+    options:
+      runInCI: 'always'
   lint:
     command: 'oxlint --type-aware --tsconfig tsconfig.oxlint.json .'
     deps:

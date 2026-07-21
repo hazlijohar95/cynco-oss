@@ -87,6 +87,34 @@ Open the actual/expected/diff attachments under
 `/tmp/cynco-<project>-vrt-results*/`, decide whether the change is intended, and
 only then update. Blind-updating baselines deletes the lane's entire value.
 
+## Repo-invariant guards
+
+Three root tasks turn architectural comments into CI failures (all wired as
+`runInCI: 'always'` targets in `ci.yml`; unit tests for their pure logic live in
+`scripts/*.test.ts` and run via `root:test`):
+
+- **`root:assert-tiers`** (`scripts/assert-tiers.ts`): dependency edges between
+  packages must point down the tier matrix (domain → surface/engine → fixtures).
+- **`root:assert-wiring`** (`scripts/assert-wiring.ts`): every hand-maintained
+  package list matches the workspace — dist-producing (`tsdown`-tagged) packages
+  appear in root `moon.yml` `dependsOn`; `publishable`-tagged packages have
+  `PUBLISH_CONFIGS` entries (and vice versa); every `@cynco/*` dependency of
+  `apps/docs` is built by the deploy-docs workflow's "Build package
+  dependencies" step; publishable packages carry
+  `README.md`/`LICENSE.md`/`sideEffects`; inlined dependencies and
+  `PRIVATE_PACKAGES` match the manifests. Motivated by two incidents where a new
+  package skipped `dependsOn` and the docs-deploy build list.
+- **`root:assert-lockstep`** (`scripts/assert-lockstep.ts`): the deliberately
+  duplicated types/tables (the currency exponent table, `AmountFormat` and its
+  presets, importers' copies of the entry shapes, and CSS px/ms values mirrored
+  by JS constants) are compared as normalized source text against a central
+  `MIRROR_REGISTRY` — the mechanical form of every "MUST mirror" comment,
+  motivated by the partial currency-table copy that once mis-scaled currencies
+  100×/10×. `packages/importers/test/lockstepParity.test.ts` remains alongside
+  it: that suite also asserts runtime/compile-time facts (the exported table
+  agrees with its own source; parser output is assignable to the reconciliation
+  input shape) that only the package's own test context can check.
+
 ## CI
 
 `.github/workflows/ci.yml` runs
