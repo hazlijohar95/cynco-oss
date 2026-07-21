@@ -23,6 +23,7 @@
     --accounts-input-bg-override
     --accounts-balance-override
     --accounts-balance-negative-override
+    --accounts-focus-ring-selected-override
 
     // Status dot colors (git-status analog)
     --accounts-status-unreconciled-override
@@ -169,6 +170,16 @@
       --accounts-focus-ring-offset-override,
       -1px
     );
+    /* Ring color for a row that is focused AND selected: the selection wash
+     * (--accounts-accent-subtle) is an accent tint, so an accent-colored
+     * ring can dissolve into it at low contrast. Mixing the accent toward
+     * the foreground (dark in light mode, light in dark mode — 'in lab',
+     * see the color-mix note above) keeps the ring visible on top of the
+     * selection in both schemes. */
+    --accounts-focus-ring-selected: var(
+      --accounts-focus-ring-selected-override,
+      color-mix(in lab, var(--accounts-accent) 60%, var(--accounts-fg))
+    );
 
     color-scheme: light dark;
     display: block;
@@ -234,6 +245,12 @@
     overflow-anchor: none;
     padding-inline: var(--accounts-padding-inline);
     outline: none;
+    /* Scope layout and style recalculation to the scroller: window commits
+     * rewrite thousands of rows via innerHTML and nothing outside the
+     * scroller can be affected (its own size comes from the host, not its
+     * contents). Never add `size` here — size containment on the scroll
+     * container breaks position:sticky descendants in Firefox. */
+    contain: layout style;
   }
 
   [data-scroller][data-density='compact'] {
@@ -252,6 +269,16 @@
   [data-accounts-content] {
     min-width: 0;
     position: relative;
+  }
+
+  /* Virtualization spacers: empty divs whose only job is to hold an inline
+   * pixel height for the off-window rows. They have no contents, no ink,
+   * and their height never depends on layout, so full containment is free —
+   * it lets the engine skip them entirely when window commits rewrite the
+   * neighboring rows, and turns the (very frequent) spacer height writes
+   * into isolated layouts. */
+  [data-spacer] {
+    contain: strict;
   }
 
   /* Hover-revealed scrollbars: fully transparent at rest, thumb painted only
@@ -305,6 +332,14 @@
     background-color: var(--accounts-bg);
     border-bottom: 1px solid var(--accounts-hairline);
     pointer-events: none;
+    /* Promote the sticky overlay to its own layer: sticky repositions the
+     * header every scrolled frame, and without a layer its text rows are
+     * re-rasterized per frame — visible as a ~1px vertical shake and
+     * character tearing during fast scrolls. With the layer the text
+     * rasterizes once and is GPU-translated. Scoped to this one element
+     * (bounded at STICKY_ANCESTOR_STACK_MAX mirror rows, and display:none
+     * while [hidden]) so the memory cost stays a single small texture. */
+    will-change: transform;
   }
 
   [data-sticky-header][data-sticky-stack='true'] {
@@ -339,6 +374,15 @@
     outline: none;
     white-space: nowrap;
     transition: background-color 150ms ease;
+    /* Rows are fixed-height (the windowing contract), so per-row content
+     * churn — rename input swaps, decoration lanes, truncation — can never
+     * move surrounding layout; layout containment tells the engine so and
+     * keeps window commits from triggering tree-wide reflow. `paint` is
+     * deliberately omitted: the focus-ring ::before draws its outline at an
+     * overridable offset (--accounts-focus-ring-offset-override), and a
+     * positive offset puts ring ink past the padding edge where paint
+     * containment would clip it. */
+    contain: layout;
   }
 
   [data-row][data-sticky-row='true'] {
@@ -367,6 +411,13 @@
     outline: var(--accounts-focus-ring-width) solid var(--accounts-accent);
     outline-offset: var(--accounts-focus-ring-offset);
     pointer-events: none;
+  }
+
+  /* Focused + selected: shift the ring off the plain accent so it never
+   * disappears against the accent-subtle selection background (see the
+   * --accounts-focus-ring-selected definition for the mixing rationale). */
+  [data-row][data-focused='true'][data-selected='true']::before {
+    outline-color: var(--accounts-focus-ring-selected);
   }
 
   /* Indent guides: the spacing container provides the indentation width and
@@ -634,6 +685,35 @@
     outline-offset: var(--accounts-focus-ring-offset);
   }
 
+  /* Touch: the hover reveal above never fires on coarse pointers, which
+   * would leave the row-action lane invisible and undiscoverable. Rest the
+   * button at a quiet 0.65 instead — present without competing with the
+   * name — and snap to full opacity while pressed. The visual stays the
+   * small "…" glyph; the hit target is expanded with a transparent ::after
+   * overlay (layout-neutral, unlike padding or width changes): vertically
+   * it fills the fixed row height exactly (percentages resolve against the
+   * button box, so the math self-corrects under density and row-height
+   * overrides) and never bleeds into adjacent rows; horizontally ±9px
+   * yields a ≥34px effective target at every density (compact's 16px
+   * button + 18px = 34px). */
+  @media (pointer: coarse) {
+    [data-row-action] {
+      position: relative;
+      opacity: 0.65;
+    }
+
+    [data-row-action]:active {
+      opacity: 1;
+    }
+
+    [data-row-action]::after {
+      content: '';
+      position: absolute;
+      inset-block: calc((var(--accounts-row-height) - 100%) / -2);
+      inset-inline: -9px;
+    }
+  }
+
   /* Balance column: right-aligned, mono + tabular-nums so amounts line up
    * digit-for-digit down the tree. */
   [data-balance] {
@@ -692,10 +772,26 @@
     }
   }
 
-  /* Reduced motion: the dots hold steady at mid opacity — the row's
-   * presence (and the group's aria-busy) already communicates "loading"
-   * without any animation. */
+  /* Reduced motion. This stylesheet must carry its own coverage: document-
+   * level reduced-motion resets (the usual `*, ::before, ::after` app rule)
+   * do not pierce the shadow root — outer author styles never cascade into
+   * it — so every transition/animation declared above is neutralized here.
+   * All of them are decorative (hover fades, the chevron rotate, the guide
+   * fade-in); the end states apply instantly and lose nothing. */
   @media (prefers-reduced-motion: reduce) {
+    /* Row hover/selection fade, indent-guide fade-in, chevron rotate,
+     * row-action reveal, and the retry button's hover fade. */
+    [data-row],
+    [data-indent-guide],
+    [data-chevron] svg,
+    [data-row-action],
+    [data-load-retry] {
+      transition: none;
+    }
+
+    /* The dots hold steady at mid opacity — the row's presence (and the
+     * group's aria-busy) already communicates "loading" without any
+     * animation. */
     [data-load-dots] > span {
       animation: none;
       opacity: 0.6;
