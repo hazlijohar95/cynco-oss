@@ -35,6 +35,16 @@ export function addMinorUnits(a: MinorUnits, b: MinorUnits): MinorUnits {
 }
 
 /**
+ * Negates a minor-unit amount without ever producing IEEE negative zero
+ * (`-0` survives `toEqual` checks, `Object.is`, and division-based math, so
+ * letting it leak out of a derivation invites subtle downstream bugs).
+ * Statement derivations use this for every presentation sign flip.
+ */
+export function negateMinorUnits(n: MinorUnits): MinorUnits {
+  return n === 0 ? 0 : -n;
+}
+
+/**
  * True when a value is a minor-unit amount that has left the exactly-
  * representable integer range. Individual postings are validated on ingest,
  * but an *aggregate* of many individually-safe postings can still cross

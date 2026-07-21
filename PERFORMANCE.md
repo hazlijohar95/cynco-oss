@@ -141,3 +141,14 @@ typed arrays for hot per-row data. Concretely:
   requested viewport rows over shared typed-array state; `EntryStore` serves
   register slices from cached per-account prefix-sum indexes (one Float64Array
   per currency) so scroll-frame re-reads never re-scan the entry list.
+- **Point-in-time balances are index reads.** `EntryStore.getBalancesAsOf` /
+  `getBalanceChanges` answer with binary searches over the same cached
+  prefix-sum index plus one array read per currency — warm as-of and period
+  queries never re-scan the entry list.
+- **Statement derivations are single-pass.** `deriveTrialBalance` /
+  `deriveIncomeStatement` / `deriveBalanceSheet`
+  (`packages/ledger-core/src/*.ts`) accumulate per (account, currency [,
+  column]) in ONE linear scan of the entries. They must never build a
+  per-account register index (that would be O(accounts × entries)) — they are
+  report-time queries, not per-frame reads, and one honest O(entries) pass is
+  the invariant.

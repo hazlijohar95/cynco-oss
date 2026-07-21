@@ -16,6 +16,7 @@ import type {
   EntryIngestOptions,
   EntryIngestResult,
   LedgerEntry,
+  MinorUnits,
   MutationEvent,
   RegisterOptions,
   RegisterRow,
@@ -283,6 +284,89 @@ export class EntryStore {
     );
   }
 
+  // --- Point-in-time balances ------------------------------------------------------
+
+  /**
+   * Balance of one account per currency as of the end of `date` (inclusive):
+   * the sum of every register posting dated on or before it. Warm calls are
+   * one binary search plus one array read per currency against the same
+   * cached prefix-sum index that backs `getRegisterRows` — never a re-scan.
+   *
+   * Currencies with a zero balance are omitted; absence means zero, matching
+   * the `AccountRow` balance convention. Invalid paths and dates before the
+   * first posting yield an empty map. Balances share the exactness contract
+   * of the register index: exact integers unless a running total crossed
+   * 2^53, which `hasRunningBalanceOverflow` surfaces.
+   */
+  getBalancesAsOf(
+    accountPath: string,
+    date: string,
+    options: Pick<RegisterOptions, 'includeDescendants'> = {}
+  ): Map<string, MinorUnits> {
+    const balances = new Map<string, MinorUnits>();
+    if (!isValidAccountPath(accountPath)) {
+      return balances;
+    }
+    const index = this.getRegisterIndex(
+      accountPath,
+      options.includeDescendants === true
+    );
+    const row = this.findLastRowOnOrBefore(index, date);
+    if (row < 0) {
+      return balances;
+    }
+    for (const [currency, sums] of index.prefixSumsByCurrency) {
+      const balance = sums[row];
+      if (balance !== 0) {
+        balances.set(currency, balance);
+      }
+    }
+    return balances;
+  }
+
+  /**
+   * Net movement of one account per currency across the inclusive date range
+   * `[dateFrom, dateTo]`: the sum of register postings dated inside it. This
+   * is the period-activity query financial statements are built on — a P&L
+   * line is the balance change of an income or expense account over the
+   * reporting period.
+   *
+   * Computed as two prefix-sum reads (balance through `dateTo` minus balance
+   * through the day before `dateFrom`, located by binary search), so no date
+   * arithmetic and no scan. Zero-change currencies are omitted; an inverted
+   * or unmatched range yields an empty map.
+   */
+  getBalanceChanges(
+    accountPath: string,
+    dateFrom: string,
+    dateTo: string,
+    options: Pick<RegisterOptions, 'includeDescendants'> = {}
+  ): Map<string, MinorUnits> {
+    const changes = new Map<string, MinorUnits>();
+    if (!isValidAccountPath(accountPath) || dateTo < dateFrom) {
+      return changes;
+    }
+    const index = this.getRegisterIndex(
+      accountPath,
+      options.includeDescendants === true
+    );
+    const endRow = this.findLastRowOnOrBefore(index, dateTo);
+    if (endRow < 0) {
+      return changes;
+    }
+    // Rows strictly before dateFrom: everything on or before it minus rows
+    // dated exactly dateFrom and later — found as "last row before" via the
+    // half-open property of the sorted date column.
+    const beforeRow = this.findLastRowBefore(index, dateFrom);
+    for (const [currency, sums] of index.prefixSumsByCurrency) {
+      const change = sums[endRow] - (beforeRow < 0 ? 0 : sums[beforeRow]);
+      if (change !== 0) {
+        changes.set(currency, change);
+      }
+    }
+    return changes;
+  }
+
   // --- Mutations --------------------------------------------------------------------
 
   /**
@@ -495,6 +579,45 @@ export class EntryStore {
       `${entry.payee ?? ''}\n${entry.narration}`.toLowerCase()
     );
     return this.searchTextByIndex[index];
+  }
+
+  /**
+   * Greatest register row index whose entry date is `<= date`, or -1 when
+   * every row is later. Register rows inherit the store's (date, id) order,
+   * so the date column is non-decreasing and a plain binary search applies;
+   * ISO dates compare correctly as strings.
+   */
+  private findLastRowOnOrBefore(index: RegisterIndex, date: string): number {
+    let low = 0;
+    let high = index.entryIndices.length - 1;
+    let found = -1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (this.entries[index.entryIndices[mid]].date <= date) {
+        found = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return found;
+  }
+
+  /** Greatest register row index whose entry date is strictly `< date`, or -1. */
+  private findLastRowBefore(index: RegisterIndex, date: string): number {
+    let low = 0;
+    let high = index.entryIndices.length - 1;
+    let found = -1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (this.entries[index.entryIndices[mid]].date < date) {
+        found = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return found;
   }
 
   /** Cached register index for (account, includeDescendants), built on demand. */
