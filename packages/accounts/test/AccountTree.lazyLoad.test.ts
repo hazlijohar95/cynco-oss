@@ -265,7 +265,9 @@ describe('stale-response gating', () => {
     await wait(0);
     // Retry, then let the FIRST retry's sibling attempt lose the race: the
     // second attempt is superseded by a third before it resolves.
-    click(queryPlaceholder(mounted)?.querySelector('[data-load-retry]')!);
+    const placeholder = queryPlaceholder(mounted);
+    if (placeholder == null) throw new Error('expected a retry placeholder');
+    click(placeholder.querySelector('[data-load-retry]')!);
     const second = mounted.deferreds[1];
     mounted.tree.getController().cancelChildLoads();
     mounted.tree.getController().requestChildLoad('Remote');
