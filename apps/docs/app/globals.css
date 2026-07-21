@@ -367,9 +367,8 @@
   }
 }
 
-/* Hero/footnote links: semibold with a hairline underline offset a quarter
- * em, the decoration mixed toward transparent until hover. */
-.hero-link,
+/* Footnote links: semibold with a hairline underline offset a quarter em,
+ * the decoration mixed toward transparent until hover. */
 .footnote-link {
   font-weight: 600;
   text-decoration: underline;
@@ -380,7 +379,6 @@
     var(--motion-ease);
 }
 
-.hero-link:hover,
 .footnote-link:hover {
   text-decoration-color: currentcolor;
 }

@@ -7,9 +7,9 @@ import { GITHUB_URL } from '@/lib/site';
 const INSTALL_COMMAND = 'pnpm add @cynco/journals @cynco/accounts';
 
 // Hero in the opencode /data style: an oversized headline and right-aligned
-// summary knocked out of a 6px pixel-pattern band, followed by one wrapping
-// action row (layer-2 install chip, the glossy contrast/neutral button pair,
-// and a quiet anchor down to the closing film). A server component — the
+// summary knocked out of a 6px pixel-pattern band, followed by the layer-2
+// install chip with the glossy contrast/neutral button pair beneath it. A
+// server component — the
 // copy chip is the only client leaf — so the version read from package.json
 // never ships to the browser bundle. Vertical rhythm is deliberately tight:
 // the hero cedes the rest of the first viewport to the live workspace demo
@@ -41,12 +41,10 @@ export function Hero() {
       </div>
 
       {/* The install chip (styled like the /data hero-meta ticker chip; it
-       * wraps on narrow viewports so the command is never truncated) shares
-       * a row with the CTAs and the film anchor — merging the original
-       * stacked rows buys the workspace demo another two rows of first
-       * viewport. The anchor targets the Remotion film's h2, which carries
-       * scroll-mt to clear the sticky header. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+       * wraps on narrow viewports so the command is never truncated) leads,
+       * with the CTA pair on its own row beneath — command first, actions
+       * second, matching how a reader actually consumes an install block. */}
+      <div className="flex flex-col items-start gap-3">
         <InstallCommand command={INSTALL_COMMAND} />
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/docs/journals" className="btn-data btn-data-contrast">
@@ -62,12 +60,6 @@ export function Hero() {
             <span>[MIT]</span>
           </a>
         </div>
-        <a
-          href="#the-film"
-          className="hero-link text-foreground text-[13px] leading-none"
-        >
-          Watch the ninety-second film <span aria-hidden="true">↓</span>
-        </a>
       </div>
 
       <p className="text-text-weak text-[11px] leading-none">
