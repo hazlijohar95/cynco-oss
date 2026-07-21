@@ -9,7 +9,6 @@
     "@cynco/ledger-core": "workspace:*",
     "@cynco/ledger-test-data": "workspace:*",
     "@cynco/statements": "workspace:*",
-    "@cynco/theme": "workspace:*",
     "@cynco/theming": "workspace:*"
   },
   "devDependencies": {

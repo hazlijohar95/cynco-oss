@@ -174,9 +174,6 @@ importers:
       '@cynco/statements':
         specifier: workspace:*
         version: link:../../packages/statements
-      '@cynco/theme':
-        specifier: workspace:*
-        version: link:../../packages/theme
       '@cynco/theming':
         specifier: workspace:*
         version: link:../../packages/theming
