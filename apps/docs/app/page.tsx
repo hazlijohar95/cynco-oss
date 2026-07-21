@@ -105,12 +105,9 @@ async function JournalEntrySection() {
           title="Journal entries, server-rendered"
           description={
             <>
-              A six-posting payroll run — split across EPF and SOCSO,
-              Malaysia&apos;s statutory payroll funds — rendered on the server
-              as declarative shadow DOM and adopted at hydration, with no client
-              re-render. Every color resolves through the{' '}
-              <code>@cynco/theme</code> chain: override → role → default, per
-              color scheme.
+              A six-posting payroll run, rendered on the server as declarative
+              shadow DOM, adopted at hydration. Zero client re-render. Every
+              color resolves override → role → default.
             </>
           }
         />
@@ -129,20 +126,18 @@ function RegisterSection() {
           title="A register that scales"
           description={
             <>
-              10,000 seeded entries against one cash account. Fixed row heights
-              reduce windowing to arithmetic — no measurement, no layout thrash
-              — so the register mounts the same number of DOM nodes at 100 rows
-              or 100,000.
+              10,000 entries, one cash account. Fixed row heights make windowing
+              pure arithmetic — no measurement, no layout thrash, the same DOM
+              node count at 100 rows or 100,000.
             </>
           }
         />
         <RegisterDemo />
         <RegisterComparison />
         <Footnote>
-          Registers also take a projection-level filter: <code>setFilter</code>{' '}
-          reshapes the visible rows in place — group summaries recomputed over
-          the matched rows, matched substrings highlighted — while selection and
-          every public index stay in full-data space.
+          <code>setFilter</code> reshapes rows in place — group summaries
+          recomputed, matches highlighted — while selection and every public
+          index stay in full-data space.
         </Footnote>
       </div>
     </section>
@@ -158,10 +153,9 @@ function ReconciliationSection() {
           title="Reconciliation as conflict resolution"
           description={
             <>
-              Statement lines left, book postings right, proposed matches as
-              tinted pairs. Accept or reject each pair from the center gutter,
-              like resolving a merge conflict. The difference is integer
-              arithmetic and reads reconciled only at exactly zero.
+              Statement lines left, book postings right, matches as tinted
+              pairs. Accept or reject from the gutter, like a merge conflict.
+              Reconciled means exactly zero — integer arithmetic, no epsilon.
             </>
           }
         />
@@ -185,11 +179,10 @@ async function EntryDiffSection() {
           title="Every edit, diffed like code"
           description={
             <>
-              Two versions of one entry rendered as an audit-trail diff — word
-              highlights on the narration, tag and link pills added, postings
-              aligned by account and currency with exact before/after amounts.
-              Server-rendered via <code>preloadEntryDiffHTML</code> and adopted
-              at hydration, like every card on this page.
+              Two versions of one entry as an audit-trail diff — word
+              highlights, pill adds, postings aligned by account and currency
+              with exact before/after amounts. Server-rendered, like every card
+              on this page.
             </>
           }
         />
@@ -201,8 +194,7 @@ async function EntryDiffSection() {
           />
         </div>
         <Footnote>
-          The revised quote splits out a delivery leg — both versions balance to
-          exactly zero, and the diff is pure data from{' '}
+          Both versions balance to exactly zero. The diff is pure data from{' '}
           <code>diffEntryVersions</code>.
         </Footnote>
       </div>
@@ -225,10 +217,9 @@ async function AccountTreeSection() {
           title="The chart of accounts as a tree"
           description={
             <>
-              Canonical colon-delimited paths —{' '}
-              <code>Assets:Current:Cash-Maybank</code> — materialize into a
-              keyboard-navigable tree with rolled-up balances and status dots. A
-              file tree with git status, for accounts.
+              <code>Assets:Current:Cash-Maybank</code> materializes into a
+              keyboard-navigable tree — rolled-up balances, status dots. A file
+              tree with git status, for accounts.
             </>
           }
         />
@@ -249,9 +240,8 @@ async function UnbalancedSection() {
           title="Honest about imbalance"
           description={
             <>
-              The store never repairs a broken entry. When postings don&apos;t
-              sum to zero per currency, the renderer flags the entry and reports
-              the exact residual.
+              Postings that don&apos;t sum to zero per currency are flagged with
+              the exact residual. Never repaired, never hidden.
             </>
           }
         />
@@ -259,8 +249,8 @@ async function UnbalancedSection() {
           <JournalEntry entry={UNBALANCED_ENTRY} ssrHTML={ssrHTML} />
         </div>
         <Footnote>
-          The cash leg above is exactly RM&nbsp;1.00 short — rendered, flagged,
-          never repaired.
+          The cash leg is exactly RM&nbsp;1.00 short — rendered, flagged, left
+          alone.
         </Footnote>
       </div>
     </section>

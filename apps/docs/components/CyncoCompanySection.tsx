@@ -13,10 +13,9 @@ export function CyncoCompanySection() {
             Built at Cynco
           </h2>
           <p className="text-muted-foreground text-base leading-normal">
-            Accounting infrastructure, built the way systems engineers build
-            databases: integer minor units end to end, entries that balance by
-            construction, rendering that holds at six-figure row counts. These
-            packages are the primitives under everything we ship.
+            Accounting infrastructure built like a database: integer minor units
+            end to end, entries balanced by construction, rendering that holds
+            at a million rows. The primitives under everything we ship.
           </p>
         </div>
         <div className="mt-8 flex flex-wrap gap-2">
