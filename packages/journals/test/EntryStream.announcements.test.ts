@@ -30,8 +30,16 @@ interface Harness {
 }
 
 function createHarness(instance: EntryStream): Harness {
-  instance.render({ parentNode: document.body });
-  const container = document.querySelector(JOURNALS_TAG_NAME);
+  // Each harness gets its own parent node and queries WITHIN it. Querying
+  // document-wide (the old shape) made tests read each other's DOM: a test
+  // failing before its cleanUp() left its container behind, and the next
+  // test's document.querySelector grabbed the stale instance — which is
+  // exactly how a completion announcement from test 1 once showed up in
+  // test 2's assertions on a loaded CI runner.
+  const parent = document.createElement('div');
+  document.body.append(parent);
+  instance.render({ parentNode: parent });
+  const container = parent.querySelector(JOURNALS_TAG_NAME);
   const shadowRoot =
     container instanceof HTMLElement ? container.shadowRoot : null;
   if (shadowRoot == null) {
@@ -46,8 +54,21 @@ function createHarness(instance: EntryStream): Harness {
     },
     cleanUp() {
       instance.cleanUp();
+      parent.remove();
     },
   };
+}
+
+// Settle by quiescence, not fixed sleeps (test/README.md known-gaps table:
+// fixed waits race multi-stage async pipelines on loaded CI runners).
+// Deadline-bounded so a broken stream still fails fast.
+async function waitUntilDone(instance: EntryStream): Promise<void> {
+  const deadline = Date.now() + 3000;
+  while (!instance.isDone() && Date.now() < deadline) {
+    await wait(10);
+  }
+  // One tick for the completion announcement to commit after done flips.
+  await wait(0);
 }
 
 describe('EntryStream announcements', () => {
@@ -76,15 +97,15 @@ describe('EntryStream announcements', () => {
     }
     await wait(0);
     expect(region?.textContent).toBe('Streaming entries\u2026');
-    // Mid-stream: entries keep arriving and the visual footer counts up,
-    // but the region holds exactly the start message.
-    await wait(30);
-    expect(harness.instance.isDone()).toBe(false);
-    expect(region?.textContent).toBe('Streaming entries\u2026');
-    await wait(80);
+    // No fixed-time mid-stream assertion: on a loaded runner the stream's
+    // chained timeouts can lag past any sleep we pick (this exact test
+    // failed in CI with isDone() still false after 110ms of waits). The
+    // "nothing in between" claim is carried by the mutation count below —
+    // exactly two announcements means the region held the start message for
+    // the whole stream, no timing window required.
+    await waitUntilDone(harness.instance);
     expect(harness.instance.isDone()).toBe(true);
     expect(region?.textContent).toBe('5 entries loaded');
-    await wait(0);
     // Exactly two announcements across the whole stream lifetime.
     expect(mutations).toBe(2);
     observer.disconnect();
@@ -96,16 +117,7 @@ describe('EntryStream announcements', () => {
       stream: createEntryStreamFromArray(makeEntries(1), { delayMs: 10 }),
     });
     const harness = createHarness(instance);
-    // Settle by quiescence, not a fixed sleep (test/README.md known-gaps
-    // table: fixed waits race multi-stage async pipelines on loaded CI
-    // runners — this wait(60) flaked exactly that way). Poll for stream
-    // completion, deadline-bounded so a broken stream still fails fast,
-    // then yield one tick for the completion announcement to commit.
-    const deadline = Date.now() + 3000;
-    while (!instance.isDone() && Date.now() < deadline) {
-      await wait(10);
-    }
-    await wait(0);
+    await waitUntilDone(instance);
     expect(harness.region()?.textContent).toBe('1 entry loaded');
     harness.cleanUp();
   });
