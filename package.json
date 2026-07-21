@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "devDependencies": {
+    "@arethetypeswrong/cli": "catalog:",
+    "@arethetypeswrong/core": "catalog:",
     "@moonrepo/cli": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
@@ -10,6 +12,7 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
+    "publint": "catalog:",
     "stylelint": "catalog:",
     "stylelint-config-standard": "catalog:",
     "typescript": "catalog:"

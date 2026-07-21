@@ -1,3 +1,9 @@
+import {
+  checkPackage,
+  createPackageFromTarballData,
+  type Problem,
+  type ResolutionKind,
+} from '@arethetypeswrong/core';
 import { spawnSync } from 'node:child_process';
 import {
   closeSync,
@@ -11,6 +17,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
+import { publint, type Message as PublintMessage } from 'publint';
+import { formatMessage } from 'publint/utils';
 
 // Shared release pipeline for every published @cynco package. Invoked per
 // package through the inherited `publish` moon task, which runs with the
@@ -370,6 +378,143 @@ export function collectExportPaths(exportsField: unknown): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// Consumer-correctness verdicts (pure, unit-tested)
+//
+// assertPublishPayload proves the payload contains what it claims; nothing
+// above this line proves a *consumer* can actually resolve it. A broken
+// exports condition order, a missing/mislinked types file, an ESM/CJS
+// mismatch, or a d.ts that references a private package would all sail
+// through the file-existence checks and ship silently. publint lints the
+// manifest/payload pairing; arethetypeswrong resolves every entrypoint the
+// way real TypeScript consumers do (node10 / node16-cjs / node16-esm /
+// bundler). Both run against the final artifact, and both run during
+// --dry-run — they are verification, not upload.
+// ---------------------------------------------------------------------------
+
+/**
+ * Splits publint messages into release-blocking errors and printed-only
+ * warnings. Threshold rationale:
+ * - `error`: the package is broken for some consumer (missing file, wrong
+ *   format, invalid exports value) — always fails the release.
+ * - `warning`: works today but is fragile or deoptimized in some tooling —
+ *   printed so a maintainer sees it in every dry-run, but does not block
+ *   (blocking would make unrelated releases hostage to hygiene nits).
+ * - `suggestion`: pure style advice — noise at release time; the publint
+ *   call filters these out with `level: 'warning'` so they never reach here.
+ */
+export function partitionPublintMessages(messages: readonly PublintMessage[]): {
+  errors: PublintMessage[];
+  warnings: PublintMessage[];
+} {
+  const errors: PublintMessage[] = [];
+  const warnings: PublintMessage[] = [];
+  for (const message of messages) {
+    if (message.type === 'error') {
+      errors.push(message);
+    } else if (message.type === 'warning') {
+      warnings.push(message);
+    }
+  }
+  return { errors, warnings };
+}
+
+export interface AttwAllowRule {
+  kind: Problem['kind'];
+  resolutionKind: ResolutionKind;
+  /** Why this problem is acceptable — printed next to every allowlisted hit. */
+  reason: string;
+}
+
+/**
+ * attw problems that are inherent consequences of shipping ESM-only packages
+ * ("type": "module", import-only exports) rather than packaging defects. The
+ * allowlist only applies when the shipped manifest really is ESM-only; a
+ * future dual-format package gets zero exemptions.
+ */
+export const ESM_ONLY_ATTW_ALLOWLIST: readonly AttwAllowRule[] = [
+  {
+    kind: 'CJSResolvesToESM',
+    resolutionKind: 'node16-cjs',
+    // Every @cynco package deliberately ships ESM-only, so `require()` from a
+    // CJS consumer necessarily lands on an ESM file — that is the design, not
+    // a mismatch. Node >= 20.19 supports require(esm) natively; older
+    // CJS-only consumers were never a supported target, and "fixing" this
+    // would mean dual-publishing CJS builds.
+    reason:
+      'ESM-only by design; require(esm) works on Node >= 20.19 and CJS-only ' +
+      'consumers are not a supported target',
+  },
+  {
+    kind: 'NoResolution',
+    resolutionKind: 'node10',
+    // node10 resolution reads `main`/`typesVersions`, which ESM-only packages
+    // may not carry. No working consumer is masked: actual Node 10-era
+    // runtimes cannot load ESM at all, so a node10 *types* resolution failure
+    // only affects TS configs still on moduleResolution node10 — which must
+    // use node16/bundler to consume these packages anyway.
+    reason:
+      'node10 resolution cannot load ESM-only packages at runtime regardless; ' +
+      'TS consumers need moduleResolution node16/bundler',
+  },
+];
+
+export interface AttwVerdict {
+  failures: Problem[];
+  allowed: { problem: Problem; reason: string }[];
+}
+
+/**
+ * Applies the ESM-only allowlist to attw's findings. Any problem without an
+ * applicable rule fails the release — including node16-esm/bundler
+ * resolution failures, missing named exports, false-ESM/CJS type mismatches,
+ * and internal resolution errors (a d.ts importing a private package
+ * surfaces as the latter).
+ */
+export function evaluateAttwProblems(
+  problems: readonly Problem[],
+  manifest: PublishManifest
+): AttwVerdict {
+  const rules = manifest.type === 'module' ? ESM_ONLY_ATTW_ALLOWLIST : [];
+  const verdict: AttwVerdict = { failures: [], allowed: [] };
+  for (const problem of problems) {
+    const rule = rules.find(
+      (candidate) =>
+        candidate.kind === problem.kind &&
+        'resolutionKind' in problem &&
+        candidate.resolutionKind === problem.resolutionKind
+    );
+    if (rule === undefined) {
+      verdict.failures.push(problem);
+    } else {
+      verdict.allowed.push({ problem, reason: rule.reason });
+    }
+  }
+  return verdict;
+}
+
+/**
+ * Human-readable one-liner for an attw problem. attw's own renderers are
+ * table-oriented; release logs want one offender per line.
+ */
+export function describeAttwProblem(problem: Problem): string {
+  const parts: string[] = [problem.kind];
+  if ('entrypoint' in problem) {
+    parts.push(
+      `entrypoint "${problem.entrypoint}" (${problem.resolutionKind})`
+    );
+  }
+  if ('typesFileName' in problem) {
+    parts.push(
+      `types ${problem.typesFileName} vs impl ${problem.implementationFileName}`
+    );
+  }
+  if ('fileName' in problem) {
+    parts.push(`in ${problem.fileName}`);
+  }
+  return parts.join(' — ');
+}
+
+// ---------------------------------------------------------------------------
 // Process plumbing
 // ---------------------------------------------------------------------------
 
@@ -603,6 +748,69 @@ function assertPublishPayload(
   }
 }
 
+// Runs the consumer-correctness tools against the artifact that ships: publint
+// over the extracted final payload (every file in that dir came out of the
+// final tarball, hence `pack: false`) and attw over the final tarball bytes
+// themselves. Kept separate from assertPublishPayload because these tools are
+// async and external — the in-house payload checks stay synchronous and
+// dependency-free.
+async function assertConsumerCorrectness(
+  finalTarballPath: string,
+  payloadDir: string
+): Promise<void> {
+  const offenders: string[] = [];
+
+  console.log('[publish] publint: linting extracted final payload');
+  const { messages, pkg } = await publint({
+    pkgDir: payloadDir,
+    pack: false,
+    // Suggestions are style noise at release time; see
+    // partitionPublintMessages for the error/warning threshold rationale.
+    level: 'warning',
+  });
+  const { errors, warnings } = partitionPublintMessages(messages);
+  for (const message of warnings) {
+    console.warn(
+      `[publish] publint warning: ${formatMessage(message, pkg) ?? message.code}`
+    );
+  }
+  for (const message of errors) {
+    offenders.push(`publint: ${formatMessage(message, pkg) ?? message.code}`);
+  }
+
+  console.log(
+    '[publish] attw: resolving entrypoints (node10/node16-cjs/node16-esm/bundler) against final tarball'
+  );
+  const tarballData = new Uint8Array(readFileSync(finalTarballPath));
+  const result = await checkPackage(createPackageFromTarballData(tarballData));
+  if (result.types === false) {
+    offenders.push('attw: package ships no type declarations at all');
+  } else {
+    const manifest = JSON.parse(
+      readFileSync(join(payloadDir, 'package.json'), 'utf8')
+    ) as PublishManifest;
+    const { failures, allowed } = evaluateAttwProblems(
+      result.problems,
+      manifest
+    );
+    for (const { problem, reason } of allowed) {
+      console.warn(
+        `[publish] attw allowlisted: ${describeAttwProblem(problem)} — ${reason}`
+      );
+    }
+    for (const problem of failures) {
+      offenders.push(`attw: ${describeAttwProblem(problem)}`);
+    }
+  }
+
+  if (offenders.length > 0) {
+    throw new Error(
+      ['Consumer correctness verification failed:', ...offenders].join('\n  ')
+    );
+  }
+  console.log('[publish] consumer correctness verified (publint + attw)');
+}
+
 // Line-level manifest diff for the dry-run report: enough to eyeball that
 // only the inlined deps and release-only fields disappeared.
 function describeDiff(before: string, after: string): string {
@@ -653,7 +861,7 @@ function tagRelease(packageName: string, version: string): void {
 // Driver
 // ---------------------------------------------------------------------------
 
-function main(): void {
+async function main(): Promise<void> {
   // moon runs the `publish` task with the package directory as cwd, which is
   // how a single shared script knows which package it is releasing.
   const packageDir = process.cwd();
@@ -701,7 +909,13 @@ function main(): void {
   const finalTarballPath = packTarball(join(workDir, 'final'), payloadDir);
   const verifyRoot = join(workDir, 'verify');
   untar(finalTarballPath, verifyRoot);
-  assertPublishPayload(join(verifyRoot, 'package'), config);
+  const finalPayloadDir = join(verifyRoot, 'package');
+  assertPublishPayload(finalPayloadDir, config);
+
+  // Consumer-correctness gate (publint + attw) on the same final artifact.
+  // Deliberately before the dry-run/publish fork: a --dry-run that skipped
+  // it would rehearse less than the real release verifies.
+  await assertConsumerCorrectness(finalTarballPath, finalPayloadDir);
 
   if (flags.dryRun) {
     dryRunPublish(finalTarballPath, flags.tag, flags.otp);
@@ -732,5 +946,5 @@ function main(): void {
 }
 
 if (import.meta.main) {
-  main();
+  await main();
 }

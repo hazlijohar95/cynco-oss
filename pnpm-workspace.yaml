@@ -41,6 +41,11 @@ minimumReleaseAgeExclude:
   - 'vite'
 
 catalog:
+  # arethetypeswrong: publish-time consumer type-resolution checks. cli and
+  # core must stay in lockstep — the CLI is the human-debuggable face of the
+  # exact core the publish script calls programmatically.
+  '@arethetypeswrong/cli': '0.18.5'
+  '@arethetypeswrong/core': '0.18.5'
   # Paper Shaders (Apache-2.0): WebGL status-badge shaders on the cynco.dev
   # index; bundled into apps/home/public/vendor by home:bundle-shaders.
   '@paper-design/shaders': 0.0.77
@@ -83,6 +88,7 @@ catalog:
   'postcss-nesting': '14.0.0'
   'preact': '11.0.0-beta.0'
   'preact-render-to-string': '6.6.5'
+  'publint': '0.3.21'
   'react': '19.2.7'
   'react-dom': '19.2.7'
   'remark-gfm': '4.0.1'

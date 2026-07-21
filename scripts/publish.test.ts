@@ -1,12 +1,18 @@
+import type { Problem } from '@arethetypeswrong/core';
 import { describe, expect, test } from 'bun:test';
+import type { Message as PublintMessage } from 'publint';
 
 import {
   collectExportPaths,
+  describeAttwProblem,
   distTagAddArgs,
   dryRunPublishArgs,
+  ESM_ONLY_ATTW_ALLOWLIST,
+  evaluateAttwProblems,
   findManifestDependencyOffenders,
   findQuotedSpecifierOffenders,
   parseArgs,
+  partitionPublintMessages,
   PRIVATE_PACKAGES,
   PUBLISH_CONFIGS,
   publishArgs,
@@ -287,6 +293,142 @@ describe('collectExportPaths', () => {
     // A conditional export can map to another package name; only relative
     // paths are files this package must ship.
     expect(collectExportPaths({ '.': { import: 'some-package' } })).toEqual([]);
+  });
+});
+
+describe('partitionPublintMessages', () => {
+  const message = (
+    type: PublintMessage['type'],
+    code: string
+  ): PublintMessage =>
+    // Synthetic fixture: the union's common shape is all the partitioning
+    // logic reads, so a representative code with empty args is enough.
+    ({ code, args: {}, path: ['exports', '.'], type }) as PublintMessage;
+
+  test('errors block, warnings pass through, suggestions are dropped', () => {
+    const { errors, warnings } = partitionPublintMessages([
+      message('error', 'FILE_DOES_NOT_EXIST'),
+      message('warning', 'USE_TYPE'),
+      message('suggestion', 'USE_FILES'),
+      message('error', 'EXPORTS_VALUE_INVALID'),
+    ]);
+    expect(errors.map((entry) => entry.code)).toEqual([
+      'FILE_DOES_NOT_EXIST',
+      'EXPORTS_VALUE_INVALID',
+    ]);
+    expect(warnings.map((entry) => entry.code)).toEqual(['USE_TYPE']);
+  });
+
+  test('a clean payload produces an empty verdict', () => {
+    expect(partitionPublintMessages([])).toEqual({ errors: [], warnings: [] });
+  });
+});
+
+describe('evaluateAttwProblems', () => {
+  const esmOnlyManifest: PublishManifest = {
+    name: '@cynco/theme',
+    version: '0.1.0',
+    type: 'module',
+  };
+  const cjsResolvesToEsm: Problem = {
+    kind: 'CJSResolvesToESM',
+    entrypoint: '.',
+    resolutionKind: 'node16-cjs',
+  };
+  const node10NoResolution: Problem = {
+    kind: 'NoResolution',
+    entrypoint: '.',
+    resolutionKind: 'node10',
+  };
+  const missingNamedExports: Problem = {
+    kind: 'NamedExports',
+    typesFileName: 'dist/index.d.ts',
+    implementationFileName: 'dist/index.js',
+    isMissingAllNamed: false,
+    missing: ['parseCsv'],
+  };
+
+  test('allowlists the inherent ESM-only problems for "type": "module" packages', () => {
+    const verdict = evaluateAttwProblems(
+      [cjsResolvesToEsm, node10NoResolution],
+      esmOnlyManifest
+    );
+    expect(verdict.failures).toEqual([]);
+    expect(verdict.allowed.map((entry) => entry.problem.kind)).toEqual([
+      'CJSResolvesToESM',
+      'NoResolution',
+    ]);
+    // Every allowlisted hit must carry its justification into the logs.
+    for (const entry of verdict.allowed) {
+      expect(entry.reason.length).toBeGreaterThan(0);
+    }
+  });
+
+  test('fails on real resolution problems even for ESM-only packages', () => {
+    const esmNoResolution: Problem = {
+      kind: 'NoResolution',
+      entrypoint: './react',
+      resolutionKind: 'node16-esm',
+    };
+    const verdict = evaluateAttwProblems(
+      [missingNamedExports, esmNoResolution, cjsResolvesToEsm],
+      esmOnlyManifest
+    );
+    expect(verdict.failures.map((entry) => entry.kind)).toEqual([
+      'NamedExports',
+      'NoResolution',
+    ]);
+    expect(verdict.allowed.map((entry) => entry.problem.kind)).toEqual([
+      'CJSResolvesToESM',
+    ]);
+  });
+
+  test('grants zero exemptions to packages that are not ESM-only', () => {
+    const dualFormatManifest: PublishManifest = {
+      name: '@cynco/hypothetical-dual',
+      version: '0.1.0',
+    };
+    const verdict = evaluateAttwProblems(
+      [cjsResolvesToEsm, node10NoResolution],
+      dualFormatManifest
+    );
+    expect(verdict.failures).toHaveLength(2);
+    expect(verdict.allowed).toEqual([]);
+  });
+
+  test('allowlist rules pin both kind and resolutionKind', () => {
+    // Guards against a rule accidentally widening: NoResolution is only
+    // acceptable in node10 mode, CJSResolvesToESM only in node16-cjs.
+    expect(
+      ESM_ONLY_ATTW_ALLOWLIST.map((rule) => [rule.kind, rule.resolutionKind])
+    ).toEqual([
+      ['CJSResolvesToESM', 'node16-cjs'],
+      ['NoResolution', 'node10'],
+    ]);
+  });
+});
+
+describe('describeAttwProblem', () => {
+  test('names entrypoint and resolution mode for resolution problems', () => {
+    expect(
+      describeAttwProblem({
+        kind: 'NoResolution',
+        entrypoint: '.',
+        resolutionKind: 'node10',
+      })
+    ).toBe('NoResolution — entrypoint "." (node10)');
+  });
+
+  test('names the type/implementation file pair for mismatch problems', () => {
+    expect(
+      describeAttwProblem({
+        kind: 'NamedExports',
+        typesFileName: 'dist/index.d.ts',
+        implementationFileName: 'dist/index.js',
+        isMissingAllNamed: false,
+        missing: ['parseCsv'],
+      })
+    ).toBe('NamedExports — types dist/index.d.ts vs impl dist/index.js');
   });
 });
 

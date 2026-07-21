@@ -91,10 +91,30 @@ The publish script itself then:
 6. Repacks the rewritten payload into the final tarball and verifies the
    extracted final tarball again — the artifact that ships is the artifact that
    was checked.
-7. Publishes the final tarball (or stops after step 6 with `--dry-run`).
+7. Verifies consumer correctness of that same final artifact (also during
+   `--dry-run` — these are verification, not upload):
+   - **publint** (node API) lints the extracted final payload for
+     manifest/payload mismatches: broken exports condition order, missing or
+     wrongly-formatted entry files, invalid exports values. `error`-severity
+     messages fail the release; `warning`s are printed but do not block;
+     `suggestion`s are filtered out entirely.
+   - **arethetypeswrong** (`@arethetypeswrong/core`, `checkPackage` on the final
+     tarball bytes) resolves every entrypoint the way real TypeScript consumers
+     do (`node10`, `node16-cjs`, `node16-esm`, `bundler`). Any problem fails the
+     release — a d.ts referencing a private package surfaces here as an internal
+     resolution error — except two explicitly allowlisted consequences of
+     shipping ESM-only (`"type": "module"`) packages: `CJSResolvesToESM` in
+     `node16-cjs` mode (by design; Node ≥ 20.19 supports `require(esm)`) and
+     `NoResolution` in `node10` mode (node10 resolution could never load ESM at
+     runtime anyway). Allowlisted hits are printed with their justification;
+     packages that are not ESM-only get zero exemptions. The same checks are
+     runnable by hand via the `attw` and `publint` CLIs (both are root
+     devDependencies).
+8. Publishes the final tarball (or stops after step 7 with `--dry-run`).
 
 The pure pieces of this pipeline (flag parsing, manifest rewriting, specifier
-scanning, OTP redaction) are unit-tested in `scripts/publish.test.ts`, run by
+scanning, OTP redaction, publint message partitioning, the attw allowlist
+verdict) are unit-tested in `scripts/publish.test.ts`, run by
 `moon run root:test`.
 
 ## OTP / 2FA behavior
