@@ -44,6 +44,12 @@
     --journals-font-family
     --journals-font-size
     --journals-line-height
+    --journals-radius-override
+    --journals-radius-small-override
+    --journals-pad-y-override
+    --journals-pad-y-dense-override
+    --journals-gap-override
+    --journals-gutter-override
     --journals-focus-ring-width-override
     --journals-focus-ring-offset-override
     */
@@ -247,6 +253,40 @@
       var(--journals-accent)
     );
 
+    /* Spacing / radius tokens, resolving override → default like the color
+     * tokens above (the accounts package's token treatment). Unlike accounts
+     * there is no density scale factor multiplied in: journals density modes
+     * (comfortable/compact) swap fixed row heights that must stay in
+     * lockstep with constants.ts, so these tokens are static values — which
+     * also makes :host a safe place to resolve them (nothing below
+     * re-derives them per [data-density], unlike accounts' scroller-scoped
+     * metrics).
+     *
+     * Semantics, read from actual usage:
+     * - radius:       card / pill / badge corners
+     * - radius-small: small square controls (recon gutter actions)
+     * - pad-y:        card header block padding
+     * - pad-y-dense:  card body / footer / annotation / recon cell padding
+     * - gap:          entry-stream spacing (gap between cards AND the equal
+     *                 inset around them — deliberately one value)
+     * - gutter:       horizontal edge inset; ch-based so it stays on the
+     *                 character grid (this design has no px horizontal
+     *                 padding — the gutter IS the pad-x role)
+     *
+     * DELIBERATELY NOT TOKENIZED — fixed-height arithmetic mirrored by JS
+     * constants in constants.ts: the 24px in the register/reconciliation
+     * header min-height (DEFAULT_HEADER_HEIGHT = 1lh + 24px), the 8px in
+     * the group row height (GROUP_HEADER_EXTRA_HEIGHT), and the 56px in the
+     * register empty state (REGISTER_EMPTY_EXTRA_HEIGHT). Routing those
+     * through an overridable token would let a host silently desync
+     * virtualized spacer math from layout. */
+    --journals-radius: var(--journals-radius-override, 6px);
+    --journals-radius-small: var(--journals-radius-small-override, 4px);
+    --journals-pad-y: var(--journals-pad-y-override, 6px);
+    --journals-pad-y-dense: var(--journals-pad-y-dense-override, 4px);
+    --journals-gap: var(--journals-gap-override, 8px);
+    --journals-gutter: var(--journals-gutter-override, 2ch);
+
     color-scheme: light dark;
     display: block;
     font-family: var(--journals-font-family, var(--journals-font-fallback));
@@ -418,7 +458,7 @@
   /* ------------------ */
   [data-entry] {
     border: 1px solid var(--journals-hairline);
-    border-radius: 6px;
+    border-radius: var(--journals-radius);
     background-color: var(--journals-bg);
     overflow: hidden;
   }
@@ -433,7 +473,7 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0 1ch;
-    padding: 6px 2ch;
+    padding: var(--journals-pad-y) var(--journals-gutter);
     border-bottom: 1px solid var(--journals-hairline);
   }
 
@@ -456,7 +496,7 @@
 
   [data-tag],
   [data-link] {
-    border-radius: 6px;
+    border-radius: var(--journals-radius);
     padding: 0 0.75ch;
     background-color: color-mix(
       in lab,
@@ -481,7 +521,7 @@
   [data-postings] {
     display: grid;
     grid-template-columns: minmax(0, 1fr) max-content max-content max-content;
-    padding: 4px 0;
+    padding: var(--journals-pad-y-dense) 0;
   }
 
   [data-entry][data-line-numbers] [data-postings] {
@@ -514,11 +554,11 @@
     text-align: right;
     min-width: 3ch;
     user-select: none;
-    padding-left: 2ch;
+    padding-left: var(--journals-gutter);
   }
 
   [data-posting] [data-cell='account'] {
-    padding-left: 2ch;
+    padding-left: var(--journals-gutter);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -534,21 +574,21 @@
   }
 
   [data-posting] [data-cell='currency'] {
-    padding-right: 2ch;
+    padding-right: var(--journals-gutter);
   }
 
   [data-posting-annotation] {
     grid-column: 1 / -1;
     background-color: var(--journals-bg-elevated);
     border-block: 1px solid var(--journals-hairline);
-    padding: 4px 2ch;
+    padding: var(--journals-pad-y-dense) var(--journals-gutter);
   }
 
   /* Unbalanced entry footer */
   /* ----------------------- */
   [data-entry-footer] {
     border-top: 1px solid var(--journals-hairline);
-    padding: 4px 2ch;
+    padding: var(--journals-pad-y-dense) var(--journals-gutter);
   }
 
   [data-imbalance] {
@@ -585,7 +625,7 @@
   /* Same card shell as [data-entry] so diffs read as entries. */
   [data-entry-diff] {
     border: 1px solid var(--journals-hairline);
-    border-radius: 6px;
+    border-radius: var(--journals-radius);
     background-color: var(--journals-bg);
     overflow: hidden;
   }
@@ -594,7 +634,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 6px 2ch;
+    padding: var(--journals-pad-y) var(--journals-gutter);
     border-bottom: 1px solid var(--journals-hairline);
   }
 
@@ -735,6 +775,11 @@
     outline-offset: var(--journals-focus-ring-offset);
   }
 
+  /* Sticky register header. min-height MUST stay 1lh + 24px — the JS
+   * section/offset math mirrors it via DEFAULT_HEADER_HEIGHT (44px) in
+   * constants.ts. The 24px is deliberately a raw value, NOT a spacing
+   * token: an overridable token here could desync virtualized offsets
+   * from layout (see the token block on :host). */
   [data-register-header] {
     position: sticky;
     top: 0;
@@ -744,7 +789,7 @@
     justify-content: space-between;
     gap: 1ch;
     min-height: calc(1lh + 24px);
-    padding-inline: 2ch;
+    padding-inline: var(--journals-gutter);
     background-color: var(--journals-bg);
     border-bottom: 1px solid var(--journals-hairline);
   }
@@ -816,7 +861,7 @@
 
   [data-row] [data-cell='date'] {
     color: var(--journals-date);
-    padding-left: 2ch;
+    padding-left: var(--journals-gutter);
     white-space: nowrap;
   }
 
@@ -860,13 +905,13 @@
   [data-row] [data-cell='amount'] {
     text-align: right;
     white-space: nowrap;
-    padding-right: 2ch;
+    padding-right: var(--journals-gutter);
   }
 
   [data-row] [data-cell='balance'] {
     text-align: right;
     white-space: nowrap;
-    padding-right: 2ch;
+    padding-right: var(--journals-gutter);
     color: var(--journals-balance);
   }
 
@@ -897,6 +942,9 @@
    * into the virtualized row space. Height MUST stay 1lh + 8px — the JS
    * window math mirrors it via GROUP_HEADER_EXTRA_HEIGHT, and like the
    * register header it does not scale with density (only entry rows do).
+   * The 8px is deliberately raw, NOT var(--journals-gap) (which happens to
+   * default to the same 8px): routing it through an overridable token
+   * would let a host desync spacer heights from GROUP_HEADER_EXTRA_HEIGHT.
    * Deliberately not sticky in v1: sticky group headers inside a virtualized
    * body need per-group offset bookkeeping that is out of scope here. */
   [data-group-row] {
@@ -904,7 +952,7 @@
     grid-column: 1 / -1;
     align-items: center;
     height: calc(var(--journals-line-height, 20px) + 8px);
-    padding-inline: 2ch;
+    padding-inline: var(--journals-gutter);
     overflow: hidden;
     background-color: var(--journals-bg-elevated);
     border-block: 1px solid var(--journals-hairline);
@@ -1001,20 +1049,24 @@
    * 1lh + 56px — Register.getEstimatedHeight and
    * LedgerView.computeSectionOffsets mirror it via
    * REGISTER_EMPTY_EXTRA_HEIGHT — and, like the register header, it does
-   * not scale with density (only entry rows do). */
+   * not scale with density (only entry rows do). The 56px is deliberately
+   * raw, not a spacing token, for the same lockstep reason. */
   [data-register-empty] {
     display: flex;
     grid-column: 1 / -1;
     align-items: center;
     justify-content: center;
     height: calc(var(--journals-line-height, 20px) + 56px);
-    padding-inline: 2ch;
+    padding-inline: var(--journals-gutter);
     color: var(--journals-fg3);
     user-select: none;
   }
 
   /* Reconciliation */
   /* -------------- */
+  /* Mirrors the register header's shape: min-height MUST stay 1lh + 24px
+   * (the JS headerHeight default, DEFAULT_HEADER_HEIGHT) — the 24px stays
+   * raw, not tokenized, for the same lockstep reason. */
   [data-reconciliation-header] {
     position: sticky;
     top: 0;
@@ -1024,7 +1076,7 @@
     justify-content: space-between;
     gap: 2ch;
     min-height: calc(1lh + 24px);
-    padding-inline: 2ch;
+    padding-inline: var(--journals-gutter);
     background-color: var(--journals-bg);
     border-bottom: 1px solid var(--journals-hairline);
   }
@@ -1111,7 +1163,7 @@
     align-items: center;
     gap: 1ch;
     min-width: 0;
-    padding: 4px 2ch;
+    padding: var(--journals-pad-y-dense) var(--journals-gutter);
   }
 
   [data-recon-cell] [data-date] {
@@ -1148,7 +1200,7 @@
     color: var(--journals-fg3);
     font-size: 0.85em;
     border: 1px solid var(--journals-hairline);
-    border-radius: 6px;
+    border-radius: var(--journals-radius);
     padding: 0 0.75ch;
     user-select: none;
     white-space: nowrap;
@@ -1192,8 +1244,11 @@
     user-select: none;
   }
 
-  /* Center action gutter: small 4px-radius buttons that fade in on row
-   * hover. */
+  /* Center action gutter: small buttons (--journals-radius-small) that fade
+   * in on row hover. The 4px gap stays raw: the coarse-pointer hit-area
+   * overlay below hardcodes half of it (-2px inset) so adjacent accept/
+   * reject targets can never overlap — tokenizing one side of that pair
+   * would let an override break the invariant. */
   [data-recon-gutter] {
     display: flex;
     align-items: center;
@@ -1212,7 +1267,7 @@
     width: 1lh;
     height: 1lh;
     padding: 0;
-    border-radius: 4px;
+    border-radius: var(--journals-radius-small);
     background-color: transparent;
     color: var(--journals-fg3);
     font: inherit;
@@ -1287,8 +1342,8 @@
   [data-entry-stream] [data-stream-entries] {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 8px;
+    gap: var(--journals-gap);
+    padding: var(--journals-gap);
   }
 
   /* Sticky footer strip: running count pinned to the scroller's bottom
@@ -1301,7 +1356,7 @@
     align-items: center;
     gap: 1ch;
     min-height: calc(1lh + 8px);
-    padding-inline: 2ch;
+    padding-inline: var(--journals-gutter);
     background-color: var(--journals-bg);
     border-top: 1px solid var(--journals-hairline);
     font-variant-numeric: tabular-nums;
