@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo } from 'react';
+
 import {
   Reconciliation as ReconciliationComponent,
   type ReconciliationOptions,
@@ -36,8 +38,15 @@ export function Reconciliation({
   style,
   ssrHTML,
 }: ReconciliationProps): React.JSX.Element {
-  const mergedOptions: ReconciliationOptions =
-    colorScheme != null ? { ...options, colorScheme } : options;
+  // Memoized so the wrapper never manufactures a fresh options object on an
+  // unrelated parent re-render: the vanilla class treats a new reference as
+  // the data-change signal (see Reconciliation.setOptions), and a per-render
+  // spread would re-derive the match set — blowing away in-flight
+  // accept/reject state — whenever `colorScheme` is set.
+  const mergedOptions: ReconciliationOptions = useMemo(
+    () => (colorScheme != null ? { ...options, colorScheme } : options),
+    [options, colorScheme]
+  );
   const { ref } = useJournalsInstance<ReconciliationComponent>({
     create(container) {
       const instance = new ReconciliationComponent(mergedOptions, true);

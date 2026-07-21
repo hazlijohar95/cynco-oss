@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo } from 'react';
+
 import {
   Register as RegisterComponent,
   type RegisterOptions,
@@ -39,8 +41,14 @@ export function Register({
   style,
   ssrHTML,
 }: RegisterProps): React.JSX.Element {
-  const mergedOptions: RegisterOptions =
-    colorScheme != null ? { ...options, colorScheme } : options;
+  // Memoized so a stable caller-provided options object stays
+  // reference-stable through the wrapper: Register.setOptions bails out on
+  // same-reference options, and a per-render spread would force the full
+  // option-apply path on every unrelated parent re-render.
+  const mergedOptions: RegisterOptions = useMemo(
+    () => (colorScheme != null ? { ...options, colorScheme } : options),
+    [options, colorScheme]
+  );
   const { ref } = useJournalsInstance<RegisterComponent>({
     create(container) {
       const instance = new RegisterComponent(mergedOptions, true);
