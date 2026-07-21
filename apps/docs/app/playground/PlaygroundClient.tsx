@@ -37,6 +37,29 @@ interface LedgerData {
   skippedLines: number[];
 }
 
+// Primary display currency for the tree's balance column: the currency the
+// pasted data actually uses most (by posting count, first-seen tiebreak).
+// The parser accepts any currency per line, so hardcoding MYR would roll up
+// wrong-or-empty tree balances for non-MYR CSVs while the register beside
+// it stays per-currency correct.
+function pickDisplayCurrency(entries: LedgerEntry[]): string {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    for (const posting of entry.postings) {
+      counts.set(posting.currency, (counts.get(posting.currency) ?? 0) + 1);
+    }
+  }
+  let best = 'MYR';
+  let bestCount = 0;
+  for (const [currency, count] of counts) {
+    if (count > bestCount) {
+      best = currency;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
 // First leaf-ish default: the account with the most register rows makes the
 // initial right pane interesting without any clicking.
 function pickDefaultAccount(entries: LedgerEntry[]): string | null {
@@ -91,6 +114,11 @@ export function PlaygroundClient() {
     if (store == null || selectedAccount == null) return [];
     return buildRegisterRows(store, selectedAccount);
   }, [store, selectedAccount]);
+
+  const displayCurrency = useMemo(
+    () => (data == null ? 'MYR' : pickDisplayCurrency(data.entries)),
+    [data]
+  );
 
   const loadEntries = useCallback(
     (entries: LedgerEntry[], label: string, skippedLines: number[] = []) => {
@@ -275,7 +303,7 @@ export function PlaygroundClient() {
                 key={`tree-${data.version}`}
                 options={{
                   entries: data.entries,
-                  currency: 'MYR',
+                  currency: displayCurrency,
                   initialExpansion: 'all',
                   onSelect: (selectedPaths, focusedPath) => {
                     const path = selectedPaths[0] ?? focusedPath;

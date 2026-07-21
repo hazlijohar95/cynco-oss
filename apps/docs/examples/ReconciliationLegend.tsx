@@ -44,9 +44,12 @@ function Swatch({ kind }: { kind: LegendEntry['swatch'] }) {
     missing: ['recon-swatch-plain', 'recon-swatch-pinstripe'],
   };
   const [left, right] = halves[kind];
+  // aria-hidden, not aria-label: a label on a role-less <span> is ignored by
+  // most assistive tech anyway, and the adjacent State cell already names the
+  // state — the swatch is a visual duplicate.
   return (
     <span
-      aria-label={kind}
+      aria-hidden="true"
       className="flex h-6 w-6 gap-px overflow-hidden rounded-md shadow-[inset_0_0_0_1px_rgb(0_0_0_/_0.05)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255_/_0.08)]"
     >
       <span className={`h-full w-1/2 ${left}`} />

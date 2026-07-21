@@ -2,7 +2,26 @@
 @import 'tw-animate-css';
 
 @custom-variant light (&:is(.light *));
-@custom-variant dark (&:is(.dark *, .dark));
+/* Class-gated for explicit choices, with a media fallback for the default
+ * `system` preference, which deliberately leaves the html class off (see
+ * lib/theme.ts) — without the fallback every `dark:` utility is inert on a
+ * dark-OS first visit even though light-dark() renders the page dark. Same
+ * pattern as the shadow-component color-scheme rules further down. */
+/* stylelint-disable nesting-selector-no-missing-scoping-root --
+ * inside @custom-variant, `&` is Tailwind's utility placeholder, not CSS
+ * nesting, so there is deliberately no scoping root. */
+@custom-variant dark {
+  &:is(.dark *, .dark) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:not(:is(.light *, .light)) {
+      @slot;
+    }
+  }
+}
+/* stylelint-enable nesting-selector-no-missing-scoping-root */
 
 @theme {
   --font-geist: var(--font-geist-sans);
