@@ -16,14 +16,14 @@ gets published.
 
 ## What is published (and what is not)
 
-| Package           | npm | Notes                                                    |
-| ----------------- | --- | -------------------------------------------------------- |
-| `@cynco/theme`    | yes | No workspace dependencies.                               |
-| `@cynco/theming`  | yes | Depends on `@cynco/theme` (real npm dependency).         |
-| `@cynco/journals` | yes | Depends on `@cynco/theme` (real npm dependency).         |
-| `@cynco/accounts` | yes | Inlines `@cynco/ledger-core` and `@cynco/theme` in dist. |
+| Package             | npm | Notes                                                    |
+| ------------------- | --- | -------------------------------------------------------- |
+| `@cynco/theme`      | yes | No workspace dependencies.                               |
+| `@cynco/theming`    | yes | Depends on `@cynco/theme` (real npm dependency).         |
+| `@cynco/journals`   | yes | Depends on `@cynco/theme` (real npm dependency).         |
+| `@cynco/accounts`   | yes | Inlines `@cynco/ledger-core` and `@cynco/theme` in dist. |
 | `@cynco/statements` | yes | Inlines `@cynco/ledger-core` and `@cynco/theme` in dist. |
-| `@cynco/importers` | yes | No workspace dependencies (types lockstep-duplicated). |
+| `@cynco/importers`  | yes | No workspace dependencies (types lockstep-duplicated).   |
 
 `@cynco/ledger-core` and `@cynco/ledger-test-data` are **never** published. The
 ledger-core engine ships inside `@cynco/accounts`' `dist/` via tsdown's

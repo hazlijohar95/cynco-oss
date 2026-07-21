@@ -18,13 +18,13 @@ inside `@cynco/accounts`.
 #### Added
 
 - New package: bank statement parsers producing reconciliation-ready statement
-  lines and balanced draft ledger entries. Pure data, zero runtime
-  dependencies, no DOM.
+  lines and balanced draft ledger entries. Pure data, zero runtime dependencies,
+  no DOM.
 - `parseCsvStatement` — explicit column mapping (indices or header names, no
   sniffing), RFC 4180 tokenizer (quoted fields, escaped quotes, embedded
-  delimiters/newlines, CRLF), single-amount or debit/credit split columns,
-  four explicit date formats, decimal-comma amount support, malformed rows
-  skipped with a per-line reason — never silently dropped.
+  delimiters/newlines, CRLF), single-amount or debit/credit split columns, four
+  explicit date formats, decimal-comma amount support, malformed rows skipped
+  with a per-line reason — never silently dropped.
 - `parseOfx` — OFX 1.x (SGML) and 2.x (XML) via one tolerant tag scanner,
   `STMTTRN` extraction (FITID ids, signed amounts, date-prefix parsing),
   multi-statement grouping, `CURDEF` with explicit fallback.
@@ -36,8 +36,8 @@ inside `@cynco/accounts`.
 - Amounts parse from digit strings against the ISO 4217 exponent table — no
   floats anywhere; over-precise amounts are rejected, not rounded.
 - Statement-line and ledger types are duplicated from `@cynco/journals` with a
-  mechanical lockstep parity test, so parser output feeds the reconciliation
-  UI unadapted.
+  mechanical lockstep parity test, so parser output feeds the reconciliation UI
+  unadapted.
 
 ### @cynco/statements — 0.1.0-beta.1 (new package)
 
