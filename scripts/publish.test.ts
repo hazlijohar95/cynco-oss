@@ -291,13 +291,16 @@ describe('collectExportPaths', () => {
 });
 
 describe('publish configuration invariants', () => {
-  test('accounts is the only package with inlined dependencies, and they match its tsdown noExternal list', () => {
-    expect(PUBLISH_CONFIGS['@cynco/accounts']?.inlinedDependencies).toEqual([
-      '@cynco/ledger-core',
-      '@cynco/theme',
-    ]);
+  test('accounts and statements are the only packages with inlined dependencies, and they match their tsdown noExternal lists', () => {
+    const enginePackages = ['@cynco/accounts', '@cynco/statements'];
+    for (const name of enginePackages) {
+      expect(PUBLISH_CONFIGS[name]?.inlinedDependencies).toEqual([
+        '@cynco/ledger-core',
+        '@cynco/theme',
+      ]);
+    }
     for (const [name, config] of Object.entries(PUBLISH_CONFIGS)) {
-      if (name !== '@cynco/accounts') {
+      if (!enginePackages.includes(name)) {
         expect(config.inlinedDependencies).toEqual([]);
       }
     }

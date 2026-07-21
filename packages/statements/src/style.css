@@ -1,0 +1,221 @@
+@layer base, theme, rendered, unsafe;
+
+@layer base {
+  :host {
+    --statements-font-fallback:
+      'SF Mono', Monaco, Consolas, 'Ubuntu Mono', 'Liberation Mono',
+      'Courier New', monospace;
+
+    /*
+    // Available CSS Color Overrides
+    --statements-bg-override
+    --statements-fg-override
+    --statements-fg2-override
+    --statements-fg3-override
+    --statements-border-override
+    --statements-warn-override
+    --statements-danger-override
+
+    // Available CSS Layout Overrides
+    --statements-font-family
+    --statements-font-size
+    --statements-line-height
+    */
+
+    /* Every color resolves override → theme (@cynco/theme roles, injected as
+     * --statements-theme-* variables) → built-in light-dark() default, so one
+     * DOM serves both modes. Defaults are the exact cynco theme role values. */
+    --statements-bg: var(
+      --statements-bg-override,
+      var(--statements-theme-bg-editor, light-dark(#ffffff, #0a0a0a))
+    );
+    --statements-fg: var(
+      --statements-fg-override,
+      var(--statements-theme-fg-base, light-dark(#0a0a0a, #fafafa))
+    );
+    --statements-fg2: var(
+      --statements-fg2-override,
+      var(--statements-theme-fg-fg2, light-dark(#525252, #a3a3a3))
+    );
+    --statements-fg3: var(
+      --statements-fg3-override,
+      var(--statements-theme-fg-fg3, light-dark(#737373, #737373))
+    );
+    --statements-border: var(
+      --statements-border-override,
+      var(--statements-theme-border-editor, light-dark(#d4d4d4, #1d1d1d))
+    );
+    --statements-warn: var(
+      --statements-warn-override,
+      var(--statements-theme-states-warn, light-dark(#d5a910, #ffca00))
+    );
+    --statements-danger: var(
+      --statements-danger-override,
+      var(--statements-theme-states-danger, light-dark(#d52c36, #ff2e3f))
+    );
+
+    /* NOTE: 'in lab' rather than 'in oklch' — see the journals stylesheet:
+     * older embedded-chrome builds mis-handle color-mix in oklch. */
+    --statements-hairline: color-mix(
+      in lab,
+      var(--statements-border) 60%,
+      transparent
+    );
+
+    color-scheme: light dark;
+    display: block;
+    font-family: var(--statements-font-family, var(--statements-font-fallback));
+    font-size: var(--statements-font-size, 13px);
+    line-height: var(--statements-line-height, 20px);
+    background-color: var(--statements-bg);
+    color: var(--statements-fg);
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  /* Statement wrappers */
+  /* ------------------ */
+  [data-trial-balance],
+  [data-income-statement],
+  [data-balance-sheet] {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  [data-section] {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--statements-hairline);
+  }
+
+  [data-caption] {
+    text-align: left;
+    padding: 6px 2ch;
+    color: var(--statements-fg);
+    font-weight: 600;
+    caption-side: top;
+  }
+
+  [data-caption] [data-as-of-date] {
+    color: var(--statements-fg3);
+    font-weight: 400;
+  }
+
+  [data-section] th,
+  [data-section] td {
+    padding: 2px 2ch;
+    min-height: 1lh;
+  }
+
+  /* Column headers: quiet, small, right-aligned over the amount columns. */
+  [data-section] thead th {
+    color: var(--statements-fg3);
+    font-weight: 400;
+    font-size: 0.85em;
+    text-align: right;
+    border-bottom: 1px solid var(--statements-hairline);
+    white-space: nowrap;
+  }
+
+  [data-section] thead th[data-column='account'],
+  [data-section] thead th[data-column='type'] {
+    text-align: left;
+  }
+
+  /* Account rows: the account path is a row header, rendered as data — no
+   * heading weight. Hairline separators carry the structure. */
+  [data-row] th[data-cell='account'] {
+    font-weight: 400;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-row] td[data-cell='type'] {
+    color: var(--statements-fg3);
+    font-size: 0.85em;
+    white-space: nowrap;
+  }
+
+  /* Amount cells: right-aligned tabular numerals, the ledger register
+   * discipline — every digit column lines up down the page. */
+  [data-section] td:not([data-cell='type']) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* Abnormal balances (an asset in credit, income in debit): the classic
+   * review flag, restrained — warn color on the amounts only. */
+  [data-row][data-abnormal] td:not([data-cell='type']) {
+    color: var(--statements-warn);
+  }
+
+  /* Unclassified residue: muted, never hidden. */
+  [data-row][data-unclassified] th[data-cell='account'] {
+    color: var(--statements-fg2);
+    font-style: italic;
+  }
+
+  /* Group headers (Income, Expenses, Assets, …): quiet structural labels
+   * above their lines, separated by a hairline. */
+  [data-group-header] th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--statements-fg2);
+    border-bottom: 1px solid var(--statements-hairline);
+  }
+
+  /* Group totals (Total Income, Total Assets, …): a single rule above,
+   * reserving the double rule for the final proof line. */
+  [data-group-total] th,
+  [data-group-total] td {
+    border-top: 1px solid var(--statements-fg3);
+    font-weight: 600;
+  }
+
+  [data-group-total] th[data-cell='total-label'] {
+    text-align: left;
+  }
+
+  /* Computed equity lines (the virtual closing): rendered as data the
+   * derivation produced, visually distinguished from booked accounts. */
+  [data-row][data-computed] th[data-cell='account'] {
+    color: var(--statements-fg2);
+    font-style: italic;
+  }
+
+  /* Totals row: the classic accounting double rule above the proof line. */
+  [data-totals] th,
+  [data-totals] td,
+  [data-net-income] th,
+  [data-net-income] td,
+  tfoot [data-group-total] th,
+  tfoot [data-group-total] td {
+    border-top: 3px double var(--statements-fg3);
+    font-weight: 600;
+  }
+
+  [data-totals] th[data-cell='totals-label'],
+  [data-net-income] th[data-cell='net-income-label'] {
+    text-align: left;
+  }
+
+  /* Out-of-balance flag row: unmissable, in the danger color. The renderer
+   * never invents a plug to tie the columns — it flags instead. */
+  [data-imbalance] th,
+  [data-imbalance] td {
+    color: var(--statements-danger);
+  }
+
+  [data-imbalance] th[data-cell='imbalance-label'] {
+    text-align: left;
+    font-weight: 600;
+  }
+}

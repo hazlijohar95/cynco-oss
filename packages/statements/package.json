@@ -1,0 +1,90 @@
+{
+  "name": "@cynco/statements",
+  "version": "0.1.0-beta.1",
+  "description": "Cynco statements: trial balance and financial statement renderers derived from ledger entries",
+  "keywords": [
+    "accounting",
+    "balance-sheet",
+    "cynco",
+    "financial-statements",
+    "ledger",
+    "trial-balance"
+  ],
+  "homepage": "https://github.com/hazlijohar95/cynco-oss/tree/main/packages/statements",
+  "bugs": {
+    "url": "https://github.com/hazlijohar95/cynco-oss/issues"
+  },
+  "license": "MIT",
+  "author": "Hazli Johar <coding@hazli.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hazlijohar95/cynco-oss.git",
+    "directory": "packages/statements"
+  },
+  "files": [
+    "dist",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "dist/components/web-components.js"
+  ],
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/*"
+      ],
+      "react": [
+        "dist/react/index.d.ts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run statements:prepublish"
+  },
+  "dependencies": {
+    "@cynco/ledger-core": "workspace:*",
+    "@cynco/theme": "workspace:*"
+  },
+  "devDependencies": {
+    "@tsdown/css": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "autoprefixer": "catalog:",
+    "lightningcss": "catalog:",
+    "postcss": "catalog:",
+    "postcss-calc": "catalog:",
+    "postcss-nesting": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1 || ^19.0.0",
+    "react-dom": "^18.3.1 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  }
+}
