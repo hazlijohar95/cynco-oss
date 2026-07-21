@@ -799,9 +799,11 @@ export class Register implements VirtualizedInstance {
     this.ensureStickyGroupElement();
     this.interactionManager.setup(section);
     this.updateGridAttributes();
-    if (this.options.disableKeyboardNavigation !== true) {
-      section.addEventListener('keydown', this.handleKeyDown);
-    }
+    // Always attached; the handler gates on the CURRENT option value. A
+    // mount-time gate here would desync from updateGridAttributes when
+    // setOptions flips disableKeyboardNavigation at runtime — advertising a
+    // focusable grid (tabindex="0") that ignores every key, or the inverse.
+    section.addEventListener('keydown', this.handleKeyDown);
   }
 
   // (Re)derives the (grouped and/or filtered) row model + offsets. Null on
@@ -1219,6 +1221,11 @@ export class Register implements VirtualizedInstance {
   // the same space as selection — so group header rows are skipped without
   // any bookkeeping: they simply have no entry index.
   private handleKeyDown = (event: Event): void => {
+    // Checked per event, not at listener-attach time, so runtime option
+    // flips via setOptions take effect immediately (see adoptSection).
+    if (this.options.disableKeyboardNavigation === true) {
+      return;
+    }
     const keyboard = event as KeyboardEvent;
     // IME guard, first thing: keys consumed by an active composition
     // (Enter confirms a candidate, Escape dismisses one) must never drive
