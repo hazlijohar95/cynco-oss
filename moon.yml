@@ -18,8 +18,12 @@ language: 'typescript'
 # dist-producing package and lint orders itself after their builds.
 dependsOn:
   - 'theme'
+  - 'theming'
+  - 'ledger-core'
+  - 'ledger-test-data'
   - 'journals'
   - 'accounts'
+  - 'statements'
 
 workspace:
   inheritedTasks:
