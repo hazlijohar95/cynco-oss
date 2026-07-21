@@ -96,12 +96,24 @@ export function Header({ className }: HeaderProps) {
         </span>
       </Link>
 
+      {/* The center nav only renders where the full link row genuinely fits
+          (xl and up) — below that the hamburger menu owns navigation. The
+          links are nowrap and the list cannot shrink, so showing it any
+          earlier makes it spill over the brand on one side and under the
+          buttons on the other. flex-wrap is the safety net for user text
+          zoom: wrapped rows stay centered instead of overlapping. Home is
+          omitted because the brand mark already links home, and the
+          Performance lab (a diagnostics page) is omitted so the row fits on
+          one line at common laptop widths; the mobile menu and footer keep
+          the full SITE_LINKS list. */}
       <nav
         aria-label="Primary"
-        className="hidden min-w-0 flex-1 items-center justify-center md:flex"
+        className="hidden min-w-0 flex-1 items-center justify-center xl:flex"
       >
-        <ul className="m-0 flex list-none items-center p-0">
-          {SITE_LINKS.map(({ href, label }) => (
+        <ul className="m-0 flex list-none flex-wrap items-center justify-center p-0">
+          {SITE_LINKS.filter(
+            ({ href }) => href !== '/' && href !== '/ledger-dev'
+          ).map(({ href, label }) => (
             <li key={href}>
               <NavLink href={href} label={label} />
             </li>
@@ -109,7 +121,7 @@ export function Header({ className }: HeaderProps) {
         </ul>
       </nav>
 
-      <div className="ml-auto flex flex-none items-center gap-2 md:ml-0">
+      <div className="ml-auto flex flex-none items-center gap-2 xl:ml-0">
         <a
           href={GITHUB_URL}
           target="_blank"
@@ -133,7 +145,7 @@ export function Header({ className }: HeaderProps) {
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={menuOpen}
           aria-controls="site-mobile-menu"
-          className="md:hidden"
+          className="xl:hidden"
           onClick={() => setMenuOpen((open) => !open)}
         >
           <Menu size={16} />
@@ -144,7 +156,7 @@ export function Header({ className }: HeaderProps) {
         id="site-mobile-menu"
         aria-label="Primary"
         ref={menuRef}
-        className={cn('mobile-popover md:hidden', menuOpen && 'is-open')}
+        className={cn('mobile-popover xl:hidden', menuOpen && 'is-open')}
       >
         <div className="flex flex-col gap-1">
           {SITE_LINKS.map(({ href, label }) => (
