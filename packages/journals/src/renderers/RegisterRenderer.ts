@@ -1,4 +1,7 @@
-import { DEFAULT_HEADER_HEIGHT } from '../constants';
+import {
+  DEFAULT_HEADER_HEIGHT,
+  DEFAULT_REGISTER_EMPTY_LABEL,
+} from '../constants';
 import type {
   MinorUnits,
   RegisterDensity,
@@ -87,6 +90,13 @@ export interface RegisterRenderOptions {
    */
   maxSsrRows?: number;
   /**
+   * Guidance text shown in the `[data-register-empty]` block when the
+   * register has zero rows. Defaults to DEFAULT_REGISTER_EMPTY_LABEL. Lives
+   * on the render options (not just the client options) so SSR emits the
+   * same bytes the hydrated client would write — the byte-parity contract.
+   */
+  emptyLabel?: string;
+  /**
    * Sticky current-period label for grouped registers. Default ON whenever
    * `groupBy !== 'none'` (new surface, so no back-compat concern): a slim
    * aria-hidden mirror strip pinned just below the register's sticky header
@@ -160,6 +170,18 @@ export function finalRegisterBalances(
     }
   }
   return balances;
+}
+
+// The zero-row state: one full-span block of muted guidance inside the rows
+// grid, shared by SSR (renderRegisterHTML) and the client Register's window
+// commit so both paths produce identical bytes. A plain div, like the
+// spacers — deliberately no grid-row semantics, so aria-rowcount="0" stays
+// honest and the InteractionManager's [data-row] delegation ignores it.
+export function renderRegisterEmptyStateHTML(emptyLabel?: string): string {
+  return (
+    '<div data-register-empty>' +
+    `${escapeHtml(emptyLabel ?? DEFAULT_REGISTER_EMPTY_LABEL)}</div>`
+  );
 }
 
 // Sticky section header: account path plus current balances (one span per
@@ -486,7 +508,13 @@ export function renderRegisterHTML(
   html += '<div data-register-body>';
   html += '<div data-register-spacer="before" style="height: 0px"></div>';
   html += '<div data-register-rows>';
-  if (model != null) {
+  if (rows.length === 0) {
+    // Zero rows would otherwise leave a bare header over nothing — render
+    // the designed empty state instead. Checked before the model branches
+    // (an active filter over zero rows builds an empty model anyway) so
+    // every zero-row register takes exactly this path.
+    html += renderRegisterEmptyStateHTML(options.emptyLabel);
+  } else if (model != null) {
     html += renderRegisterVirtualRowsHTML(
       model,
       { start: 0, end: model.length },
@@ -549,6 +577,12 @@ function isRowIndexSelected(
 // the 'description' field by the caller) highlights matches within each line
 // independently — matching also treats payee and narration as separate lines
 // (the '\n'-joined corpus), so highlight and match agree by construction.
+// Both lines clip with text-overflow ellipsis, and a pure string builder
+// cannot know at render time whether clipping will actually occur — so every
+// line carries its full text as a title attribute unconditionally (the
+// accounts package's truncation tooltip, minus the layout read that would
+// break SSR/worker/client byte-parity). The title is the RAW escaped text,
+// never the filter-marked HTML: attribute values cannot carry markup.
 function renderDescriptionCellHTML(
   payee: string | null,
   narration: string,
@@ -558,14 +592,16 @@ function renderDescriptionCellHTML(
     filter != null
       ? renderFilterHighlightHTML(text, filter.lowerQuery)
       : escapeHtml(text);
+  const titleAttribute = (text: string): string =>
+    ` title="${escapeHtml(text)}"`;
   let html = '<span data-cell="description" role="gridcell">';
   if (payee != null && payee !== '') {
-    html += `<span data-payee>${renderText(payee)}</span>`;
+    html += `<span data-payee${titleAttribute(payee)}>${renderText(payee)}</span>`;
     if (narration !== '') {
-      html += `<span data-narration>${renderText(narration)}</span>`;
+      html += `<span data-narration${titleAttribute(narration)}>${renderText(narration)}</span>`;
     }
   } else if (narration !== '') {
-    html += `<span data-payee>${renderText(narration)}</span>`;
+    html += `<span data-payee${titleAttribute(narration)}>${renderText(narration)}</span>`;
   }
   html += '</span>';
   return html;

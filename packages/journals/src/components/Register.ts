@@ -5,6 +5,7 @@ import {
   DEFAULT_VIEWPORT_HEIGHT,
   GROUP_HEADER_EXTRA_HEIGHT,
   JOURNALS_TAG_NAME,
+  REGISTER_EMPTY_EXTRA_HEIGHT,
 } from '../constants';
 import {
   InteractionManager,
@@ -14,6 +15,7 @@ import { queueRender } from '../managers/UniversalRenderingManager';
 import {
   finalRegisterBalances,
   type RegisterRenderOptions,
+  renderRegisterEmptyStateHTML,
   renderRegisterHeaderHTML,
   renderRegisterRowsHTML,
   renderRegisterVirtualRowsHTML,
@@ -673,7 +675,17 @@ export class Register implements VirtualizedInstance {
   }
 
   getEstimatedHeight(): number {
-    const { headerHeight = DEFAULT_HEADER_HEIGHT } = this.options;
+    const {
+      headerHeight = DEFAULT_HEADER_HEIGHT,
+      lineHeight = DEFAULT_LINE_HEIGHT,
+    } = this.options;
+    // A zero-row register renders the fixed-height empty-state block in
+    // place of rows; it is real flow content, so estimates must count it or
+    // every section below an empty one drifts by its height. Density does
+    // not scale it (the group-header precedent).
+    if (this.rows.length === 0) {
+      return headerHeight + lineHeight + REGISTER_EMPTY_EXTRA_HEIGHT;
+    }
     const bodyHeight =
       this.rowOffsets != null
         ? this.rowOffsets[this.rowOffsets.length - 1]
@@ -998,6 +1010,20 @@ export class Register implements VirtualizedInstance {
       );
     }
     this.renderedRange = range;
+
+    // Zero rows: commit the designed empty state instead of a bare header
+    // over nothing — the same bytes renderRegisterHTML emits for SSR, so
+    // hydration adoption stays a no-op rewrite. Always synchronous and never
+    // through the worker pool (there is no row window to build); the version
+    // bump invalidates any in-flight worker window from a previous non-empty
+    // dataset so a stale response cannot clobber the block.
+    if (this.rows.length === 0) {
+      this.windowRenderVersion += 1;
+      rowsElement.innerHTML = renderRegisterEmptyStateHTML(
+        this.options.emptyLabel
+      );
+      return;
+    }
 
     const pool = this.options.workerPool;
     if (pool == null || !pool.isWorkingPool()) {

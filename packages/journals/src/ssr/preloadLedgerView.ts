@@ -6,6 +6,7 @@ import {
 } from '../constants';
 import {
   finalRegisterBalances,
+  renderRegisterEmptyStateHTML,
   renderRegisterHeaderHTML,
   renderRegisterRowsHTML,
 } from '../renderers/RegisterRenderer';
@@ -29,6 +30,12 @@ export interface PreloadLedgerViewOptions {
   maxRowsPerSection?: number;
   /** Total row cap across sections; defaults to SSR_MAX_PRELOADED_TOTAL_ROWS. */
   maxTotalRows?: number;
+  /**
+   * Guidance text for zero-row sections. Must match the client
+   * LedgerView's `emptyLabel` option so the SSR bytes agree with what the
+   * hydrated Register's first window commit writes.
+   */
+  emptyLabel?: string;
 }
 
 // Produces the shadow-root HTML for a LedgerView (the preloadRegister
@@ -69,7 +76,8 @@ export function preloadLedgerViewHTML(
       idPrefix,
       density,
       preloadCount,
-      (section.rows.length - preloadCount) * rowHeight
+      (section.rows.length - preloadCount) * rowHeight,
+      options.emptyLabel
     );
   }
   html += '</div></div>';
@@ -87,7 +95,8 @@ function renderLedgerSectionHTML(
   idPrefix: string | undefined,
   density: RegisterDensity,
   preloadCount: number,
-  afterSpacerHeight: number
+  afterSpacerHeight: number,
+  emptyLabel: string | undefined
 ): string {
   const { account, rows } = section;
   const balance = finalRegisterBalances(rows);
@@ -100,12 +109,18 @@ function renderLedgerSectionHTML(
   html += '<div data-register-body>';
   html += '<div data-register-spacer="before" style="height: 0px"></div>';
   html += '<div data-register-rows>';
-  html += renderRegisterRowsHTML(
-    rows,
-    { start: 0, end: preloadCount },
-    null,
-    idPrefix
-  );
+  // Zero-row sections preload the same empty state the hydrated Register's
+  // first window commit writes (renderRegisterHTML's zero-row branch), so
+  // adoption rewrites identical bytes.
+  html +=
+    rows.length === 0
+      ? renderRegisterEmptyStateHTML(emptyLabel)
+      : renderRegisterRowsHTML(
+          rows,
+          { start: 0, end: preloadCount },
+          null,
+          idPrefix
+        );
   html += '</div>';
   html += `<div data-register-spacer="after" style="height: ${afterSpacerHeight}px"></div>`;
   html += '</div></section>';

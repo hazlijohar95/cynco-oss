@@ -41,6 +41,26 @@ export const DEFAULT_GROUP_HEADER_HEIGHT: number =
   DEFAULT_LINE_HEIGHT + GROUP_HEADER_EXTRA_HEIGHT;
 
 /**
+ * Default guidance text inside `[data-register-empty]` when a register has
+ * zero rows. Hosts override per instance via `emptyLabel` on
+ * RegisterRenderOptions/RegisterOptions; the default lives here (not inline
+ * in the renderer) so SSR, worker, and client paths can never disagree on
+ * the fallback bytes.
+ */
+export const DEFAULT_REGISTER_EMPTY_LABEL = 'No transactions in this view';
+
+/**
+ * Extra vertical space on the register empty-state block beyond one text
+ * line, in px. The empty state is real flow content inside the section
+ * body, so its height feeds the same estimate arithmetic as rows do:
+ * `lineHeight + REGISTER_EMPTY_EXTRA_HEIGHT` must match the `height` on
+ * `[data-register-empty]` in style.css (1lh + 56px) or LedgerView section
+ * offsets drift from layout for every section below an empty one. Like
+ * group headers it does NOT scale with density.
+ */
+export const REGISTER_EMPTY_EXTRA_HEIGHT = 56;
+
+/**
  * Cap on the character length of a header field eligible for word-level
  * diffing. Fields longer than this on either side skip the O(words²) LCS and
  * render as wholly changed instead.

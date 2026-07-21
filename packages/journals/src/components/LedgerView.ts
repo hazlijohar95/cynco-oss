@@ -3,6 +3,7 @@ import {
   DEFAULT_LINE_HEIGHT,
   DEFAULT_VIEWPORT_HEIGHT,
   JOURNALS_TAG_NAME,
+  REGISTER_EMPTY_EXTRA_HEIGHT,
 } from '../constants';
 import type {
   ColorScheme,
@@ -55,6 +56,13 @@ export interface LedgerViewOptions {
    * contract). Auto-generated when omitted (client-only rendering).
    */
   id?: string;
+  /**
+   * Guidance text for zero-row sections (see RegisterRenderOptions
+   * .emptyLabel), shared by every section. Pass the same value to
+   * `preloadLedgerViewHTML` so SSR emits the bytes the hydrated client
+   * would write.
+   */
+  emptyLabel?: string;
   /** Spring tuning for the shared smooth-scroll engine (one per view). */
   smoothScrollSettings?: SmoothScrollSettings;
   /** Fired when any row is clicked, with the owning account path. */
@@ -461,6 +469,7 @@ export class LedgerView {
         lineHeight: this.options.lineHeight,
         headerHeight: this.options.headerHeight,
         overscanRows: this.options.overscanRows,
+        emptyLabel: this.options.emptyLabel,
         id: `${this.viewId}-s${this.nextSectionSerial++}`,
         smoothScroller: this.smoothScroller,
         getOffsetTop: () => this.sectionOffsets[entry.index],
@@ -604,13 +613,24 @@ export class LedgerView {
   }
 
   private computeSectionOffsets(sections: readonly LedgerSection[]): number[] {
-    const { headerHeight = DEFAULT_HEADER_HEIGHT } = this.options;
+    const {
+      headerHeight = DEFAULT_HEADER_HEIGHT,
+      lineHeight = DEFAULT_LINE_HEIGHT,
+    } = this.options;
     const rowHeight = this.getRowHeight();
     const offsets: number[] = [];
     let offset = 0;
     for (const section of sections) {
       offsets.push(offset);
-      offset += headerHeight + section.rows.length * rowHeight;
+      // Zero-row sections render the fixed-height empty-state block instead
+      // of rows; it is real flow content, so the estimate must count it or
+      // every offset below an empty section drifts by its height. Must
+      // agree with Register.getEstimatedHeight (density never scales it).
+      offset +=
+        headerHeight +
+        (section.rows.length === 0
+          ? lineHeight + REGISTER_EMPTY_EXTRA_HEIGHT
+          : section.rows.length * rowHeight);
     }
     return offsets;
   }

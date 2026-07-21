@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { MINUS_SIGN } from '../src/constants';
+import { DEFAULT_REGISTER_EMPTY_LABEL, MINUS_SIGN } from '../src/constants';
 import {
   finalRegisterBalances,
+  renderRegisterEmptyStateHTML,
   renderRegisterHeaderHTML,
   renderRegisterHTML,
   renderRegisterRowHTML,
@@ -104,6 +105,63 @@ describe('renderRegisterRowHTML', () => {
     const rows = makeRows(1);
     const row = parse(renderRegisterRowHTML(rows[0], 0, true));
     expect(row.getAttribute('data-row-selected')).toBe('true');
+  });
+
+  test('description lines carry full-text title attributes (truncation tooltips)', () => {
+    // Both lines ellipsize in CSS and the pure renderer cannot know whether
+    // clipping occurs, so the title is emitted unconditionally on both.
+    const rows = makeRows(1);
+    const row = parse(renderRegisterRowHTML(rows[0], 0, false));
+    expect(row.querySelector('[data-payee]')?.getAttribute('title')).toBe(
+      'Payee 0'
+    );
+    expect(row.querySelector('[data-narration]')?.getAttribute('title')).toBe(
+      'Narration 0'
+    );
+  });
+
+  test('promoted narration (payee-less entry) titles the primary line', () => {
+    const entry = makeEntry({ payee: null, narration: 'Direct debit' });
+    const rowData: RegisterRowData = {
+      entry,
+      posting: entry.postings[0],
+      runningBalance: new Map([['MYR', 10_000]]),
+    };
+    const row = parse(renderRegisterRowHTML(rowData, 0, false));
+    expect(row.querySelector('[data-payee]')?.getAttribute('title')).toBe(
+      'Direct debit'
+    );
+    expect(row.querySelector('[data-narration]')).toBeNull();
+  });
+
+  test('titles are HTML-escaped and never carry filter markup', () => {
+    const entry = makeEntry({
+      payee: '"Ampersand & Sons" <BHD>',
+      narration: 'Invoice <mark>',
+    });
+    const rowData: RegisterRowData = {
+      entry,
+      posting: entry.postings[0],
+      runningBalance: new Map([['MYR', 10_000]]),
+    };
+    const row = parse(
+      renderRegisterRowHTML(rowData, 0, false, 1, undefined, {
+        lowerQuery: 'ampersand',
+        fields: new Set(['description']),
+      })
+    );
+    // getAttribute returns the decoded value: the raw text round-trips.
+    expect(row.querySelector('[data-payee]')?.getAttribute('title')).toBe(
+      '"Ampersand & Sons" <BHD>'
+    );
+    expect(row.querySelector('[data-narration]')?.getAttribute('title')).toBe(
+      'Invoice <mark>'
+    );
+    // The visible line still carries the highlight; the attribute does not.
+    expect(
+      row.querySelector('[data-payee] mark[data-filter-match]')
+    ).not.toBeNull();
+    expect(row.querySelectorAll('mark').length).toBe(1);
   });
 
   test('escapes a malicious flag from an untyped host (XSS)', () => {
@@ -275,5 +333,49 @@ describe('renderRegisterHTML', () => {
       renderRegisterHTML(rows, { account: ACCOUNT, maxSsrRows: 1000 })
     );
     expect(section.querySelectorAll('[data-row]').length).toBe(3);
+  });
+});
+
+describe('register empty state', () => {
+  test('zero rows render the empty-state block with the default label', () => {
+    const section = parse(renderRegisterHTML([], { account: ACCOUNT }));
+    const empty = section.querySelector('[data-register-empty]');
+    expect(empty).not.toBeNull();
+    expect(empty?.textContent).toBe(DEFAULT_REGISTER_EMPTY_LABEL);
+    // The sticky header (balance-less: the null case) and both spacers
+    // survive around it — the empty state replaces only the rows.
+    expect(section.querySelector('[data-register-header]')).not.toBeNull();
+    expect(section.querySelector('[data-balance-amount]')).toBeNull();
+    expect(section.querySelectorAll('[data-register-spacer]').length).toBe(2);
+    expect(section.querySelectorAll('[data-row]').length).toBe(0);
+    expect(section.getAttribute('aria-rowcount')).toBe('0');
+  });
+
+  test('emptyLabel overrides the guidance text and is escaped', () => {
+    const section = parse(
+      renderRegisterHTML([], {
+        account: ACCOUNT,
+        emptyLabel: 'No entries match <this> period & view',
+      })
+    );
+    const empty = section.querySelector('[data-register-empty]');
+    expect(empty?.textContent).toBe('No entries match <this> period & view');
+    expect(empty?.children.length).toBe(0);
+  });
+
+  test('non-empty registers never render the empty state', () => {
+    const section = parse(
+      renderRegisterHTML(makeRows(3), { account: ACCOUNT })
+    );
+    expect(section.querySelector('[data-register-empty]')).toBeNull();
+  });
+
+  test('renderRegisterEmptyStateHTML defaults and overrides agree with the section path', () => {
+    expect(renderRegisterEmptyStateHTML()).toBe(
+      `<div data-register-empty>${DEFAULT_REGISTER_EMPTY_LABEL}</div>`
+    );
+    expect(renderRegisterEmptyStateHTML('Nothing here')).toBe(
+      '<div data-register-empty>Nothing here</div>'
+    );
   });
 });

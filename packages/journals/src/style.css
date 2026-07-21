@@ -38,11 +38,14 @@
     --journals-pending-override
     --journals-flagged-override
     --journals-void-override
+    --journals-focus-ring-color-override
 
     // Available CSS Layout Overrides
     --journals-font-family
     --journals-font-size
     --journals-line-height
+    --journals-focus-ring-width-override
+    --journals-focus-ring-offset-override
     */
 
     /* Every color resolves override → theme (@cynco/theme roles, injected as
@@ -228,6 +231,22 @@
       color-mix(in lab, var(--journals-bg) 66%, var(--journals-match))
     );
 
+    /* Focus ring tokens, matching the accounts package's treatment (1px
+     * ring at -1px offset) so both packages speak one focus language when
+     * composed side by side. The color resolves override → accent, and the
+     * accent itself already resolves override → theme → default, so the
+     * ring follows the same token chain as every other color. Drawn with
+     * `outline`, which is layout-neutral by definition. */
+    --journals-focus-ring-width: var(--journals-focus-ring-width-override, 1px);
+    --journals-focus-ring-offset: var(
+      --journals-focus-ring-offset-override,
+      -1px
+    );
+    --journals-focus-ring-color: var(
+      --journals-focus-ring-color-override,
+      var(--journals-accent)
+    );
+
     color-scheme: light dark;
     display: block;
     font-family: var(--journals-font-family, var(--journals-font-fallback));
@@ -272,6 +291,14 @@
      * which Chrome's scroll anchoring would "compensate" by shifting
      * scrollTop, corrupting the window math. */
     overflow-anchor: none;
+    /* Window commits are innerHTML writes inside this element; layout
+     * containment tells the engine their invalidation can never leak past
+     * the scroller, so the host page around a busy register is not
+     * re-laid-out per scroll frame. `style` is free (no counters/quotes in
+     * here). Deliberately NOT `size`/`strict`: the scroller sizes from the
+     * host, and size containment breaks position:sticky in Firefox — the
+     * sticky section headers must survive. */
+    contain: layout style;
   }
 
   /* Hover-revealed scrollbars: fully transparent at rest, thumb painted only
@@ -690,18 +717,22 @@
 
   /* Keyboard-focus ring on the grid itself, but only until a row takes
    * virtual focus — once [data-focused] exists the row ring below is the
-   * sole indicator (both at once would be noise). */
+   * sole indicator (both at once would be noise). Drawn from the shared
+   * ring tokens so the register and the accounts tree paint the same ring
+   * when composed together; outline never affects layout. */
   [data-register]:focus-visible:not(:has([data-row][data-focused='true'])) {
-    outline: 2px solid var(--journals-accent);
-    outline-offset: -2px;
+    outline: var(--journals-focus-ring-width) solid
+      var(--journals-focus-ring-color);
+    outline-offset: var(--journals-focus-ring-offset);
   }
 
   /* Virtually focused row: an inset accent ring, gated on the grid's
    * :focus-visible so it appears for keyboard interaction only (the
    * accounts-tree focus treatment adapted to full-bleed rows). */
   [data-register]:focus-visible [data-row][data-focused='true'] {
-    outline: 2px solid var(--journals-accent);
-    outline-offset: -2px;
+    outline: var(--journals-focus-ring-width) solid
+      var(--journals-focus-ring-color);
+    outline-offset: var(--journals-focus-ring-offset);
   }
 
   [data-register-header] {
@@ -937,8 +968,10 @@
 
   /* Virtualization buffers: 45° pinstripes on an 8px tile mark space where
    * rows exist but are not currently rendered. The √2 factor approximates
-   * the diagonal repeat distance. */
+   * the diagonal repeat distance. The register empty state borrows the same
+   * texture so "no rows here" always reads in one visual vocabulary. */
   [data-register-spacer],
+  [data-register-empty],
   [data-recon-empty] {
     background-size: 8px 8px;
     background-position: 5px 0;
@@ -950,6 +983,34 @@
       var(--journals-bg-buffer) calc(3px * 1.414),
       var(--journals-bg-buffer) calc(4px * 1.414)
     );
+  }
+
+  /* Spacers are childless divs whose height is set inline by the window
+   * math and whose width fills the body block — nothing about their size or
+   * paint depends on content, so full containment (`strict` = layout +
+   * paint + size) is provably safe and lets the engine skip them entirely
+   * when spacer heights are rewritten every scroll frame. Rows themselves
+   * must stay containment-free: they size the shared subgrid tracks. */
+  [data-register-spacer] {
+    contain: strict;
+  }
+
+  /* Register empty state: full-span muted guidance under the sticky header
+   * so a zero-row register reads as designed emptiness (the pinstripe
+   * buffer texture, above) rather than a truncated render. Height MUST stay
+   * 1lh + 56px — Register.getEstimatedHeight and
+   * LedgerView.computeSectionOffsets mirror it via
+   * REGISTER_EMPTY_EXTRA_HEIGHT — and, like the register header, it does
+   * not scale with density (only entry rows do). */
+  [data-register-empty] {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: center;
+    height: calc(var(--journals-line-height, 20px) + 56px);
+    padding-inline: 2ch;
+    color: var(--journals-fg3);
+    user-select: none;
   }
 
   /* Reconciliation */
@@ -1168,6 +1229,29 @@
     opacity: 1;
   }
 
+  /* Touch devices have no hover to reveal the gutter actions, so the
+   * opacity:0 resting state above would make accept/reject undiscoverable —
+   * on coarse pointers they rest at a quieter tint instead (hover/active
+   * still lifts them to full opacity via the rule above, which sticky-hover
+   * taps trigger). The ::after overlay grows each button's hit area to a
+   * comfortable 34px in the scroll axis without touching layout — rows are
+   * fixed-height, so the buttons cannot grow for real. Horizontally the
+   * overlay stops at half the 4px gap between accept and reject: a mis-tap
+   * that lands on the WRONG verdict is worse than a slightly narrower
+   * target, so adjacent hit areas must never overlap. */
+  @media (pointer: coarse) {
+    [data-recon-action] {
+      position: relative;
+      opacity: 0.55;
+    }
+
+    [data-recon-action]::after {
+      content: '';
+      position: absolute;
+      inset: calc((100% - 34px) / 2) -2px;
+    }
+  }
+
   [data-recon-action='accept']:hover {
     background-color: var(--journals-reconciled);
     color: var(--journals-bg);
@@ -1242,5 +1326,25 @@
 
   [data-stream-state][data-stream-done='true'] {
     color: var(--journals-reconciled);
+  }
+
+  /* Reduced motion */
+  /* -------------- */
+  /* Host pages cannot honor prefers-reduced-motion for us: document-level
+   * rules do not pierce the shadow root, so the opt-out must live in this
+   * stylesheet. The media query itself still evaluates against the user's
+   * OS preference inside a shadow root. Every transition above is a color/
+   * opacity fade (hover tints, recon action reveals, stream state), so they
+   * snap rather than animate — none of them carries meaning through motion. */
+  @media (prefers-reduced-motion: reduce) {
+    [data-tag],
+    [data-link],
+    [data-posting],
+    [data-row],
+    [data-recon-row],
+    [data-recon-action],
+    [data-stream-state] {
+      transition: none;
+    }
   }
 }
