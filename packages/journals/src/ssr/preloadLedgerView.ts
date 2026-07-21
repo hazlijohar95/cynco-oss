@@ -5,6 +5,7 @@ import {
   SSR_MAX_PRELOADED_TOTAL_ROWS,
 } from '../constants';
 import {
+  finalRegisterBalances,
   renderRegisterHeaderHTML,
   renderRegisterRowsHTML,
 } from '../renderers/RegisterRenderer';
@@ -89,7 +90,7 @@ function renderLedgerSectionHTML(
   afterSpacerHeight: number
 ): string {
   const { account, rows } = section;
-  const balance = rows.length > 0 ? rows[rows.length - 1].runningBalance : null;
+  const balance = finalRegisterBalances(rows);
   let html =
     `<section data-register data-density="${density}" role="grid"` +
     ` aria-label="${escapeHtml(account)}"` +

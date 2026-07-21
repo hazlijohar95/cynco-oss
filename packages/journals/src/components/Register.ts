@@ -12,6 +12,7 @@ import {
 } from '../managers/InteractionManager';
 import { queueRender } from '../managers/UniversalRenderingManager';
 import {
+  finalRegisterBalances,
   type RegisterRenderOptions,
   renderRegisterHeaderHTML,
   renderRegisterRowsHTML,
@@ -481,7 +482,7 @@ export class Register implements VirtualizedInstance {
       const template = document.createElement('div');
       template.innerHTML = renderRegisterHeaderHTML(
         this.options.account,
-        rows.length > 0 ? rows[rows.length - 1].runningBalance : null
+        finalRegisterBalances(rows)
       );
       const nextHeader = template.firstElementChild;
       if (nextHeader instanceof HTMLElement) {

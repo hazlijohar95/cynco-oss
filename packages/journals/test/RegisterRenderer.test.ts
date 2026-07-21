@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { MINUS_SIGN } from '../src/constants';
 import {
+  finalRegisterBalances,
   renderRegisterHeaderHTML,
   renderRegisterHTML,
   renderRegisterRowHTML,
@@ -168,6 +169,67 @@ describe('renderRegisterHeaderHTML', () => {
   test('empty registers render a header without balances', () => {
     const header = parse(renderRegisterHeaderHTML(ACCOUNT, null));
     expect(header.querySelector('[data-balance-amount]')).toBeNull();
+  });
+});
+
+describe('finalRegisterBalances', () => {
+  test('empty rows produce null', () => {
+    expect(finalRegisterBalances([])).toBeNull();
+  });
+
+  test('collects the latest balance per currency across single-entry maps', () => {
+    // The @cynco/ledger-core adapter shape: each row's map carries only the
+    // posting's own currency. Reading only the LAST row would drop MYR here.
+    const entry = makeEntry();
+    const rows: RegisterRowData[] = [
+      {
+        entry,
+        posting: entry.postings[0],
+        runningBalance: new Map([['MYR', 10_000]]),
+      },
+      {
+        entry,
+        posting: entry.postings[0],
+        runningBalance: new Map([['USD', -5_000]]),
+      },
+      {
+        entry,
+        posting: entry.postings[0],
+        runningBalance: new Map([['MYR', 12_500]]),
+      },
+    ];
+    const balances = finalRegisterBalances(rows);
+    expect(balances).not.toBeNull();
+    expect(Array.from(balances ?? [])).toEqual([
+      ['MYR', 12_500],
+      ['USD', -5_000],
+    ]);
+  });
+
+  test('full per-currency maps behave like the last row', () => {
+    const entry = makeEntry();
+    const rows: RegisterRowData[] = [
+      {
+        entry,
+        posting: entry.postings[0],
+        runningBalance: new Map([
+          ['MYR', 1_000],
+          ['USD', 2_000],
+        ]),
+      },
+      {
+        entry,
+        posting: entry.postings[0],
+        runningBalance: new Map([
+          ['MYR', 3_000],
+          ['USD', 4_000],
+        ]),
+      },
+    ];
+    expect(Array.from(finalRegisterBalances(rows) ?? [])).toEqual([
+      ['MYR', 3_000],
+      ['USD', 4_000],
+    ]);
   });
 });
 

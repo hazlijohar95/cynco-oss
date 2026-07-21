@@ -17,9 +17,11 @@ export interface LedgerCoreRegisterRow {
 /**
  * Adapts a `@cynco/ledger-core` register row into the renderer's
  * {@link RegisterRowData}. The data layer carries the running balance as a
- * plain own-currency number; the renderer expects a per-currency map but only
- * ever reads the posting's own currency, so the conversion is a single-entry
- * map keyed by `posting.currency`.
+ * plain own-currency number; the renderer expects a per-currency map, so the
+ * conversion is a single-entry map keyed by `posting.currency`. Row cells
+ * read only the posting's own currency, and the sticky header aggregates the
+ * latest balance per currency across ALL rows (see finalRegisterBalances),
+ * so single-entry maps stay correct on multi-currency accounts.
  *
  * Kept as one small, tested boundary function rather than an inline reshape at
  * every call site: it is the single place the "number vs. per-currency map"

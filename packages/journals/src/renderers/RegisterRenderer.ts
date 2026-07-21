@@ -141,6 +141,27 @@ export function prepareRegisterFilter(
 // Like EntryRenderer, these are pure string builders shared by the client
 // Register component (innerHTML) and the SSR preload path. No DOM APIs.
 
+// Final per-currency balances for the sticky header: the LATEST running
+// balance each currency reports across the rows. With full per-currency
+// maps this equals the last row's map for free; with the single-entry maps
+// the `@cynco/ledger-core` adapter produces (one currency per posting —
+// see toRegisterRowData), reading only the LAST row would drop every other
+// currency from the header on multi-currency accounts.
+export function finalRegisterBalances(
+  rows: readonly RegisterRowData[]
+): ReadonlyMap<string, MinorUnits> | null {
+  if (rows.length === 0) {
+    return null;
+  }
+  const balances = new Map<string, MinorUnits>();
+  for (const row of rows) {
+    for (const [currency, amount] of row.runningBalance) {
+      balances.set(currency, amount);
+    }
+  }
+  return balances;
+}
+
 // Sticky section header: account path plus current balances (one span per
 // currency present in the final running balance).
 export function renderRegisterHeaderHTML(
@@ -409,7 +430,7 @@ export function renderRegisterHTML(
   // The header balance stays the FULL register's running balance even under
   // a filter: it names the account's balance, not a sum of visible rows, so
   // filtering must not restate it.
-  const balance = rows.length > 0 ? rows[rows.length - 1].runningBalance : null;
+  const balance = finalRegisterBalances(rows);
   const filter =
     options.filter != null && options.filter.query !== ''
       ? options.filter
