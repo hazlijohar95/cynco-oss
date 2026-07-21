@@ -153,9 +153,13 @@ interface DraftEntry {
  * Generates a deterministic list of balanced ledger entries dated within
  * `[startDate, endDate]`, sorted by `(date, id)` with ids assigned in date
  * order (`e0000001`, ...). Scenarios mirror a Malaysian SME's activity:
- * credit sales with SST, marketplace settlements, supplier bills, payroll
- * runs with EPF splits, bank transfers, and (when more than one currency is
- * configured) export sales including occasional true multi-currency entries.
+ * credit sales with SST, customer collections against AR, marketplace
+ * settlements, supplier bills, payroll runs with EPF splits, bank transfers,
+ * and (when more than one currency is configured) export sales including
+ * occasional true multi-currency entries. The scenario mix is tuned so the
+ * generated company is a healthy going concern — profitable with positive
+ * cash — because the statement demos derive real financial statements from
+ * these books and an insolvent showcase company reads as a bug.
  */
 export function generateLedger(options: GenerateLedgerOptions): LedgerEntry[] {
   const {
@@ -185,9 +189,9 @@ export function generateLedger(options: GenerateLedgerOptions): LedgerEntry[] {
     let narration: string;
     let postings: Posting[];
 
-    if (scenarioRoll < 0.25) {
+    if (scenarioRoll < 0.22) {
       // Credit sale with 8% SST: AR carries the gross, income and SST split it.
-      const net = random.nextInt(5, 500) * 100;
+      const net = random.nextInt(50, 5_000) * 100;
       const sst = exactPercentOfWhole(net, 8);
       payee = random.pick(SALE_PAYEES);
       narration = random.pick(SALE_NARRATIONS);
@@ -209,8 +213,27 @@ export function generateLedger(options: GenerateLedgerOptions): LedgerEntry[] {
         },
       ];
     } else if (scenarioRoll < 0.35) {
+      // Customer payment collecting earlier credit sales: cash in, AR down.
+      // Without collections the books bleed cash forever while AR balloons —
+      // the generated company must look like a going concern, not a write-off.
+      const amount = random.nextInt(100, 8_000) * 100;
+      payee = random.pick(SALE_PAYEES);
+      narration = 'Customer payment received';
+      postings = [
+        {
+          account: random.pick(CASH_ACCOUNTS),
+          amount,
+          currency: homeCurrency,
+        },
+        {
+          account: 'Assets:Current:AR',
+          amount: -amount,
+          currency: homeCurrency,
+        },
+      ];
+    } else if (scenarioRoll < 0.45) {
       // Marketplace settlement: cash in net of platform commission.
-      const gross = random.nextInt(3, 300) * 100;
+      const gross = random.nextInt(20, 2_000) * 100;
       const commission = exactPercentOfWhole(gross, 12);
       payee = random.pick(MARKETPLACE_PAYEES);
       narration = 'Marketplace settlement payout';
@@ -231,7 +254,7 @@ export function generateLedger(options: GenerateLedgerOptions): LedgerEntry[] {
           currency: homeCurrency,
         },
       ];
-    } else if (scenarioRoll < 0.75) {
+    } else if (scenarioRoll < 0.8) {
       // Supplier bill paid from cash or card.
       const amount = random.nextInt(1, 800) * 100;
       const profile = random.pick(EXPENSE_PROFILES);
@@ -245,10 +268,10 @@ export function generateLedger(options: GenerateLedgerOptions): LedgerEntry[] {
         { account: profile.account, amount, currency: homeCurrency },
         { account: settlement, amount: -amount, currency: homeCurrency },
       ];
-    } else if (scenarioRoll < 0.8) {
+    } else if (scenarioRoll < 0.85) {
       // Payroll run: gross salary plus employer EPF, offset by the EPF
       // liability (employee 11% + employer 13%) and net cash out.
-      const gross = random.nextInt(30, 150) * 10_000;
+      const gross = random.nextInt(20, 80) * 10_000;
       const employeeEpf = exactPercentOfWhole(gross, 11);
       const employerEpf = exactPercentOfWhole(gross, 13);
       payee = null;
@@ -275,7 +298,7 @@ export function generateLedger(options: GenerateLedgerOptions): LedgerEntry[] {
           currency: homeCurrency,
         },
       ];
-    } else if (scenarioRoll < 0.85 || foreignCurrencies.length === 0) {
+    } else if (scenarioRoll < 0.9 || foreignCurrencies.length === 0) {
       // Inter-bank transfer.
       const amount = random.nextInt(10, 1_000) * 100;
       const fromAccount = random.pick(CASH_ACCOUNTS);
