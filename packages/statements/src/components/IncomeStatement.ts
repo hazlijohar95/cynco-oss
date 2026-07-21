@@ -1,5 +1,8 @@
 import { STATEMENTS_TAG_NAME } from '../constants';
-import { renderIncomeStatementHTML } from '../renderers/IncomeStatementRenderer';
+import {
+  type IncomeStatementRenderOptions,
+  renderIncomeStatementHTML,
+} from '../renderers/IncomeStatementRenderer';
 import type { ColorScheme, IncomeStatementData } from '../types';
 import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import { StatementsContainerLoaded } from './web-components';
@@ -8,7 +11,7 @@ import { StatementsContainerLoaded } from './web-components';
 // package re-exports the engine's IncomeStatementOptions — the options bag
 // of deriveIncomeStatement — and the two must not collide in the public
 // surface.
-export interface IncomeStatementViewOptions {
+export interface IncomeStatementViewOptions extends IncomeStatementRenderOptions {
   /**
    * Pins how `light-dark()` colors resolve; see TrialBalanceViewOptions for
    * the user-preference pitfall this exists to solve.
@@ -38,6 +41,9 @@ export class IncomeStatement {
   private container: HTMLElement | undefined;
   private rootElement: HTMLElement | undefined;
   private renderedData: IncomeStatementData | undefined;
+  /** Descriptor the current DOM was formatted with (reference compare): a
+   * changed format must bust the data-reference skip. */
+  private renderedAmountFormat: IncomeStatementViewOptions['amountFormat'];
 
   constructor(
     public options: IncomeStatementViewOptions = {},
@@ -61,7 +67,10 @@ export class IncomeStatement {
     container = this.getOrCreateContainer(container, parentNode);
     applyHostColorScheme(container, this.options.colorScheme);
     const canSkip =
-      !forceRender && this.rootElement != null && this.renderedData === data;
+      !forceRender &&
+      this.rootElement != null &&
+      this.renderedAmountFormat === this.options.amountFormat &&
+      this.renderedData === data;
     if (canSkip) {
       return;
     }
@@ -72,7 +81,7 @@ export class IncomeStatement {
     // tables can atomically replace the old ones (any <style> siblings a
     // host injected into the shadow root survive).
     const template = document.createElement('div');
-    template.innerHTML = renderIncomeStatementHTML(data);
+    template.innerHTML = renderIncomeStatementHTML(data, this.options);
     const nextRootElement = template.firstElementChild;
     if (!(nextRootElement instanceof HTMLElement)) {
       return;
@@ -84,6 +93,7 @@ export class IncomeStatement {
     }
     this.rootElement = nextRootElement;
     this.renderedData = data;
+    this.renderedAmountFormat = this.options.amountFormat;
   }
 
   cleanUp(): void {
@@ -93,6 +103,7 @@ export class IncomeStatement {
     this.container = undefined;
     this.rootElement = undefined;
     this.renderedData = undefined;
+    this.renderedAmountFormat = undefined;
   }
 
   private getOrCreateContainer(
@@ -106,6 +117,7 @@ export class IncomeStatement {
     if (next !== this.container) {
       this.rootElement = undefined;
       this.renderedData = undefined;
+      this.renderedAmountFormat = undefined;
     }
     this.container = next;
     if (parentNode != null && next.parentNode !== parentNode) {

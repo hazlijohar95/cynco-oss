@@ -47,6 +47,9 @@ export class TrialBalance {
   private rootElement: HTMLElement | undefined;
   private renderedData: TrialBalanceData | undefined;
   private renderedShowClassification: boolean | undefined;
+  /** Descriptor the current DOM was formatted with (reference compare): a
+   * changed format must bust the data-reference skip. */
+  private renderedAmountFormat: TrialBalanceViewOptions['amountFormat'];
 
   constructor(
     public options: TrialBalanceViewOptions = {},
@@ -74,6 +77,7 @@ export class TrialBalance {
       !forceRender &&
       this.rootElement != null &&
       this.renderedShowClassification === showClassification &&
+      this.renderedAmountFormat === this.options.amountFormat &&
       this.renderedData === data;
     if (canSkip) {
       return;
@@ -98,6 +102,7 @@ export class TrialBalance {
     this.rootElement = nextRootElement;
     this.renderedData = data;
     this.renderedShowClassification = showClassification;
+    this.renderedAmountFormat = this.options.amountFormat;
   }
 
   cleanUp(): void {
@@ -108,6 +113,7 @@ export class TrialBalance {
     this.rootElement = undefined;
     this.renderedData = undefined;
     this.renderedShowClassification = undefined;
+    this.renderedAmountFormat = undefined;
   }
 
   private getOrCreateContainer(
@@ -121,6 +127,7 @@ export class TrialBalance {
     if (next !== this.container) {
       this.rootElement = undefined;
       this.renderedData = undefined;
+      this.renderedAmountFormat = undefined;
     }
     this.container = next;
     if (parentNode != null && next.parentNode !== parentNode) {

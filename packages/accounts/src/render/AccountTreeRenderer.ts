@@ -7,6 +7,7 @@ import type {
   AccountIconResolver,
   AccountRowDecorationsRenderer,
   AccountTreeRowData,
+  AmountFormat,
   RowRange,
 } from '../types';
 import { escapeHtml } from '../utils/escapeHtml';
@@ -22,6 +23,13 @@ export interface AccountTreeRenderOptions {
   currency: string;
   /** Whether rows render the right-aligned balance column. Default true. */
   showBalances?: boolean;
+  /**
+   * Separator/grouping descriptor for the balance column (see
+   * {@link AmountFormat}). Default AMOUNT_FORMAT_COMMA_DOT — the original
+   * `1,234.56` bytes. Plain data so SSR and client format from the same
+   * descriptor (never from Intl — the byte-parity contract).
+   */
+  amountFormat?: AmountFormat;
   /**
    * Stable id prefix baked into row `id` attributes so the view can point
    * `aria-activedescendant` at the focused row. Omitted → rows carry no id.
@@ -514,6 +522,6 @@ function renderBalanceHTML(
   const negative = row.balance < 0 ? ' data-negative="true"' : '';
   return (
     `<span data-balance${negative}>` +
-    `${formatMinorUnits(row.balance, options.currency)}</span>`
+    `${formatMinorUnits(row.balance, options.currency, { format: options.amountFormat })}</span>`
   );
 }

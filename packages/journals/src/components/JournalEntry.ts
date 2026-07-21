@@ -58,6 +58,9 @@ export class JournalEntry {
   private annotationElements: HTMLElement[] = [];
   private renderedEntry: LedgerEntry | undefined;
   private renderedShowLineNumbers: boolean | undefined;
+  /** Descriptor the current DOM was formatted with (reference compare): a
+   * changed format must bust the entry-equality skip. */
+  private renderedAmountFormat: JournalEntryOptions['amountFormat'];
 
   constructor(
     public options: JournalEntryOptions = {},
@@ -86,6 +89,7 @@ export class JournalEntry {
       this.entryElement = existing;
       this.renderedEntry = entry;
       this.renderedShowLineNumbers = this.options.showLineNumbers ?? false;
+      this.renderedAmountFormat = this.options.amountFormat;
       this.renderAnnotations();
       return;
     }
@@ -105,6 +109,7 @@ export class JournalEntry {
       !forceRender &&
       this.entryElement != null &&
       this.renderedShowLineNumbers === showLineNumbers &&
+      this.renderedAmountFormat === this.options.amountFormat &&
       areEntriesEqual(this.renderedEntry, entry);
     if (canSkip) {
       this.renderedEntry = entry;
@@ -131,6 +136,7 @@ export class JournalEntry {
     this.entryElement = nextEntryElement;
     this.renderedEntry = entry;
     this.renderedShowLineNumbers = showLineNumbers;
+    this.renderedAmountFormat = this.options.amountFormat;
     this.renderAnnotations();
   }
 
@@ -143,6 +149,7 @@ export class JournalEntry {
     this.entryElement = undefined;
     this.renderedEntry = undefined;
     this.renderedShowLineNumbers = undefined;
+    this.renderedAmountFormat = undefined;
   }
 
   private getOrCreateContainer(

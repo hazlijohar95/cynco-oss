@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { AMOUNT_FORMAT_DOT_COMMA } from '../src/constants';
 import { renderRegisterRowsHTML } from '../src/renderers/RegisterRenderer';
 import { proposeMatches } from '../src/utils/proposeMatches';
 import {
@@ -32,6 +33,54 @@ describe('WorkerPoolManager', () => {
     expect(mock.instances.length).toBe(2);
     expect(pool.getStats().workersFailed).toBe(false);
     pool.terminate();
+  });
+
+  test('amountFormat reaches the worker AND the fallback with identical bytes', async () => {
+    const rows = makeRows(12);
+    const range = { start: 0, end: 12 };
+    const expected = renderRegisterRowsHTML(
+      rows,
+      range,
+      null,
+      undefined,
+      0,
+      AMOUNT_FORMAT_DOT_COMMA
+    );
+
+    // Worker path.
+    const workerMock = createMockWorkerFactory();
+    const workerPool = new WorkerPoolManager({
+      workerFactory: workerMock.factory,
+      poolSize: 1,
+    });
+    const workerHTML = await workerPool.renderRegisterWindow({
+      rows,
+      range,
+      selectedIndex: null,
+      amountFormat: AMOUNT_FORMAT_DOT_COMMA,
+    });
+    workerPool.terminate();
+
+    // Failed-pool path: the fallback closure must produce the same bytes,
+    // so the descriptor never being able to reach a worker is only a
+    // performance regression, never a formatting one.
+    const failedMock = createMockWorkerFactory('error-event');
+    const failedPool = new WorkerPoolManager({
+      workerFactory: failedMock.factory,
+      poolSize: 1,
+    });
+    const fallbackHTML = await failedPool.renderRegisterWindow({
+      rows,
+      range,
+      selectedIndex: null,
+      amountFormat: AMOUNT_FORMAT_DOT_COMMA,
+    });
+    expect(failedPool.getStats().workersFailed).toBe(true);
+    failedPool.terminate();
+
+    expect(workerHTML).toBe(expected);
+    expect(fallbackHTML).toBe(expected);
+    expect(workerHTML).toContain(',00');
   });
 
   test('proposeMatches resolves engine parity through workers', async () => {

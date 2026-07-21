@@ -2,6 +2,7 @@ import LRUMapPkg from 'lru_map';
 
 import { renderRegisterWindowHTML } from '../renderers/RegisterRenderer';
 import type {
+  AmountFormat,
   BookPostingRef,
   ReconciliationMatch,
   RegisterFilter,
@@ -72,6 +73,8 @@ export interface RenderRegisterWindowProps {
   idPrefix?: string | null;
   /** Projection-level row filter; see RegisterWindowRequest.filter. */
   filter?: RegisterFilter | null;
+  /** Amount separators/grouping; see RegisterWindowRequest.amountFormat. */
+  amountFormat?: AmountFormat | null;
   /**
    * Stable identity for this exact input (e.g. `instance:rowsVersion:start:
    * end:selected`). Enables dedupe of in-flight identical requests and the
@@ -137,6 +140,7 @@ export class WorkerPoolManager {
     groupBy,
     idPrefix,
     filter,
+    amountFormat,
     cacheKey,
   }: RenderRegisterWindowProps): Promise<string> {
     return this.submit({
@@ -150,6 +154,7 @@ export class WorkerPoolManager {
         groupBy,
         idPrefix,
         filter,
+        amountFormat,
       },
       dedupeKey: cacheKey != null ? `register-window:${cacheKey}` : null,
       // Same selection resolution as handleWorkerRequest so worker and
@@ -162,7 +167,8 @@ export class WorkerPoolManager {
           groupBy,
           idPrefix ?? undefined,
           filter,
-          rowsOffset
+          rowsOffset,
+          amountFormat ?? undefined
         ),
     }) as Promise<string>;
   }

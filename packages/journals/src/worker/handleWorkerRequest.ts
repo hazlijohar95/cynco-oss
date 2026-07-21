@@ -44,7 +44,10 @@ export function handleWorkerRequest(request: WorkerRequest): WorkerResponse {
             request.filter,
             // Flat windows arrive as just the visible slice; the offset
             // restores absolute entry indexes (see RegisterWindowRequest).
-            request.rowsOffset
+            request.rowsOffset,
+            // The plain-data descriptor survives structured clone, so the
+            // worker formats amounts with exactly the client's separators.
+            request.amountFormat ?? undefined
           ),
           sentAt: Date.now(),
         };

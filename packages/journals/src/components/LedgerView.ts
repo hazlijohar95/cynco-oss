@@ -6,6 +6,7 @@ import {
   REGISTER_EMPTY_EXTRA_HEIGHT,
 } from '../constants';
 import type {
+  AmountFormat,
   ColorScheme,
   RegisterDensity,
   RegisterRowData,
@@ -63,6 +64,13 @@ export interface LedgerViewOptions {
    * would write.
    */
   emptyLabel?: string;
+  /**
+   * Amount separators/grouping shared by every section (see
+   * RegisterRenderOptions.amountFormat). Pass the same descriptor to
+   * `preloadLedgerViewHTML` so SSR emits the bytes the hydrated client
+   * would write. Default: the original `1,234.56` bytes.
+   */
+  amountFormat?: AmountFormat;
   /** Spring tuning for the shared smooth-scroll engine (one per view). */
   smoothScrollSettings?: SmoothScrollSettings;
   /** Fired when any row is clicked, with the owning account path. */
@@ -470,6 +478,7 @@ export class LedgerView {
         headerHeight: this.options.headerHeight,
         overscanRows: this.options.overscanRows,
         emptyLabel: this.options.emptyLabel,
+        amountFormat: this.options.amountFormat,
         id: `${this.viewId}-s${this.nextSectionSerial++}`,
         smoothScroller: this.smoothScroller,
         getOffsetTop: () => this.sectionOffsets[entry.index],

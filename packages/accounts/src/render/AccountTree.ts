@@ -556,6 +556,7 @@ export class AccountTree {
     return {
       currency: this.options.currency ?? DEFAULT_CURRENCY,
       showBalances: this.options.showBalances,
+      amountFormat: this.options.amountFormat,
       idPrefix: this.instanceId,
       renamingPath: this.controller.getRenamingPath(),
       renameDraft: this.controller.getRenameDraft(),

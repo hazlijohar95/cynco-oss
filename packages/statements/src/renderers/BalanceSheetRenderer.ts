@@ -11,6 +11,7 @@
 // assets tie to liabilities plus equity.
 
 import type {
+  AmountFormat,
   BalanceSheetData,
   BalanceSheetSection,
   StatementDate,
@@ -25,15 +26,29 @@ import {
   renderUnclassifiedGroupHTML,
 } from './statementTable';
 
+export interface BalanceSheetRenderOptions {
+  /**
+   * Separator/grouping descriptor for every amount (see
+   * {@link AmountFormat}). Default AMOUNT_FORMAT_COMMA_DOT — the original
+   * `1,234.56` bytes. Plain data so server and client format from the same
+   * descriptor (never from Intl — the byte-parity contract). Presentation
+   * signs and the U+2212 minus are unaffected.
+   */
+  amountFormat?: AmountFormat;
+}
+
 /**
  * Renders a derived {@link BalanceSheetData} as an HTML string. Every
  * element carrying meaning gets a data- attribute (the house testability
  * pattern) and all text passes through escapeHtml.
  */
-export function renderBalanceSheetHTML(data: BalanceSheetData): string {
+export function renderBalanceSheetHTML(
+  data: BalanceSheetData,
+  options: BalanceSheetRenderOptions = {}
+): string {
   let html = '<div data-balance-sheet>';
   for (const section of data.sections) {
-    html += renderSectionHTML(section, data.dates);
+    html += renderSectionHTML(section, data.dates, options.amountFormat);
   }
   html += '</div>';
   return html;
@@ -41,7 +56,8 @@ export function renderBalanceSheetHTML(data: BalanceSheetData): string {
 
 function renderSectionHTML(
   section: BalanceSheetSection,
-  dates: readonly StatementDate[]
+  dates: readonly StatementDate[],
+  amountFormat?: AmountFormat
 ): string {
   const columnCount = 1 + dates.length;
   const allBalanced = section.balancedByDate.every((balanced) => balanced);
@@ -65,35 +81,37 @@ function renderSectionHTML(
   html += '<tbody data-group="assets">';
   html += renderGroupHeaderHTML('Assets', columnCount);
   for (const line of section.assets) {
-    html += renderLineRowHTML(line, section.currency, 'date');
+    html += renderLineRowHTML(line, section.currency, 'date', amountFormat);
   }
   html += renderGroupTotalHTML(
     'Total Assets',
     'assets',
     section.totalAssets,
     section.currency,
-    'date'
+    'date',
+    amountFormat
   );
   html += '</tbody>';
 
   html += '<tbody data-group="liabilities">';
   html += renderGroupHeaderHTML('Liabilities', columnCount);
   for (const line of section.liabilities) {
-    html += renderLineRowHTML(line, section.currency, 'date');
+    html += renderLineRowHTML(line, section.currency, 'date', amountFormat);
   }
   html += renderGroupTotalHTML(
     'Total Liabilities',
     'liabilities',
     section.totalLiabilities,
     section.currency,
-    'date'
+    'date',
+    amountFormat
   );
   html += '</tbody>';
 
   html += '<tbody data-group="equity">';
   html += renderGroupHeaderHTML('Equity', columnCount);
   for (const line of section.equity) {
-    html += renderLineRowHTML(line, section.currency, 'date');
+    html += renderLineRowHTML(line, section.currency, 'date', amountFormat);
   }
   // The virtual closing, visibly computed: retained earnings is structural
   // (it is what makes the statement balance) so it always renders, stating
@@ -102,14 +120,16 @@ function renderSectionHTML(
     'Retained earnings',
     'retained-earnings',
     section.retainedEarnings,
-    section.currency
+    section.currency,
+    amountFormat
   );
   if (shouldRenderCurrentEarnings(section, dates)) {
     html += renderComputedRowHTML(
       'Current year earnings',
       'current-earnings',
       section.currentEarnings,
-      section.currency
+      section.currency,
+      amountFormat
     );
   }
   html += renderGroupTotalHTML(
@@ -117,7 +137,8 @@ function renderSectionHTML(
     'equity',
     section.totalEquity,
     section.currency,
-    'date'
+    'date',
+    amountFormat
   );
   html += '</tbody>';
 
@@ -125,7 +146,8 @@ function renderSectionHTML(
     section.unclassified,
     section.currency,
     'date',
-    columnCount
+    columnCount,
+    amountFormat
   );
 
   html += '<tfoot>';
@@ -136,10 +158,11 @@ function renderSectionHTML(
       (value, index) => value + section.totalEquity[index]
     ),
     section.currency,
-    'date'
+    'date',
+    amountFormat
   );
   if (!allBalanced) {
-    html += renderImbalanceRowHTML(section);
+    html += renderImbalanceRowHTML(section, amountFormat);
   }
   html += '</tfoot>';
 
@@ -153,12 +176,13 @@ function renderComputedRowHTML(
   label: string,
   key: string,
   amounts: readonly number[],
-  currency: string
+  currency: string,
+  amountFormat?: AmountFormat
 ): string {
   return (
     `<tr data-row data-computed="${key}">` +
     `<th scope="row" data-cell="account">${escapeHtml(label)}</th>` +
-    renderAmountCellsHTML(amounts, currency, 'date', true) +
+    renderAmountCellsHTML(amounts, currency, 'date', true, amountFormat) +
     '</tr>'
   );
 }
@@ -180,7 +204,10 @@ function shouldRenderCurrentEarnings(
 // Per-column accounting-equation differences, shown only on the dates that
 // fail. Flag, never plug: the difference is stated with an explicit sign so
 // a reviewer can see which side is heavy.
-function renderImbalanceRowHTML(section: BalanceSheetSection): string {
+function renderImbalanceRowHTML(
+  section: BalanceSheetSection,
+  amountFormat?: AmountFormat
+): string {
   let html = '<tr data-imbalance>';
   html += '<th scope="row" data-cell="imbalance-label">Out of balance</th>';
   for (let index = 0; index < section.balancedByDate.length; index += 1) {
@@ -193,7 +220,7 @@ function renderImbalanceRowHTML(section: BalanceSheetSection): string {
       (section.totalLiabilities[index] + section.totalEquity[index]);
     html +=
       `<td data-cell="date-${index}"><span data-imbalance-amount>` +
-      `${formatMinorUnits(difference, section.currency, { sign: 'always' })}` +
+      `${formatMinorUnits(difference, section.currency, { sign: 'always', format: amountFormat })}` +
       '</span></td>';
   }
   html += '</tr>';

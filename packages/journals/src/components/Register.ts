@@ -485,7 +485,8 @@ export class Register implements VirtualizedInstance {
       const template = document.createElement('div');
       template.innerHTML = renderRegisterHeaderHTML(
         this.options.account,
-        finalRegisterBalances(rows)
+        finalRegisterBalances(rows),
+        this.options.amountFormat
       );
       const nextHeader = template.firstElementChild;
       if (nextHeader instanceof HTMLElement) {
@@ -782,7 +783,7 @@ export class Register implements VirtualizedInstance {
       ? renderStickyGroupContainerHTML(headerHeight)
       : '';
     section.innerHTML =
-      renderRegisterHeaderHTML(account, null) +
+      renderRegisterHeaderHTML(account, null, this.options.amountFormat) +
       stickyLabel +
       '<div data-register-body>' +
       '<div data-register-spacer="before" style="height: 0px"></div>' +
@@ -1055,6 +1056,14 @@ export class Register implements VirtualizedInstance {
     const windowRows = isFlatWindow ? rows.slice(range.start, range.end) : rows;
     const rowsOffset = isFlatWindow ? range.start : 0;
     const selectedIndexes = this.getSortedSelection();
+    const amountFormat = this.options.amountFormat;
+    // The descriptor's separators are baked into every cached byte, so the
+    // key must carry them — encoded, because they are host-supplied strings
+    // and must not be able to forge the ':'-delimited key structure.
+    const formatKey =
+      amountFormat != null
+        ? `${encodeURIComponent(amountFormat.decimal)}|${encodeURIComponent(amountFormat.group)}|${amountFormat.groupSizes.join('-')}`
+        : 'fmt-default';
     // The filter segment sits LAST in the cache key: the query is raw user
     // text and may contain ':', so trailing position keeps it from forging
     // any other key segment.
@@ -1076,10 +1085,14 @@ export class Register implements VirtualizedInstance {
         // The filter crosses the protocol too: the worker rebuilds the
         // same filtered model so its bytes match the sync path.
         filter: activeFilter,
+        // Plain data across the structured-clone boundary; the worker
+        // formats with the exact separators the sync path would use.
+        amountFormat,
         cacheKey:
           `${this.workerInstanceId}:${this.rowsVersion}:${groupBy}:` +
           `${range.start}:${range.end}:` +
           `${selectedIndexes.length > 0 ? selectedIndexes.join('_') : 'none'}:` +
+          `${formatKey}:` +
           filterKey,
       })
       .then((html) => {
@@ -1123,10 +1136,18 @@ export class Register implements VirtualizedInstance {
         range,
         selected,
         this.instanceId,
-        this.activeFilter
+        this.activeFilter,
+        this.options.amountFormat
       );
     }
-    return renderRegisterRowsHTML(this.rows, range, selected, this.instanceId);
+    return renderRegisterRowsHTML(
+      this.rows,
+      range,
+      selected,
+      this.instanceId,
+      0,
+      this.options.amountFormat
+    );
   }
 
   private getSortedSelection(): number[] {

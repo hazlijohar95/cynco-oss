@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { AMOUNT_FORMAT_DOT_COMMA } from '../src/constants';
 import {
   renderRegisterRowsHTML,
   renderRegisterVirtualRowsHTML,
@@ -257,6 +258,91 @@ describe('worker protocol', () => {
       throw new Error('expected register-window success');
     }
     expect(response.html).toBe(renderRegisterRowsHTML(rows, range, null));
+  });
+
+  test('amountFormat crosses the protocol and stays byte-identical to the sync renderer', () => {
+    // Amounts large enough to cross group boundaries so the descriptor's
+    // separators AND grouping show up in the bytes.
+    const rows = makeRows(30).map((row, index) => {
+      const amount = 123_456_789 + index;
+      const posting = { ...row.posting, amount };
+      return {
+        entry: {
+          ...row.entry,
+          postings: [posting, ...row.entry.postings.slice(1)],
+        },
+        posting,
+        runningBalance: new Map([['MYR', 987_654_321 + index]]),
+      };
+    });
+    const range = { start: 5, end: 25 };
+    const response = handleWorkerRequest({
+      type: 'register-window',
+      id: 't2f',
+      rows,
+      range,
+      selectedIndex: 7,
+      amountFormat: AMOUNT_FORMAT_DOT_COMMA,
+    });
+    if (
+      response.type !== 'success' ||
+      response.requestType !== 'register-window'
+    ) {
+      throw new Error('expected register-window success');
+    }
+    expect(response.html).toBe(
+      renderRegisterRowsHTML(
+        rows,
+        range,
+        7,
+        undefined,
+        0,
+        AMOUNT_FORMAT_DOT_COMMA
+      )
+    );
+    expect(response.html).toContain('1.234.567,94');
+    expect(response.html).toContain('9.876.543,26');
+    // Structured-clone round trip: the descriptor is plain data, so the
+    // worker cannot receive anything other than the exact separators.
+    expect(structuredClone(AMOUNT_FORMAT_DOT_COMMA)).toEqual({
+      decimal: ',',
+      group: '.',
+      groupSizes: [3],
+    });
+  });
+
+  test('an absent amountFormat renders the exact default bytes', () => {
+    const rows = makeRows(10);
+    const range = { start: 0, end: 10 };
+    const withNull = handleWorkerRequest({
+      type: 'register-window',
+      id: 't2n',
+      rows,
+      range,
+      selectedIndex: null,
+      amountFormat: null,
+    });
+    const without = handleWorkerRequest({
+      type: 'register-window',
+      id: 't2o',
+      rows,
+      range,
+      selectedIndex: null,
+    });
+    if (
+      withNull.type !== 'success' ||
+      withNull.requestType !== 'register-window'
+    ) {
+      throw new Error('expected register-window success');
+    }
+    if (
+      without.type !== 'success' ||
+      without.requestType !== 'register-window'
+    ) {
+      throw new Error('expected register-window success');
+    }
+    expect(withNull.html).toBe(without.html);
+    expect(withNull.html).toBe(renderRegisterRowsHTML(rows, range, null));
   });
 
   test('propose-matches returns the same matches as a direct engine call', () => {

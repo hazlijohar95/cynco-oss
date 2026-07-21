@@ -50,6 +50,7 @@ export function preloadAccountTreeHTML(
     {
       currency: controllerOptions.currency ?? DEFAULT_CURRENCY,
       showBalances: controllerOptions.showBalances,
+      amountFormat: controllerOptions.amountFormat,
       idPrefix: id,
     }
   );

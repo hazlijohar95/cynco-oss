@@ -1,4 +1,5 @@
 import type {
+  AmountFormat,
   BookPostingRef,
   MinorUnits,
   ReconciliationMatch,
@@ -20,6 +21,14 @@ export interface ReconciliationRenderState {
   lines: readonly StatementLine[];
   postings: readonly BookPostingRef[];
   matches: readonly ReconciliationMatch[];
+  /**
+   * Separator/grouping descriptor applied to every amount in the view
+   * (header figures, statement and book cells, sum totals). Default
+   * AMOUNT_FORMAT_COMMA_DOT — the original `1,234.56` bytes. Part of the
+   * render state (not a side channel) so the SSR preload and the client
+   * derive identical bytes from one plain-data object.
+   */
+  amountFormat?: AmountFormat;
 }
 
 export type ReconciliationRowType = 'pair' | 'statement-only' | 'book-only';
@@ -191,7 +200,7 @@ export function renderReconciliationHTML(
   html += renderReconciliationHeaderHTML(state);
   html += '<div data-reconciliation-body>';
   for (const [index, row] of computeReconciliationRows(state).entries()) {
-    html += renderReconciliationRowHTML(row, index);
+    html += renderReconciliationRowHTML(row, index, state.amountFormat);
   }
   html += '</div></section>';
   return html;
@@ -210,13 +219,18 @@ export function renderReconciliationHeaderHTML(
   }
   html += '</span>';
   html += '<span data-recon-figures>';
-  html += renderFigureHTML('statement', 'statement', statement);
-  html += renderFigureHTML('cleared', 'cleared', cleared);
+  html += renderFigureHTML(
+    'statement',
+    'statement',
+    statement,
+    state.amountFormat
+  );
+  html += renderFigureHTML('cleared', 'cleared', cleared, state.amountFormat);
   html +=
     `<span data-recon-figure="difference" data-difference="${balanced ? 'zero' : 'nonzero'}">` +
     '<span data-figure-label>difference</span>' +
     (balanced ? '<span data-recon-dot aria-hidden="true">\u25cf</span>' : '') +
-    `<span data-figure-value>${renderAmountListHTML(difference)}</span>` +
+    `<span data-figure-value>${renderAmountListHTML(difference, state.amountFormat)}</span>` +
     '</span>';
   html += '</span></header>';
   return html;
@@ -227,7 +241,8 @@ export function renderReconciliationHeaderHTML(
 // without per-row listeners.
 export function renderReconciliationRowHTML(
   row: ReconciliationRow,
-  index: number
+  index: number,
+  amountFormat?: AmountFormat
 ): string {
   const attributes: string[] = [
     `data-recon-row`,
@@ -242,14 +257,17 @@ export function renderReconciliationRowHTML(
     );
   }
   let html = `<div ${attributes.join(' ')}>`;
-  html += renderStatementCellHTML(row);
+  html += renderStatementCellHTML(row, amountFormat);
   html += renderGutterHTML(row.match);
-  html += renderBookCellHTML(row);
+  html += renderBookCellHTML(row, amountFormat);
   html += '</div>';
   return html;
 }
 
-function renderStatementCellHTML(row: ReconciliationRow): string {
+function renderStatementCellHTML(
+  row: ReconciliationRow,
+  amountFormat?: AmountFormat
+): string {
   const { line } = row;
   if (line == null) {
     // Book-only rows leave a pinstriped statement cell with the
@@ -264,12 +282,15 @@ function renderStatementCellHTML(row: ReconciliationRow): string {
     `<div data-recon-cell="statement" data-amount="${direction}">` +
     `<span data-date>${escapeHtml(line.date)}</span>` +
     `<span data-description>${escapeHtml(line.description)}</span>` +
-    renderCellAmountHTML(direction, line.amount, line.currency) +
+    renderCellAmountHTML(direction, line.amount, line.currency, amountFormat) +
     '</div>'
   );
 }
 
-function renderBookCellHTML(row: ReconciliationRow): string {
+function renderBookCellHTML(
+  row: ReconciliationRow,
+  amountFormat?: AmountFormat
+): string {
   const refs = row.postings;
   if (refs == null || refs.length === 0) {
     // Statement-only rows: pinstriped book cell plus the create-entry
@@ -283,14 +304,15 @@ function renderBookCellHTML(row: ReconciliationRow): string {
     );
   }
   if (refs.length === 1) {
-    return renderSingleBookCellHTML(refs[0], row.match);
+    return renderSingleBookCellHTML(refs[0], row.match, amountFormat);
   }
-  return renderGroupedBookCellHTML(refs, row.match);
+  return renderGroupedBookCellHTML(refs, row.match, amountFormat);
 }
 
 function renderSingleBookCellHTML(
   ref: BookPostingRef,
-  match: ReconciliationMatch | null
+  match: ReconciliationMatch | null,
+  amountFormat?: AmountFormat
 ): string {
   const posting = ref.entry.postings[ref.postingIndex];
   if (posting == null) {
@@ -308,7 +330,12 @@ function renderSingleBookCellHTML(
     html +=
       '<span data-flag-dot data-flag="cleared" aria-label="reconciled">\u25cf</span>';
   }
-  html += renderCellAmountHTML(direction, posting.amount, posting.currency);
+  html += renderCellAmountHTML(
+    direction,
+    posting.amount,
+    posting.currency,
+    amountFormat
+  );
   html += '</div>';
   return html;
 }
@@ -318,7 +345,8 @@ function renderSingleBookCellHTML(
 // amount — the visual proof the group covers the line.
 function renderGroupedBookCellHTML(
   refs: readonly BookPostingRef[],
-  match: ReconciliationMatch | null
+  match: ReconciliationMatch | null,
+  amountFormat?: AmountFormat
 ): string {
   let total = 0;
   let currency = '';
@@ -335,7 +363,12 @@ function renderGroupedBookCellHTML(
     html += `<span data-book-line data-amount="${direction}">`;
     html += `<span data-date>${escapeHtml(ref.entry.date)}</span>`;
     html += `<span data-description>${escapeHtml(description)}</span>`;
-    html += renderCellAmountHTML(direction, posting.amount, posting.currency);
+    html += renderCellAmountHTML(
+      direction,
+      posting.amount,
+      posting.currency,
+      amountFormat
+    );
     html += '</span>';
   }
   const totalDirection = total < 0 ? 'credit' : 'debit';
@@ -345,7 +378,7 @@ function renderGroupedBookCellHTML(
     html +=
       '<span data-flag-dot data-flag="cleared" aria-label="reconciled">\u25cf</span>';
   }
-  html += renderCellAmountHTML(totalDirection, total, currency);
+  html += renderCellAmountHTML(totalDirection, total, currency, amountFormat);
   html += '</span></div>';
   return html;
 }
@@ -369,11 +402,12 @@ function renderGutterHTML(match: ReconciliationMatch | null): string {
 function renderCellAmountHTML(
   direction: 'debit' | 'credit',
   amount: MinorUnits,
-  currency: string
+  currency: string,
+  amountFormat?: AmountFormat
 ): string {
   return (
     `<span data-cell="amount"><span data-amount-sign="${direction}" aria-hidden="true"></span>` +
-    `<span data-amount-value>${formatMinorUnits(amount, currency, { sign: 'never' })}</span>` +
+    `<span data-amount-value>${formatMinorUnits(amount, currency, { sign: 'never', format: amountFormat })}</span>` +
     ` <span data-currency>${escapeHtml(currency)}</span></span>`
   );
 }
@@ -388,25 +422,32 @@ function formatDateDelta(dateDelta: number): string {
 function renderFigureHTML(
   slot: string,
   label: string,
-  amounts: Map<string, MinorUnits>
+  amounts: Map<string, MinorUnits>,
+  amountFormat?: AmountFormat
 ): string {
   return (
     `<span data-recon-figure="${slot}">` +
     `<span data-figure-label>${label}</span>` +
-    `<span data-figure-value>${renderAmountListHTML(amounts)}</span></span>`
+    `<span data-figure-value>${renderAmountListHTML(amounts, amountFormat)}</span></span>`
   );
 }
 
 // Header figures are per-currency; single-currency reconciliations (the
 // norm) render one amount, multi-currency ones a short list.
-function renderAmountListHTML(amounts: Map<string, MinorUnits>): string {
+function renderAmountListHTML(
+  amounts: Map<string, MinorUnits>,
+  amountFormat?: AmountFormat
+): string {
   if (amounts.size === 0) {
-    return '<span data-figure-amount>0.00</span>';
+    // The currencyless zero placeholder still honors the descriptor's
+    // decimal separator (a `1.234,56` view must not show `0.00`).
+    const decimal = amountFormat?.decimal ?? '.';
+    return `<span data-figure-amount>0${decimal}00</span>`;
   }
   let html = '';
   for (const [currency, amount] of amounts) {
     html +=
-      `<span data-figure-amount>${formatMinorUnits(amount, currency)}` +
+      `<span data-figure-amount>${formatMinorUnits(amount, currency, { format: amountFormat })}` +
       ` <span data-currency>${escapeHtml(currency)}</span></span>`;
   }
   return html;

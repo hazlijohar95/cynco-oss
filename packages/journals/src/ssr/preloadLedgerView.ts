@@ -11,7 +11,7 @@ import {
   renderRegisterRowsHTML,
 } from '../renderers/RegisterRenderer';
 import styles from '../style.css?inline';
-import type { RegisterDensity } from '../types';
+import type { AmountFormat, RegisterDensity } from '../types';
 import { escapeHtml } from '../utils/escapeHtml';
 
 export interface PreloadLedgerViewOptions {
@@ -36,6 +36,13 @@ export interface PreloadLedgerViewOptions {
    * hydrated Register's first window commit writes.
    */
   emptyLabel?: string;
+  /**
+   * Amount separators/grouping for every section. Must match the client
+   * LedgerView's `amountFormat` option — the same plain-data descriptor on
+   * both sides is what keeps SSR and hydrated bytes identical (never
+   * resolve it from Intl on the server; see `resolveAmountFormat`).
+   */
+  amountFormat?: AmountFormat;
 }
 
 // Produces the shadow-root HTML for a LedgerView (the preloadRegister
@@ -77,7 +84,8 @@ export function preloadLedgerViewHTML(
       density,
       preloadCount,
       (section.rows.length - preloadCount) * rowHeight,
-      options.emptyLabel
+      options.emptyLabel,
+      options.amountFormat
     );
   }
   html += '</div></div>';
@@ -96,7 +104,8 @@ function renderLedgerSectionHTML(
   density: RegisterDensity,
   preloadCount: number,
   afterSpacerHeight: number,
-  emptyLabel: string | undefined
+  emptyLabel: string | undefined,
+  amountFormat: AmountFormat | undefined
 ): string {
   const { account, rows } = section;
   const balance = finalRegisterBalances(rows);
@@ -105,7 +114,7 @@ function renderLedgerSectionHTML(
     ` aria-label="${escapeHtml(account)}"` +
     ` aria-rowcount="${rows.length}"` +
     ' tabindex="0">';
-  html += renderRegisterHeaderHTML(account, balance);
+  html += renderRegisterHeaderHTML(account, balance, amountFormat);
   html += '<div data-register-body>';
   html += '<div data-register-spacer="before" style="height: 0px"></div>';
   html += '<div data-register-rows>';
@@ -119,7 +128,9 @@ function renderLedgerSectionHTML(
           rows,
           { start: 0, end: preloadCount },
           null,
-          idPrefix
+          idPrefix,
+          0,
+          amountFormat
         );
   html += '</div>';
   html += `<div data-register-spacer="after" style="height: ${afterSpacerHeight}px"></div>`;

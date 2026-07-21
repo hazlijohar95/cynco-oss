@@ -1,4 +1,4 @@
-import type { LedgerEntry, Posting } from '../types';
+import type { AmountFormat, LedgerEntry, Posting } from '../types';
 import { escapeHtml } from '../utils/escapeHtml';
 import { formatMinorUnits } from '../utils/formatMinorUnits';
 import { getEntryImbalances } from '../utils/getEntryImbalances';
@@ -11,6 +11,13 @@ export interface EntryRenderOptions {
    * toggling it changes the grid template (see `[data-line-numbers]` CSS).
    */
   showLineNumbers?: boolean;
+  /**
+   * Separator/grouping descriptor applied to posting amounts and imbalance
+   * figures (see {@link AmountFormat}). Default AMOUNT_FORMAT_COMMA_DOT —
+   * the original `1,234.56` bytes. Plain data so SSR and client format from
+   * the same descriptor; sign gutters and U+2212 conventions are unaffected.
+   */
+  amountFormat?: AmountFormat;
 }
 
 // Renders a LedgerEntry card as an HTML string. This is the single renderer
@@ -22,7 +29,7 @@ export function renderEntryHTML(
   entry: LedgerEntry,
   options: EntryRenderOptions = {}
 ): string {
-  const { showLineNumbers = false } = options;
+  const { showLineNumbers = false, amountFormat } = options;
   const lineNumbersAttribute = showLineNumbers ? ' data-line-numbers' : '';
   let html =
     `<article data-entry data-entry-id="${escapeHtml(entry.id)}"` +
@@ -30,10 +37,10 @@ export function renderEntryHTML(
   html += renderEntryHeaderHTML(entry);
   html += '<div data-postings>';
   for (const [index, posting] of entry.postings.entries()) {
-    html += renderPostingHTML(posting, index, showLineNumbers);
+    html += renderPostingHTML(posting, index, showLineNumbers, amountFormat);
   }
   html += '</div>';
-  html += renderEntryFooterHTML(entry);
+  html += renderEntryFooterHTML(entry, amountFormat);
   html += '</article>';
   return html;
 }
@@ -81,7 +88,8 @@ export function renderFlagDotHTML(flag: LedgerEntry['flag']): string {
 function renderPostingHTML(
   posting: Posting,
   index: number,
-  showLineNumbers: boolean
+  showLineNumbers: boolean,
+  amountFormat?: AmountFormat
 ): string {
   const direction = posting.amount < 0 ? 'credit' : 'debit';
   let html =
@@ -94,7 +102,7 @@ function renderPostingHTML(
   html += `<span data-cell="sign" data-amount-sign="${direction}" aria-hidden="true"></span>`;
   html +=
     '<span data-cell="amount"><span data-amount-value>' +
-    `${formatMinorUnits(posting.amount, posting.currency, { sign: 'never' })}` +
+    `${formatMinorUnits(posting.amount, posting.currency, { sign: 'never', format: amountFormat })}` +
     '</span></span>';
   html += `<span data-cell="currency">${escapeHtml(posting.currency)}</span>`;
   html += '</div>';
@@ -107,7 +115,10 @@ function renderPostingHTML(
 // layer owns correctness, the renderer owns visibility. Exported so
 // EntryDiffRenderer can give an unbalanced AFTER version the identical
 // treatment.
-export function renderEntryFooterHTML(entry: LedgerEntry): string {
+export function renderEntryFooterHTML(
+  entry: LedgerEntry,
+  amountFormat?: AmountFormat
+): string {
   const imbalances = getEntryImbalances(entry);
   if (imbalances.size === 0) {
     return '';
@@ -118,7 +129,7 @@ export function renderEntryFooterHTML(entry: LedgerEntry): string {
     html += '<span data-imbalance-bar aria-hidden="true"></span>';
     html +=
       '<span data-imbalance-amount>' +
-      `${formatMinorUnits(amount, currency, { sign: 'always' })} ${escapeHtml(currency)}` +
+      `${formatMinorUnits(amount, currency, { sign: 'always', format: amountFormat })} ${escapeHtml(currency)}` +
       '</span>';
     html += '</div>';
   }

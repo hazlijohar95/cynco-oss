@@ -7,10 +7,11 @@ export * from './renderers/BalanceSheetRenderer';
 export * from './renderers/IncomeStatementRenderer';
 export * from './renderers/statementTable';
 export * from './renderers/TrialBalanceRenderer';
-export type { ColorScheme } from './types';
+export type { AmountFormat, ColorScheme } from './types';
 export * from './utils/applyHostColorScheme';
 export * from './utils/escapeHtml';
 export * from './utils/formatMinorUnits';
+export * from './utils/resolveAmountFormat';
 export * from './utils/statementsThemeVariables';
 
 // The statements DX surface of the data engine, re-exported so consumers

@@ -3,6 +3,7 @@ import {
   DEFAULT_REGISTER_EMPTY_LABEL,
 } from '../constants';
 import type {
+  AmountFormat,
   MinorUnits,
   RegisterDensity,
   RegisterFilter,
@@ -97,6 +98,16 @@ export interface RegisterRenderOptions {
    */
   emptyLabel?: string;
   /**
+   * Separator/grouping descriptor applied to every amount the register
+   * renders (posting amounts, running balances, header balances, group net
+   * changes). Default AMOUNT_FORMAT_COMMA_DOT — the original `1,234.56`
+   * bytes. Lives on the render options so SSR, worker, and client all
+   * format from the SAME plain-data descriptor (never from Intl — the
+   * byte-parity contract). Like `density`, it must not change between
+   * renders without a full re-render.
+   */
+  amountFormat?: AmountFormat;
+  /**
    * Sticky current-period label for grouped registers. Default ON whenever
    * `groupBy !== 'none'` (new surface, so no back-compat concern): a slim
    * aria-hidden mirror strip pinned just below the register's sticky header
@@ -188,7 +199,8 @@ export function renderRegisterEmptyStateHTML(emptyLabel?: string): string {
 // currency present in the final running balance).
 export function renderRegisterHeaderHTML(
   account: string,
-  balance: ReadonlyMap<string, MinorUnits> | null
+  balance: ReadonlyMap<string, MinorUnits> | null,
+  amountFormat?: AmountFormat
 ): string {
   let html = '<header data-register-header data-sticky>';
   html += `<span data-account>${renderAccountPathHTML(account)}</span>`;
@@ -198,7 +210,7 @@ export function renderRegisterHeaderHTML(
       const negative = amount < 0 ? ' data-balance-negative="true"' : '';
       html +=
         `<span data-balance-amount${negative}>` +
-        `${formatMinorUnits(amount, currency)}` +
+        `${formatMinorUnits(amount, currency, { format: amountFormat })}` +
         ` <span data-currency>${escapeHtml(currency)}</span></span>`;
     }
   }
@@ -225,7 +237,8 @@ export function renderRegisterRowHTML(
   selected: boolean,
   ariaRowIndex: number = index + 1,
   idPrefix?: string,
-  filter?: PreparedRegisterFilter | null
+  filter?: PreparedRegisterFilter | null,
+  amountFormat?: AmountFormat
 ): string {
   const { entry, posting } = row;
   const direction = posting.amount < 0 ? 'credit' : 'debit';
@@ -253,9 +266,9 @@ export function renderRegisterRowHTML(
   html +=
     `<span data-cell="amount" role="gridcell"><span data-amount-sign="${direction}" aria-hidden="true"></span>` +
     '<span data-amount-value>' +
-    `${formatMinorUnits(posting.amount, posting.currency, { sign: 'never' })}` +
+    `${formatMinorUnits(posting.amount, posting.currency, { sign: 'never', format: amountFormat })}` +
     '</span></span>';
-  html += renderBalanceCellHTML(row);
+  html += renderBalanceCellHTML(row, amountFormat);
   html += '</div>';
   return html;
 }
@@ -274,7 +287,8 @@ export function renderRegisterRowHTML(
 // tabindex, no id, never a focus or selection target.
 export function renderRegisterGroupRowHTML(
   group: RegisterGroupSummary,
-  ariaRowIndex?: number
+  ariaRowIndex?: number,
+  amountFormat?: AmountFormat
 ): string {
   const rowIndexAttribute =
     ariaRowIndex != null ? ` aria-rowindex="${ariaRowIndex}"` : '';
@@ -291,7 +305,7 @@ export function renderRegisterGroupRowHTML(
     const negative = amount < 0 ? ' data-net-negative="true"' : '';
     html +=
       `<span data-group-net${negative}>` +
-      `${formatMinorUnits(amount, currency, { sign: 'always' })}` +
+      `${formatMinorUnits(amount, currency, { sign: 'always', format: amountFormat })}` +
       ` <span data-currency>${escapeHtml(currency)}</span></span>`;
   }
   html += '</span></span></div>';
@@ -305,7 +319,8 @@ export function renderRegisterGroupRowHTML(
 // the semantics; the mirror lives inside an aria-hidden container and is
 // pure presentation.
 export function renderStickyGroupLabelHTML(
-  group: RegisterGroupSummary
+  group: RegisterGroupSummary,
+  amountFormat?: AmountFormat
 ): string {
   let html = '<div data-group-row data-sticky-mirror>';
   html += '<span data-group-cell>';
@@ -318,7 +333,7 @@ export function renderStickyGroupLabelHTML(
     const negative = amount < 0 ? ' data-net-negative="true"' : '';
     html +=
       `<span data-group-net${negative}>` +
-      `${formatMinorUnits(amount, currency, { sign: 'always' })}` +
+      `${formatMinorUnits(amount, currency, { sign: 'always', format: amountFormat })}` +
       ` <span data-currency>${escapeHtml(currency)}</span></span>`;
   }
   html += '</span></span></div>';
@@ -339,7 +354,8 @@ export function renderRegisterRowsHTML(
   range: RowRange,
   selected: RegisterSelectedRows,
   idPrefix?: string,
-  rowsOffset = 0
+  rowsOffset = 0,
+  amountFormat?: AmountFormat
 ): string {
   let html = '';
   for (let index = range.start; index < range.end; index += 1) {
@@ -350,7 +366,9 @@ export function renderRegisterRowsHTML(
       index,
       isRowIndexSelected(selected, index),
       index + 1,
-      idPrefix
+      idPrefix,
+      null,
+      amountFormat
     );
   }
   return html;
@@ -369,7 +387,8 @@ export function renderRegisterVirtualRowsHTML(
   range: RowRange,
   selected: RegisterSelectedRows,
   idPrefix?: string,
-  filter?: RegisterFilter | null
+  filter?: RegisterFilter | null,
+  amountFormat?: AmountFormat
 ): string {
   const prepared = prepareRegisterFilter(filter);
   let html = '';
@@ -379,14 +398,15 @@ export function renderRegisterVirtualRowsHTML(
     // grid rows), while data-row-index/id stay in entry space.
     html +=
       item.kind === 'group'
-        ? renderRegisterGroupRowHTML(item.group, index + 1)
+        ? renderRegisterGroupRowHTML(item.group, index + 1, amountFormat)
         : renderRegisterRowHTML(
             item.row,
             item.entryIndex,
             isRowIndexSelected(selected, item.entryIndex),
             index + 1,
             idPrefix,
-            prepared
+            prepared,
+            amountFormat
           );
   }
   return html;
@@ -412,7 +432,8 @@ export function renderRegisterWindowHTML(
   groupBy?: RegisterGroupBy,
   idPrefix?: string,
   filter?: RegisterFilter | null,
-  rowsOffset = 0
+  rowsOffset = 0,
+  amountFormat?: AmountFormat
 ): string {
   const activeFilter = filter != null && filter.query !== '' ? filter : null;
   if (activeFilter != null) {
@@ -425,7 +446,8 @@ export function renderRegisterWindowHTML(
       range,
       selected,
       idPrefix,
-      activeFilter
+      activeFilter,
+      amountFormat
     );
   }
   if (groupBy != null && groupBy !== 'none') {
@@ -433,10 +455,19 @@ export function renderRegisterWindowHTML(
       buildRegisterRowModel(rows, groupBy),
       range,
       selected,
-      idPrefix
+      idPrefix,
+      null,
+      amountFormat
     );
   }
-  return renderRegisterRowsHTML(rows, range, selected, idPrefix, rowsOffset);
+  return renderRegisterRowsHTML(
+    rows,
+    range,
+    selected,
+    idPrefix,
+    rowsOffset,
+    amountFormat
+  );
 }
 
 // Full register HTML for SSR: sticky header plus every row with zero-height
@@ -493,7 +524,7 @@ export function renderRegisterHTML(
     html += ' tabindex="0"';
   }
   html += '>';
-  html += renderRegisterHeaderHTML(account, balance);
+  html += renderRegisterHeaderHTML(account, balance, options.amountFormat);
   // Sticky mirror gates on GROUPING, not on the model existing — a filtered
   // flat register has a model but no group rows to mirror.
   if (groupBy !== 'none' && options.stickyGroupLabels !== false) {
@@ -520,7 +551,8 @@ export function renderRegisterHTML(
       { start: 0, end: model.length },
       null,
       options.id,
-      filter
+      filter,
+      options.amountFormat
     );
   } else {
     // Bound the flat SSR payload when asked. The client owns the real
@@ -535,7 +567,9 @@ export function renderRegisterHTML(
       rows,
       { start: 0, end: ssrEnd },
       null,
-      options.id
+      options.id,
+      0,
+      options.amountFormat
     );
   }
   html += '</div>';
@@ -610,7 +644,10 @@ function renderDescriptionCellHTML(
 // Running balance in the posting's own currency. A missing currency in the
 // running-balance map is bad input; render an empty cell rather than a made
 // up number (graceful degradation, never silent repair).
-function renderBalanceCellHTML(row: RegisterRowData): string {
+function renderBalanceCellHTML(
+  row: RegisterRowData,
+  amountFormat?: AmountFormat
+): string {
   const balance = row.runningBalance.get(row.posting.currency);
   if (balance == null) {
     return '<span data-cell="balance" role="gridcell"></span>';
@@ -618,7 +655,7 @@ function renderBalanceCellHTML(row: RegisterRowData): string {
   const negative = balance < 0 ? ' data-balance-negative="true"' : '';
   return (
     `<span data-cell="balance" role="gridcell"${negative}>` +
-    `<span data-balance-value>${formatMinorUnits(balance, row.posting.currency)}</span>` +
+    `<span data-balance-value>${formatMinorUnits(balance, row.posting.currency, { format: amountFormat })}</span>` +
     ` <span data-currency>${escapeHtml(row.posting.currency)}</span></span>`
   );
 }

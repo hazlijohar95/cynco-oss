@@ -1,5 +1,9 @@
-import { CURRENCY_DECIMALS, MINUS_SIGN } from '../constants';
-import type { MinorUnits } from '../types';
+import {
+  AMOUNT_FORMAT_COMMA_DOT,
+  CURRENCY_DECIMALS,
+  MINUS_SIGN,
+} from '../constants';
+import type { AmountFormat, MinorUnits } from '../types';
 
 export interface FormatMinorUnitsOptions {
   /**
@@ -8,6 +12,14 @@ export interface FormatMinorUnitsOptions {
    * absolute value — used when a sign gutter carries the semantics instead.
    */
   sign?: 'auto' | 'always' | 'never';
+  /**
+   * Separator and grouping descriptor (see {@link AmountFormat}). Defaults
+   * to AMOUNT_FORMAT_COMMA_DOT — the package's original `1,234.56` bytes —
+   * so callers that never pass it see zero output change. Affects ONLY the
+   * group/decimal separators and digit grouping: sign conventions (U+2212,
+   * sign gutters) and per-currency decimal counts compose on top unchanged.
+   */
+  format?: AmountFormat;
 }
 
 // Number of decimal places a currency uses in its minor units. Unknown codes
@@ -26,7 +38,7 @@ export function formatMinorUnits(
   currency: string,
   options: FormatMinorUnitsOptions = {}
 ): string {
-  const { sign = 'auto' } = options;
+  const { sign = 'auto', format = AMOUNT_FORMAT_COMMA_DOT } = options;
   const decimals = getCurrencyDecimals(currency);
   const safeAmount = toSafeInteger(amount);
   const negative = safeAmount < 0;
@@ -39,8 +51,9 @@ export function formatMinorUnits(
   const fractionDigits =
     decimals > 0 ? digits.slice(-decimals).padStart(decimals, '0') : '';
 
-  const grouped = groupThousands(integerDigits);
-  const unsigned = decimals > 0 ? `${grouped}.${fractionDigits}` : grouped;
+  const grouped = groupIntegerDigits(integerDigits, format);
+  const unsigned =
+    decimals > 0 ? `${grouped}${format.decimal}${fractionDigits}` : grouped;
 
   if (sign === 'never') {
     return unsigned;
@@ -51,9 +64,38 @@ export function formatMinorUnits(
   return sign === 'always' ? `+${unsigned}` : unsigned;
 }
 
-// Inserts a comma before every group of three digits counted from the right.
-function groupThousands(integerDigits: string): string {
-  return integerDigits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+// Groups integer digits from the decimal point outward per the descriptor:
+// each entry of groupSizes consumes that many digits right-to-left and the
+// LAST size repeats for whatever remains, so [3] is Western thousands and
+// [3,2] is Indian lakh/crore. Pure slicing over the digit string — the
+// deterministic stand-in for Intl.NumberFormat, which must never run in a
+// render path (ICU versions differ between Node and browsers, which would
+// break the SSR/worker/client byte-parity contract).
+function groupIntegerDigits(
+  integerDigits: string,
+  format: AmountFormat
+): string {
+  const { group, groupSizes } = format;
+  if (group === '' || groupSizes.length === 0) {
+    return integerDigits;
+  }
+  const parts: string[] = [];
+  let end = integerDigits.length;
+  let sizeIndex = 0;
+  while (end > 0) {
+    const size = groupSizes[Math.min(sizeIndex, groupSizes.length - 1)];
+    // A non-positive size is a malformed descriptor; keep the remaining
+    // digits ungrouped rather than looping forever — degrade gracefully
+    // mid-render, never throw or hang.
+    if (!Number.isInteger(size) || size <= 0) {
+      parts.unshift(integerDigits.slice(0, end));
+      break;
+    }
+    parts.unshift(integerDigits.slice(Math.max(0, end - size), end));
+    end -= size;
+    sizeIndex += 1;
+  }
+  return parts.join(group);
 }
 
 // Monetary values must be integers; degrade gracefully on bad input instead

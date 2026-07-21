@@ -1,6 +1,7 @@
 import { renderReconciliationHTML } from '../renderers/ReconciliationRenderer';
 import styles from '../style.css?inline';
 import type {
+  AmountFormat,
   BookPostingRef,
   ReconciliationMatch,
   StatementLine,
@@ -18,6 +19,13 @@ export interface PreloadReconciliationOptions {
   matches?: readonly ReconciliationMatch[];
   /** Suggestion window forwarded to the default `proposeMatches`. Default 3. */
   dateWindowDays?: number;
+  /**
+   * Amount separators/grouping for every figure. Must match the client
+   * Reconciliation's `amountFormat` option so hydration adopts identical
+   * bytes (thread the same plain-data descriptor — never re-resolve from
+   * Intl on the server; see `resolveAmountFormat`).
+   */
+  amountFormat?: AmountFormat;
 }
 
 // Produces the shadow-root HTML for a reconciliation view, ready for a
@@ -41,6 +49,7 @@ export function preloadReconciliationHTML(
         lines: options.statementLines,
         postings: options.postings,
         matches,
+        amountFormat: options.amountFormat,
       })
   );
 }

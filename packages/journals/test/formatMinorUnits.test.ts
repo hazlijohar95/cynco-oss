@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
-import { MINUS_SIGN } from '../src/constants';
+import {
+  AMOUNT_FORMAT_APOSTROPHE_DOT,
+  AMOUNT_FORMAT_COMMA_DOT,
+  AMOUNT_FORMAT_DOT_COMMA,
+  AMOUNT_FORMAT_INDIAN,
+  AMOUNT_FORMAT_SPACE_COMMA,
+  MINUS_SIGN,
+} from '../src/constants';
 import {
   formatMinorUnits,
   getCurrencyDecimals,
@@ -90,6 +97,124 @@ describe('formatMinorUnits', () => {
     expect(formatMinorUnits(Number.MAX_SAFE_INTEGER, 'BHD')).toBe(
       '9,007,199,254,740.991'
     );
+  });
+
+  // Each preset × representative currency exponents (2/0/3-decimal). The
+  // values cross several group boundaries so the grouping itself — not just
+  // the separators — is exercised.
+  test('amount format presets: 2-decimal currency across multiple groups', () => {
+    const amount = 123_456_789; // 1,234,567.89 MYR
+    expect(formatMinorUnits(amount, 'MYR')).toBe('1,234,567.89');
+    expect(
+      formatMinorUnits(amount, 'MYR', { format: AMOUNT_FORMAT_DOT_COMMA })
+    ).toBe('1.234.567,89');
+    expect(
+      formatMinorUnits(amount, 'MYR', { format: AMOUNT_FORMAT_SPACE_COMMA })
+    ).toBe('1\u202f234\u202f567,89');
+    expect(
+      formatMinorUnits(amount, 'MYR', { format: AMOUNT_FORMAT_APOSTROPHE_DOT })
+    ).toBe("1'234'567.89");
+    expect(
+      formatMinorUnits(amount, 'MYR', { format: AMOUNT_FORMAT_INDIAN })
+    ).toBe('12,34,567.89');
+  });
+
+  test('amount format presets: 0-decimal currency (JPY)', () => {
+    const amount = 1_234_567;
+    expect(formatMinorUnits(amount, 'JPY')).toBe('1,234,567');
+    expect(
+      formatMinorUnits(amount, 'JPY', { format: AMOUNT_FORMAT_DOT_COMMA })
+    ).toBe('1.234.567');
+    expect(
+      formatMinorUnits(amount, 'JPY', { format: AMOUNT_FORMAT_SPACE_COMMA })
+    ).toBe('1\u202f234\u202f567');
+    expect(
+      formatMinorUnits(amount, 'JPY', { format: AMOUNT_FORMAT_APOSTROPHE_DOT })
+    ).toBe("1'234'567");
+    expect(
+      formatMinorUnits(amount, 'JPY', { format: AMOUNT_FORMAT_INDIAN })
+    ).toBe('12,34,567');
+  });
+
+  test('amount format presets: 3-decimal currency (BHD)', () => {
+    const amount = 123_456_789; // 123,456.789 BHD
+    expect(formatMinorUnits(amount, 'BHD')).toBe('123,456.789');
+    expect(
+      formatMinorUnits(amount, 'BHD', { format: AMOUNT_FORMAT_DOT_COMMA })
+    ).toBe('123.456,789');
+    expect(
+      formatMinorUnits(amount, 'BHD', { format: AMOUNT_FORMAT_SPACE_COMMA })
+    ).toBe('123\u202f456,789');
+    expect(
+      formatMinorUnits(amount, 'BHD', { format: AMOUNT_FORMAT_APOSTROPHE_DOT })
+    ).toBe("123'456.789");
+    expect(
+      formatMinorUnits(amount, 'BHD', { format: AMOUNT_FORMAT_INDIAN })
+    ).toBe('1,23,456.789');
+  });
+
+  test('amount format presets: negatives keep the U+2212 minus and sign options compose', () => {
+    expect(
+      formatMinorUnits(-123_456_789, 'MYR', { format: AMOUNT_FORMAT_DOT_COMMA })
+    ).toBe(`${MINUS_SIGN}1.234.567,89`);
+    expect(
+      formatMinorUnits(-123_456_789, 'MYR', {
+        sign: 'never',
+        format: AMOUNT_FORMAT_SPACE_COMMA,
+      })
+    ).toBe('1\u202f234\u202f567,89');
+    expect(
+      formatMinorUnits(123_456_789, 'MYR', {
+        sign: 'always',
+        format: AMOUNT_FORMAT_INDIAN,
+      })
+    ).toBe('+12,34,567.89');
+  });
+
+  test('Indian grouping across lakh and crore boundaries', () => {
+    // Below one lakh the Indian and Western groupings coincide.
+    expect(
+      formatMinorUnits(123_456, 'MYR', { format: AMOUNT_FORMAT_INDIAN })
+    ).toBe('1,234.56');
+    // One lakh (1,00,000) and one crore (1,00,00,000).
+    expect(
+      formatMinorUnits(10_000_000, 'MYR', { format: AMOUNT_FORMAT_INDIAN })
+    ).toBe('1,00,000.00');
+    expect(
+      formatMinorUnits(1_000_000_000, 'MYR', { format: AMOUNT_FORMAT_INDIAN })
+    ).toBe('1,00,00,000.00');
+    expect(
+      formatMinorUnits(1_234_567_890, 'JPY', { format: AMOUNT_FORMAT_INDIAN })
+    ).toBe('1,23,45,67,890');
+    // Very large values keep repeating the two-digit group exactly.
+    expect(
+      formatMinorUnits(Number.MAX_SAFE_INTEGER, 'MYR', {
+        format: AMOUNT_FORMAT_INDIAN,
+      })
+    ).toBe('9,00,71,99,25,47,409.91');
+  });
+
+  test('explicit default preset is byte-identical to omitting the format', () => {
+    for (const [amount, currency] of [
+      [123_456_789, 'MYR'],
+      [-4_550, 'MYR'],
+      [1_000_000, 'JPY'],
+      [1_234_567, 'BHD'],
+      [0, 'MYR'],
+      [Number.MAX_SAFE_INTEGER, 'MYR'],
+    ] as const) {
+      expect(
+        formatMinorUnits(amount, currency, { format: AMOUNT_FORMAT_COMMA_DOT })
+      ).toBe(formatMinorUnits(amount, currency));
+    }
+  });
+
+  test('grouping-free descriptor renders no separators', () => {
+    expect(
+      formatMinorUnits(123_456_789, 'MYR', {
+        format: { decimal: ',', group: '', groupSizes: [] },
+      })
+    ).toBe('1234567,89');
   });
 
   test('degrades gracefully on bad input instead of throwing', () => {

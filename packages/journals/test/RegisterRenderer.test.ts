@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { DEFAULT_REGISTER_EMPTY_LABEL, MINUS_SIGN } from '../src/constants';
+import {
+  AMOUNT_FORMAT_COMMA_DOT,
+  AMOUNT_FORMAT_DOT_COMMA,
+  AMOUNT_FORMAT_INDIAN,
+  DEFAULT_REGISTER_EMPTY_LABEL,
+  MINUS_SIGN,
+} from '../src/constants';
 import {
   finalRegisterBalances,
   renderRegisterEmptyStateHTML,
@@ -333,6 +339,73 @@ describe('renderRegisterHTML', () => {
       renderRegisterHTML(rows, { account: ACCOUNT, maxSsrRows: 1000 })
     );
     expect(section.querySelectorAll('[data-row]').length).toBe(3);
+  });
+});
+
+describe('renderRegisterHTML amount formats', () => {
+  // One row whose posting (1,234.56) and running balance (1,234,567.89)
+  // both cross group boundaries, so separators AND grouping are visible.
+  function makeFormatRow(): RegisterRowData {
+    const entry = makeEntry({
+      id: 'fmt-0',
+      payee: 'Fmt Payee',
+      narration: 'Fmt Narration',
+      tags: [],
+      links: [],
+      postings: [
+        {
+          account: 'Assets:Current:Cash-Maybank',
+          amount: 123_456,
+          currency: 'MYR',
+        },
+        { account: 'Income:Sales', amount: -123_456, currency: 'MYR' },
+      ],
+    });
+    return {
+      entry,
+      posting: entry.postings[0],
+      runningBalance: new Map([['MYR', 123_456_789]]),
+    };
+  }
+
+  test('rows and header render dot-comma amounts when the option is set', () => {
+    const section = parse(
+      renderRegisterHTML([makeFormatRow()], {
+        account: ACCOUNT,
+        amountFormat: AMOUNT_FORMAT_DOT_COMMA,
+      })
+    );
+    expect(section.querySelector('[data-amount-value]')?.textContent).toBe(
+      '1.234,56'
+    );
+    expect(section.querySelector('[data-balance-value]')?.textContent).toBe(
+      '1.234.567,89'
+    );
+    expect(section.querySelector('[data-balance-amount]')?.textContent).toBe(
+      '1.234.567,89 MYR'
+    );
+  });
+
+  test('Indian grouping threads through rows and balances', () => {
+    const section = parse(
+      renderRegisterHTML([makeFormatRow()], {
+        account: ACCOUNT,
+        amountFormat: AMOUNT_FORMAT_INDIAN,
+      })
+    );
+    expect(section.querySelector('[data-balance-value]')?.textContent).toBe(
+      '12,34,567.89'
+    );
+  });
+
+  test('omitting the option and passing the default preset are byte-identical', () => {
+    const rows = [makeFormatRow(), ...makeRows(4)];
+    expect(renderRegisterHTML(rows, { account: ACCOUNT })).toBe(
+      renderRegisterHTML(rows, {
+        account: ACCOUNT,
+        amountFormat: AMOUNT_FORMAT_COMMA_DOT,
+      })
+    );
   });
 });
 

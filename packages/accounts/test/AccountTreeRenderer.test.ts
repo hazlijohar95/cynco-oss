@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { MINUS_SIGN } from '../src/constants';
+import {
+  AMOUNT_FORMAT_COMMA_DOT,
+  AMOUNT_FORMAT_DOT_COMMA,
+  MINUS_SIGN,
+} from '../src/constants';
 import { AccountTreeController } from '../src/model/AccountTreeController';
 import {
   renderAccountRowHTML,
@@ -158,6 +162,29 @@ describe('renderAccountRowHTML', () => {
     const balance = row.querySelector('[data-balance]');
     expect(balance?.getAttribute('data-negative')).toBe('true');
     expect(balance?.textContent).toBe(`${MINUS_SIGN}1,500.00`);
+  });
+
+  test('amountFormat reshapes the balance column; the default stays byte-identical', () => {
+    const controller = makeController();
+    const index = controller.getPathIndex('Income');
+    const [income] = controller.getRows(index, index + 1);
+    const dotComma = parse(
+      renderAccountRowHTML(income, index, {
+        ...RENDER_OPTIONS,
+        amountFormat: AMOUNT_FORMAT_DOT_COMMA,
+      })
+    );
+    // Same figure as above (−1,500.00), continental separators, sign kept.
+    expect(dotComma.querySelector('[data-balance]')?.textContent).toBe(
+      `${MINUS_SIGN}1.500,00`
+    );
+    // Passing the default preset changes nothing, byte for byte.
+    expect(
+      renderAccountRowHTML(income, index, {
+        ...RENDER_OPTIONS,
+        amountFormat: AMOUNT_FORMAT_COMMA_DOT,
+      })
+    ).toBe(renderAccountRowHTML(income, index, RENDER_OPTIONS));
   });
 
   test('status dot and count render from the decorated row', () => {

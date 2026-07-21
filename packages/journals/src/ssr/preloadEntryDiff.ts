@@ -1,7 +1,12 @@
-import { renderEntryDiffHTML } from '../renderers/EntryDiffRenderer';
+import {
+  type EntryDiffRenderOptions,
+  renderEntryDiffHTML,
+} from '../renderers/EntryDiffRenderer';
 import styles from '../style.css?inline';
 import type { LedgerEntry } from '../types';
 import { diffEntryVersions } from '../utils/diffEntryVersions';
+
+export interface PreloadEntryDiffOptions extends EntryDiffRenderOptions {}
 
 // Produces the shadow-root HTML for one entry diff card, ready to be
 // embedded in a declarative shadow DOM template (mirrors
@@ -12,9 +17,10 @@ import { diffEntryVersions } from '../utils/diffEntryVersions';
 // if theme resolution ever becomes asynchronous.
 export function preloadEntryDiffHTML(
   before: LedgerEntry | null,
-  after: LedgerEntry | null
+  after: LedgerEntry | null,
+  options?: PreloadEntryDiffOptions
 ): Promise<string> {
   return Promise.resolve(
-    `<style>${styles}</style>${renderEntryDiffHTML(diffEntryVersions(before, after))}`
+    `<style>${styles}</style>${renderEntryDiffHTML(diffEntryVersions(before, after), options)}`
   );
 }

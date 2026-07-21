@@ -6,7 +6,11 @@ import {
 } from '@cynco/ledger-core';
 import { describe, expect, test } from 'bun:test';
 
-import { MINUS_SIGN } from '../src/constants';
+import {
+  AMOUNT_FORMAT_COMMA_DOT,
+  AMOUNT_FORMAT_DOT_COMMA,
+  MINUS_SIGN,
+} from '../src/constants';
 import { renderTrialBalanceHTML } from '../src/renderers/TrialBalanceRenderer';
 
 // Pure string tests: the renderer is a DOM-free string builder, so the
@@ -36,6 +40,28 @@ function makeEntry(
 const taxonomy = createAccountTaxonomy();
 
 describe('renderTrialBalanceHTML', () => {
+  test('amountFormat reshapes every amount; the default stays byte-identical', () => {
+    const data = deriveTrialBalance(
+      [
+        makeEntry([
+          { account: 'Assets:Cash', amount: 123_456_789, currency: 'MYR' },
+          { account: 'Income:Sales', amount: -123_456_789, currency: 'MYR' },
+        ]),
+      ],
+      { taxonomy }
+    );
+    const html = renderTrialBalanceHTML(data, {
+      amountFormat: AMOUNT_FORMAT_DOT_COMMA,
+    });
+    expect(html).toContain('data-cell="debit">1.234.567,89</td>');
+    expect(html).toContain('data-cell="credit">1.234.567,89</td>');
+    expect(html).toContain('data-total="debit">1.234.567,89</td>');
+    // Passing the default preset changes nothing, byte for byte.
+    expect(
+      renderTrialBalanceHTML(data, { amountFormat: AMOUNT_FORMAT_COMMA_DOT })
+    ).toBe(renderTrialBalanceHTML(data));
+  });
+
   test('balanced section renders totals with data-balanced="true"', () => {
     const data = deriveTrialBalance(
       [

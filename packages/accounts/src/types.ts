@@ -7,6 +7,37 @@
 export type MinorUnits = number;
 
 /**
+ * Locale-shaped amount presentation: which separators to use and how to
+ * group integer digits. Plain data by design — it survives structured clone
+ * and JSON unchanged, which is what lets SSR and client render
+ * byte-identical amounts. Renderers must NEVER consult Intl.NumberFormat
+ * for this (ICU tables differ between Node versions and browsers, so the
+ * same locale can format differently on server and client); hosts resolve a
+ * descriptor once at their boundary (see `resolveAmountFormat`) and thread
+ * the same object everywhere.
+ *
+ * MUST stay in lockstep with the identical interface in
+ * `@cynco/journals/src/types.ts` and `@cynco/statements/src/types.ts` —
+ * the packages deliberately share no runtime dependency for this, so the
+ * shape is duplicated (the CURRENCY_DECIMALS precedent).
+ */
+export interface AmountFormat {
+  /** Decimal separator, e.g. `.` or `,`. */
+  decimal: string;
+  /**
+   * Group separator, e.g. `,`, `.`, `\u202f` (narrow no-break space), `'`.
+   * An empty string disables grouping entirely.
+   */
+  group: string;
+  /**
+   * Group sizes from the decimal point outward; the LAST size repeats for
+   * the remaining digits. `[3]` gives `1,234,567`; `[3,2]` gives the Indian
+   * `12,34,567`.
+   */
+  groupSizes: readonly number[];
+}
+
+/**
  * How the component's `light-dark()` color defaults resolve. `system`
  * (default) leaves resolution to the page/OS; `light`/`dark` pin the scheme
  * via an inline `color-scheme` on the host element.
@@ -553,6 +584,13 @@ export interface AccountTreeControllerOptions {
   currency?: string;
   /** Whether rows render the right-aligned balance column. Default true. */
   showBalances?: boolean;
+  /**
+   * Amount separators/grouping for the balance column (see
+   * {@link AmountFormat}). Pass the same descriptor to
+   * `preloadAccountTreeHTML` so SSR output matches the hydrated client byte
+   * for byte. Default: the original `1,234.56` bytes.
+   */
+  amountFormat?: AmountFormat;
   /**
    * Collapse single-child GROUP chains into one visible row labelled with
    * the joined segments (`Income : Sales`). Projection-level only: canonical

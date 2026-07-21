@@ -1,4 +1,5 @@
 import type {
+  AmountFormat,
   BookPostingRef,
   ReconciliationMatch,
   RegisterFilter,
@@ -69,6 +70,15 @@ export interface RegisterWindowRequest {
    * FILTERED-model-index space. Plain data: survives structured clone.
    */
   filter?: RegisterFilter | null;
+  /**
+   * Separator/grouping descriptor for every amount in the window (see
+   * {@link AmountFormat}). Plain data by design, so it crosses the worker
+   * boundary via structured clone unchanged and the worker formats with the
+   * SAME descriptor the client's sync path uses — worker HTML stays
+   * byte-identical whether or not workers exist. Absent means the default
+   * `1,234.56` bytes.
+   */
+  amountFormat?: AmountFormat | null;
 }
 
 /** Run the deterministic reconciliation proposal engine off the main thread. */

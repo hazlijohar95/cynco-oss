@@ -9,6 +9,7 @@ import {
   renderReconciliationHTML,
 } from '../renderers/ReconciliationRenderer';
 import type {
+  AmountFormat,
   BookPostingRef,
   ColorScheme,
   MinorUnits,
@@ -43,6 +44,13 @@ export interface ReconciliationOptions {
    * pass 1 to disable sum matching.
    */
   maxGroupSize?: number;
+  /**
+   * Amount separators/grouping for every figure the view renders and
+   * announces (see {@link AmountFormat}). Pass the same descriptor to
+   * `preloadReconciliationHTML` so SSR output matches the hydrated client
+   * byte for byte. Default: the original `1,234.56` bytes.
+   */
+  amountFormat?: AmountFormat;
   /**
    * Optional worker pool: match proposals are computed off the main thread
    * and applied on the next animation frame after they resolve (the view
@@ -295,8 +303,12 @@ export class Reconciliation {
     const parts: string[] = [];
     for (const [currency, amount] of difference) {
       if (amount !== 0) {
+        // Announcements speak the same separators the header shows — a
+        // screen-reader user on a `1.234,56` view must not hear `1,234.56`.
         parts.push(
-          `${currency} difference ${formatMinorUnits(amount, currency)}`
+          `${currency} difference ${formatMinorUnits(amount, currency, {
+            format: this.options.amountFormat,
+          })}`
         );
       }
     }
@@ -320,6 +332,7 @@ export class Reconciliation {
       lines: this.options.statementLines,
       postings: this.options.postings,
       matches: this.matches,
+      amountFormat: this.options.amountFormat,
     };
   }
 

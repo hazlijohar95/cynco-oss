@@ -1,5 +1,8 @@
 import { STATEMENTS_TAG_NAME } from '../constants';
-import { renderBalanceSheetHTML } from '../renderers/BalanceSheetRenderer';
+import {
+  type BalanceSheetRenderOptions,
+  renderBalanceSheetHTML,
+} from '../renderers/BalanceSheetRenderer';
 import type { BalanceSheetData, ColorScheme } from '../types';
 import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import { StatementsContainerLoaded } from './web-components';
@@ -7,7 +10,7 @@ import { StatementsContainerLoaded } from './web-components';
 // Named BalanceSheetViewOptions (not BalanceSheetOptions) because this
 // package re-exports the engine's BalanceSheetOptions — the options bag of
 // deriveBalanceSheet — and the two must not collide in the public surface.
-export interface BalanceSheetViewOptions {
+export interface BalanceSheetViewOptions extends BalanceSheetRenderOptions {
   /**
    * Pins how `light-dark()` colors resolve; see TrialBalanceViewOptions for
    * the user-preference pitfall this exists to solve.
@@ -37,6 +40,9 @@ export class BalanceSheet {
   private container: HTMLElement | undefined;
   private rootElement: HTMLElement | undefined;
   private renderedData: BalanceSheetData | undefined;
+  /** Descriptor the current DOM was formatted with (reference compare): a
+   * changed format must bust the data-reference skip. */
+  private renderedAmountFormat: BalanceSheetViewOptions['amountFormat'];
 
   constructor(
     public options: BalanceSheetViewOptions = {},
@@ -60,7 +66,10 @@ export class BalanceSheet {
     container = this.getOrCreateContainer(container, parentNode);
     applyHostColorScheme(container, this.options.colorScheme);
     const canSkip =
-      !forceRender && this.rootElement != null && this.renderedData === data;
+      !forceRender &&
+      this.rootElement != null &&
+      this.renderedAmountFormat === this.options.amountFormat &&
+      this.renderedData === data;
     if (canSkip) {
       return;
     }
@@ -71,7 +80,7 @@ export class BalanceSheet {
     // tables can atomically replace the old ones (any <style> siblings a
     // host injected into the shadow root survive).
     const template = document.createElement('div');
-    template.innerHTML = renderBalanceSheetHTML(data);
+    template.innerHTML = renderBalanceSheetHTML(data, this.options);
     const nextRootElement = template.firstElementChild;
     if (!(nextRootElement instanceof HTMLElement)) {
       return;
@@ -83,6 +92,7 @@ export class BalanceSheet {
     }
     this.rootElement = nextRootElement;
     this.renderedData = data;
+    this.renderedAmountFormat = this.options.amountFormat;
   }
 
   cleanUp(): void {
@@ -92,6 +102,7 @@ export class BalanceSheet {
     this.container = undefined;
     this.rootElement = undefined;
     this.renderedData = undefined;
+    this.renderedAmountFormat = undefined;
   }
 
   private getOrCreateContainer(
@@ -105,6 +116,7 @@ export class BalanceSheet {
     if (next !== this.container) {
       this.rootElement = undefined;
       this.renderedData = undefined;
+      this.renderedAmountFormat = undefined;
     }
     this.container = next;
     if (parentNode != null && next.parentNode !== parentNode) {

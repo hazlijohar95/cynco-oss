@@ -4,7 +4,12 @@
 // rows, and a group total — so the grammar lives here once and the two
 // renderers stay purely declarative about their domain structure.
 
-import type { MinorUnits, StatementLine, UnclassifiedBalance } from '../types';
+import type {
+  AmountFormat,
+  MinorUnits,
+  StatementLine,
+  UnclassifiedBalance,
+} from '../types';
 import { escapeHtml } from '../utils/escapeHtml';
 import { formatMinorUnits } from '../utils/formatMinorUnits';
 
@@ -19,13 +24,16 @@ export function renderAmountCellsHTML(
   amounts: readonly MinorUnits[],
   currency: string,
   columnPrefix: string,
-  alwaysShow = false
+  alwaysShow = false,
+  amountFormat?: AmountFormat
 ): string {
   let html = '';
   for (let index = 0; index < amounts.length; index += 1) {
     const amount = amounts[index];
     const text =
-      amount === 0 && !alwaysShow ? '' : formatMinorUnits(amount, currency);
+      amount === 0 && !alwaysShow
+        ? ''
+        : formatMinorUnits(amount, currency, { format: amountFormat });
     html += `<td data-cell="${columnPrefix}-${index}">${text}</td>`;
   }
   return html;
@@ -46,12 +54,19 @@ export function renderGroupHeaderHTML(
 export function renderLineRowHTML(
   line: StatementLine,
   currency: string,
-  columnPrefix: string
+  columnPrefix: string,
+  amountFormat?: AmountFormat
 ): string {
   return (
     `<tr data-row data-account="${escapeHtml(line.account)}">` +
     `<th scope="row" data-cell="account">${escapeHtml(line.account)}</th>` +
-    renderAmountCellsHTML(line.amounts, currency, columnPrefix) +
+    renderAmountCellsHTML(
+      line.amounts,
+      currency,
+      columnPrefix,
+      false,
+      amountFormat
+    ) +
     '</tr>'
   );
 }
@@ -62,12 +77,13 @@ export function renderGroupTotalHTML(
   totalKey: string,
   totals: readonly MinorUnits[],
   currency: string,
-  columnPrefix: string
+  columnPrefix: string,
+  amountFormat?: AmountFormat
 ): string {
   return (
     `<tr data-group-total data-total="${totalKey}">` +
     `<th scope="row" data-cell="total-label">${escapeHtml(label)}</th>` +
-    renderAmountCellsHTML(totals, currency, columnPrefix, true) +
+    renderAmountCellsHTML(totals, currency, columnPrefix, true, amountFormat) +
     '</tr>'
   );
 }
@@ -81,7 +97,8 @@ export function renderUnclassifiedGroupHTML(
   unclassified: readonly UnclassifiedBalance[],
   currency: string,
   columnPrefix: string,
-  columnCount: number
+  columnCount: number,
+  amountFormat?: AmountFormat
 ): string {
   if (unclassified.length === 0) {
     return '';
@@ -92,7 +109,13 @@ export function renderUnclassifiedGroupHTML(
     html +=
       `<tr data-row data-unclassified data-account="${escapeHtml(balance.account)}">` +
       `<th scope="row" data-cell="account">${escapeHtml(balance.account)}</th>` +
-      renderAmountCellsHTML(balance.amounts, currency, columnPrefix) +
+      renderAmountCellsHTML(
+        balance.amounts,
+        currency,
+        columnPrefix,
+        false,
+        amountFormat
+      ) +
       '</tr>';
   }
   html += '</tbody>';

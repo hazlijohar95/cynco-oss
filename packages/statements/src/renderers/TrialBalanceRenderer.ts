@@ -1,4 +1,5 @@
 import type {
+  AmountFormat,
   TrialBalanceData,
   TrialBalanceRow,
   TrialBalanceSection,
@@ -13,6 +14,14 @@ export interface TrialBalanceRenderOptions {
    * honestly instead of guessing a type. Default false.
    */
   showClassification?: boolean;
+  /**
+   * Separator/grouping descriptor for every amount (see
+   * {@link AmountFormat}). Default AMOUNT_FORMAT_COMMA_DOT — the original
+   * `1,234.56` bytes. Plain data so server and client format from the same
+   * descriptor (never from Intl — the byte-parity contract). Debit/credit
+   * column semantics and the U+2212 imbalance sign are unaffected.
+   */
+  amountFormat?: AmountFormat;
 }
 
 // Renders a TrialBalanceData as an HTML string: one semantic <table> per
@@ -33,7 +42,12 @@ export function renderTrialBalanceHTML(
     data.asOf == null ? '' : ` data-as-of="${escapeHtml(data.asOf)}"`;
   let html = `<div data-trial-balance${asOfAttribute}>`;
   for (const section of data.sections) {
-    html += renderSectionHTML(section, data.asOf, showClassification);
+    html += renderSectionHTML(
+      section,
+      data.asOf,
+      showClassification,
+      options.amountFormat
+    );
   }
   html += '</div>';
   return html;
@@ -45,7 +59,8 @@ export function renderTrialBalanceHTML(
 function renderSectionHTML(
   section: TrialBalanceSection,
   asOf: string | null,
-  showClassification: boolean
+  showClassification: boolean,
+  amountFormat?: AmountFormat
 ): string {
   // Adjustment splits are all-or-nothing per derivation (deriveTrialBalance
   // fills them on every row when adjustments are configured), so probing the
@@ -63,10 +78,22 @@ function renderSectionHTML(
   html += renderHeadHTML(working, showClassification);
   html += '<tbody>';
   for (const row of section.rows) {
-    html += renderRowHTML(row, section.currency, working, showClassification);
+    html += renderRowHTML(
+      row,
+      section.currency,
+      working,
+      showClassification,
+      amountFormat
+    );
   }
   html += '</tbody>';
-  html += renderFootHTML(section, working, showClassification, columnCount);
+  html += renderFootHTML(
+    section,
+    working,
+    showClassification,
+    columnCount,
+    amountFormat
+  );
   html += '</table>';
   return html;
 }
@@ -113,7 +140,8 @@ function renderRowHTML(
   row: TrialBalanceRow,
   currency: string,
   working: boolean,
-  showClassification: boolean
+  showClassification: boolean,
+  amountFormat?: AmountFormat
 ): string {
   const abnormalAttribute = row.abnormal ? ' data-abnormal' : '';
   const unclassifiedAttribute =
@@ -132,11 +160,26 @@ function renderRowHTML(
     html += `<td data-cell="type">${escapeHtml(label)}</td>`;
   }
   if (working) {
-    html += renderAmountPairHTML(row.unadjusted ?? 0, currency, 'unadjusted');
-    html += renderAmountPairHTML(row.adjustment ?? 0, currency, 'adjustments');
-    html += renderAmountPairHTML(row.balance, currency, 'adjusted');
+    html += renderAmountPairHTML(
+      row.unadjusted ?? 0,
+      currency,
+      'unadjusted',
+      amountFormat
+    );
+    html += renderAmountPairHTML(
+      row.adjustment ?? 0,
+      currency,
+      'adjustments',
+      amountFormat
+    );
+    html += renderAmountPairHTML(
+      row.balance,
+      currency,
+      'adjusted',
+      amountFormat
+    );
   } else {
-    html += renderAmountPairHTML(row.balance, currency, '');
+    html += renderAmountPairHTML(row.balance, currency, '', amountFormat);
   }
   html += '</tr>';
   return html;
@@ -148,15 +191,26 @@ function renderRowHTML(
 function renderAmountPairHTML(
   amount: number,
   currency: string,
-  columnPrefix: string
+  columnPrefix: string,
+  amountFormat?: AmountFormat
 ): string {
   const debitColumn = columnPrefix === '' ? 'debit' : `${columnPrefix}-debit`;
   const creditColumn =
     columnPrefix === '' ? 'credit' : `${columnPrefix}-credit`;
   const debit =
-    amount > 0 ? formatMinorUnits(amount, currency, { sign: 'never' }) : '';
+    amount > 0
+      ? formatMinorUnits(amount, currency, {
+          sign: 'never',
+          format: amountFormat,
+        })
+      : '';
   const credit =
-    amount < 0 ? formatMinorUnits(-amount, currency, { sign: 'never' }) : '';
+    amount < 0
+      ? formatMinorUnits(-amount, currency, {
+          sign: 'never',
+          format: amountFormat,
+        })
+      : '';
   return (
     `<td data-cell="${debitColumn}">${debit}</td>` +
     `<td data-cell="${creditColumn}">${credit}</td>`
@@ -171,13 +225,16 @@ function renderFootHTML(
   section: TrialBalanceSection,
   working: boolean,
   showClassification: boolean,
-  columnCount: number
+  columnCount: number,
+  amountFormat?: AmountFormat
 ): string {
   const totalDebit = formatMinorUnits(section.totalDebit, section.currency, {
     sign: 'never',
+    format: amountFormat,
   });
   const totalCredit = formatMinorUnits(section.totalCredit, section.currency, {
     sign: 'never',
+    format: amountFormat,
   });
   let html = '<tfoot>';
   html += `<tr data-totals data-balanced="${section.balanced}">`;
@@ -206,7 +263,7 @@ function renderFootHTML(
     html += '<th scope="row" data-cell="imbalance-label">Out of balance</th>';
     html +=
       `<td data-cell="imbalance-amount" colspan="${columnCount - 1}">` +
-      `<span data-imbalance-amount>${formatMinorUnits(difference, section.currency, { sign: 'always' })} ${escapeHtml(section.currency)}</span>` +
+      `<span data-imbalance-amount>${formatMinorUnits(difference, section.currency, { sign: 'always', format: amountFormat })} ${escapeHtml(section.currency)}</span>` +
       '</td>';
     html += '</tr>';
   }

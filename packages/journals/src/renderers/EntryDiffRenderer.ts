@@ -1,4 +1,5 @@
 import type {
+  AmountFormat,
   EntryFieldDiff,
   EntryFlag,
   EntryListDiff,
@@ -21,18 +22,32 @@ import { renderEntryFooterHTML, renderFlagDotHTML } from './EntryRenderer';
 // existing --journals-debit/credit theme vars — no new theme tokens needed).
 // Like every renderer here it is a pure string builder shared by client,
 // SSR, and tests — no DOM APIs, every interpolation escaped.
-export function renderEntryDiffHTML(diff: EntryVersionDiff): string {
+export interface EntryDiffRenderOptions {
+  /**
+   * Separator/grouping descriptor applied to posting amounts and imbalance
+   * figures (see {@link AmountFormat}). Default AMOUNT_FORMAT_COMMA_DOT —
+   * the original `1,234.56` bytes. Plain data so SSR and client format from
+   * the same descriptor; diff gutters and sign conventions are unaffected.
+   */
+  amountFormat?: AmountFormat;
+}
+
+export function renderEntryDiffHTML(
+  diff: EntryVersionDiff,
+  options: EntryDiffRenderOptions = {}
+): string {
+  const { amountFormat } = options;
   let html = `<article data-entry-diff data-diff-kind="${diff.kind}">`;
   html += renderDiffHeaderHTML(diff);
   html += '<div data-postings>';
   for (const [index, posting] of diff.postings.entries()) {
-    html += renderPostingDiffHTML(posting, index);
+    html += renderPostingDiffHTML(posting, index, amountFormat);
   }
   html += '</div>';
   // Unbalanced AFTER versions get the standard imbalance footer; deleted
   // entries (after == null) have nothing left to balance.
   if (diff.after != null) {
-    html += renderEntryFooterHTML(diff.after);
+    html += renderEntryFooterHTML(diff.after, amountFormat);
   }
   html += '</article>';
   return html;
@@ -166,7 +181,11 @@ function renderListFieldHTML(
 // amount struck through, then the new amount. The sign gutter and
 // debit/credit color derive from the surviving amount (after side when it
 // exists, before side for removed rows).
-function renderPostingDiffHTML(posting: PostingDiff, index: number): string {
+function renderPostingDiffHTML(
+  posting: PostingDiff,
+  index: number,
+  amountFormat?: AmountFormat
+): string {
   const amount = posting.afterAmount ?? posting.beforeAmount ?? 0;
   const direction = amount < 0 ? 'credit' : 'debit';
   let html =
@@ -177,10 +196,10 @@ function renderPostingDiffHTML(posting: PostingDiff, index: number): string {
   html += '<span data-cell="amount">';
   if (posting.kind === 'amount-changed') {
     html +=
-      `<span data-amount-old>${formatAmount(posting.beforeAmount, posting.currency)}</span>` +
+      `<span data-amount-old>${formatAmount(posting.beforeAmount, posting.currency, amountFormat)}</span>` +
       '<span data-diff-arrow aria-hidden="true">\u2192</span>';
   }
-  html += `<span data-amount-value>${formatAmount(amount, posting.currency)}</span>`;
+  html += `<span data-amount-value>${formatAmount(amount, posting.currency, amountFormat)}</span>`;
   html += '</span>';
   html += `<span data-cell="currency">${escapeHtml(posting.currency)}</span>`;
   html += '</div>';
@@ -190,6 +209,13 @@ function renderPostingDiffHTML(posting: PostingDiff, index: number): string {
 // Amounts render unsigned like JournalEntry postings — the sign gutter and
 // color carry the semantics. Null (structurally impossible for the kinds
 // that call this) degrades to 0 rather than throwing mid-render.
-function formatAmount(amount: MinorUnits | null, currency: string): string {
-  return formatMinorUnits(amount ?? 0, currency, { sign: 'never' });
+function formatAmount(
+  amount: MinorUnits | null,
+  currency: string,
+  amountFormat?: AmountFormat
+): string {
+  return formatMinorUnits(amount ?? 0, currency, {
+    sign: 'never',
+    format: amountFormat,
+  });
 }

@@ -1,12 +1,15 @@
 import { JOURNALS_TAG_NAME } from '../constants';
-import { renderEntryDiffHTML } from '../renderers/EntryDiffRenderer';
+import {
+  type EntryDiffRenderOptions,
+  renderEntryDiffHTML,
+} from '../renderers/EntryDiffRenderer';
 import type { ColorScheme, LedgerEntry } from '../types';
 import { applyHostColorScheme } from '../utils/applyHostColorScheme';
 import { areEntryDiffInputsEqual } from '../utils/areEntryDiffInputsEqual';
 import { diffEntryVersions } from '../utils/diffEntryVersions';
 import { JournalsContainerLoaded } from './web-components';
 
-export interface EntryDiffOptions {
+export interface EntryDiffOptions extends EntryDiffRenderOptions {
   /**
    * Pins how `light-dark()` colors resolve. The stylesheet declares
    * `:host { color-scheme: light dark }`, which resolves from the USER's OS
@@ -54,6 +57,9 @@ export class EntryDiff {
   private diffElement: HTMLElement | undefined;
   private renderedBefore: LedgerEntry | null = null;
   private renderedAfter: LedgerEntry | null = null;
+  /** Descriptor the current DOM was formatted with (reference compare, the
+   * options idiom): a changed format must bust the input-equality skip. */
+  private renderedAmountFormat: EntryDiffOptions['amountFormat'];
   private hasRendered = false;
 
   constructor(
@@ -83,6 +89,7 @@ export class EntryDiff {
       this.diffElement = existing;
       this.renderedBefore = before;
       this.renderedAfter = after;
+      this.renderedAmountFormat = this.options.amountFormat;
       this.hasRendered = true;
       return;
     }
@@ -102,6 +109,7 @@ export class EntryDiff {
       !forceRender &&
       this.hasRendered &&
       this.diffElement != null &&
+      this.renderedAmountFormat === this.options.amountFormat &&
       areEntryDiffInputsEqual(
         this.renderedBefore,
         this.renderedAfter,
@@ -119,7 +127,10 @@ export class EntryDiff {
     // Parse the shared renderer's HTML through a detached element so the new
     // card can atomically replace the old one (SSR <style> siblings survive).
     const template = document.createElement('div');
-    template.innerHTML = renderEntryDiffHTML(diffEntryVersions(before, after));
+    template.innerHTML = renderEntryDiffHTML(
+      diffEntryVersions(before, after),
+      this.options
+    );
     const nextDiffElement = template.firstElementChild;
     if (!(nextDiffElement instanceof HTMLElement)) {
       return;
@@ -132,6 +143,7 @@ export class EntryDiff {
     this.diffElement = nextDiffElement;
     this.renderedBefore = before;
     this.renderedAfter = after;
+    this.renderedAmountFormat = this.options.amountFormat;
     this.hasRendered = true;
   }
 
@@ -143,6 +155,7 @@ export class EntryDiff {
     this.diffElement = undefined;
     this.renderedBefore = null;
     this.renderedAfter = null;
+    this.renderedAmountFormat = undefined;
     this.hasRendered = false;
   }
 
@@ -156,6 +169,7 @@ export class EntryDiff {
       this.diffElement = undefined;
       this.renderedBefore = null;
       this.renderedAfter = null;
+      this.renderedAmountFormat = undefined;
       this.hasRendered = false;
     }
     this.container = next;
