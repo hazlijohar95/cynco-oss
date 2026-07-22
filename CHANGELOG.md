@@ -12,6 +12,13 @@ never reaches npm.
 
 ## [Unreleased]
 
+## 2026-07-22 — the engine goes public
+
+Published: `@cynco/ledger-core@0.1.0-beta.1` (new),
+`@cynco/statements@0.1.0-beta.1` (new), `@cynco/importers@0.1.0-beta.1` (new),
+`@cynco/journals@0.1.0-beta.2`, `@cynco/accounts@0.1.0-beta.2` (dist-tag
+`beta`). `@cynco/theme` and `@cynco/theming` are unchanged.
+
 ### @cynco/ledger-core — 0.1.0-beta.1 (new package)
 
 #### Added
@@ -36,6 +43,24 @@ never reaches npm.
   `@cynco/importers` now declare `@cynco/ledger-core` as a regular npm
   dependency; published manifests are no longer rewritten to strip inlined
   dependencies.
+
+### @cynco/journals — 0.1.0-beta.2
+
+#### Changed
+
+- The engine shapes (`LedgerEntry`, `Posting`, `EntryFlag`, `MinorUnits`,
+  `StatementLine`), the `AmountFormat` presets, and `CURRENCY_DECIMALS` are now
+  re-exported from `@cynco/ledger-core` (a new runtime dependency) instead of
+  being package-local copies. Public API and rendered output are unchanged.
+
+### @cynco/accounts — 0.1.0-beta.2
+
+#### Changed
+
+- `@cynco/ledger-core` and `@cynco/theme` are regular npm dependencies; the
+  engine and theme roles are no longer bundled into `dist/`. `AmountFormat` and
+  the amount-format presets are re-exported from the engine. Public API and
+  rendered output are unchanged.
 
 ### @cynco/importers — 0.1.0-beta.1 (new package)
 
