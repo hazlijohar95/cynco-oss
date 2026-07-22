@@ -30,11 +30,9 @@ import { formatMessage } from 'publint/utils';
 //
 // The load-bearing step is repacking the pnpm tarball after rewriting its
 // package.json, so the tarball we rehearse with --dry-run is byte-for-byte
-// the tarball we publish. Rewriting matters most for @cynco/accounts: its
-// dist inlines @cynco/ledger-core and @cynco/theme via tsdown noExternal,
-// but the workspace manifest still declares them as dependencies so local
-// resolution works. Publishing that manifest verbatim would break
-// `pnpm add @cynco/accounts` (the engine is private and never on npm).
+// the tarball we publish. Rewriting drops release-only fields (scripts,
+// devDependencies) that must never reach consumers — devDependencies in
+// particular still names private workspace packages.
 
 // ---------------------------------------------------------------------------
 // Per-package release configuration
@@ -43,46 +41,28 @@ import { formatMessage } from 'publint/utils';
 export interface PackagePublishConfig {
   /** moon project name, i.e. the packages/<dir> folder name. */
   project: string;
-  /**
-   * Workspace dependencies whose source is bundled into dist at build time
-   * (tsdown `noExternal`). They must be stripped from the published manifest
-   * (consumers already get the code) and must never survive as import
-   * specifiers in the payload (the resolver would fetch — or fail to fetch —
-   * a package whose code is already inlined).
-   */
-  inlinedDependencies: readonly string[];
 }
 
 /**
  * Workspace packages that are never published to npm. No published payload
  * may import them and no published manifest may depend on them, in any
- * package — this is the repo-wide analogue of accounts' per-build
- * assert-no-ledger-core gate.
+ * package.
  */
-export const PRIVATE_PACKAGES: readonly string[] = [
-  '@cynco/ledger-core',
-  '@cynco/ledger-test-data',
-];
+export const PRIVATE_PACKAGES: readonly string[] = ['@cynco/ledger-test-data'];
 
 /**
- * The allowlist of publishable packages. A static table (rather than deriving
- * from tsdown configs) keeps the inlining contract reviewable in one place:
- * changing what a package inlines requires touching this file, which the
- * publish tests cover.
+ * The allowlist of publishable packages. A static table keeps the release
+ * surface reviewable in one place: publishing a new package requires
+ * touching this file, which the publish tests cover.
  */
 export const PUBLISH_CONFIGS: Record<string, PackagePublishConfig> = {
-  '@cynco/accounts': {
-    project: 'accounts',
-    inlinedDependencies: ['@cynco/ledger-core', '@cynco/theme'],
-  },
-  '@cynco/importers': { project: 'importers', inlinedDependencies: [] },
-  '@cynco/journals': { project: 'journals', inlinedDependencies: [] },
-  '@cynco/statements': {
-    project: 'statements',
-    inlinedDependencies: ['@cynco/ledger-core', '@cynco/theme'],
-  },
-  '@cynco/theme': { project: 'theme', inlinedDependencies: [] },
-  '@cynco/theming': { project: 'theming', inlinedDependencies: [] },
+  '@cynco/accounts': { project: 'accounts' },
+  '@cynco/importers': { project: 'importers' },
+  '@cynco/journals': { project: 'journals' },
+  '@cynco/ledger-core': { project: 'ledger-core' },
+  '@cynco/statements': { project: 'statements' },
+  '@cynco/theme': { project: 'theme' },
+  '@cynco/theming': { project: 'theming' },
 };
 
 // ---------------------------------------------------------------------------
@@ -258,29 +238,17 @@ export interface PublishManifest {
  * Produces the manifest that actually ships to npm. Returns a new object —
  * the caller keeps the original for the dry-run diff.
  *
- * - Inlined workspace deps are removed: their code is already bundled into
- *   dist, and @cynco/ledger-core does not exist on npm at all.
  * - `scripts` is dropped entirely: the only script is prepublishOnly, which
- *   points at the moon guard chain — meaningless (and for accounts,
- *   fail-by-design) inside the packed artifact.
+ *   points at the moon guard chain — meaningless inside the packed artifact.
  * - `devDependencies` is dropped: npm ignores it on install, but it still
  *   names private workspace packages (accounts dev-depends on
  *   @cynco/ledger-test-data), and the published manifest must not mention
  *   private packages anywhere.
  */
 export function rewritePublishManifest(
-  manifest: PublishManifest,
-  inlinedDependencies: readonly string[]
+  manifest: PublishManifest
 ): PublishManifest {
   const rewritten: PublishManifest = structuredClone(manifest);
-  if (rewritten.dependencies != null) {
-    for (const name of inlinedDependencies) {
-      delete rewritten.dependencies[name];
-    }
-    if (Object.keys(rewritten.dependencies).length === 0) {
-      delete rewritten.dependencies;
-    }
-  }
   delete rewritten.scripts;
   delete rewritten.devDependencies;
   return rewritten;
@@ -635,12 +603,8 @@ function preflight(flags: CliFlags): void {
 }
 
 // Runs the guard chain this script owns: the pnpm-version pin check plus the
-// package build (accounts' build already includes its assert-no-ledger-core
-// dist gate). Deliberately NOT `moon run <project>:prepublish` — accounts'
-// prepublish contains assert-safe-publish, which fails by design while the
-// workspace manifest still carries inlined deps. That guard exists to block
-// direct `pnpm publish`; this script is the sanctioned path around it because
-// it rewrites the manifest before anything reaches the registry.
+// package build. Equivalent to `moon run <project>:prepublish`, run directly
+// so failures print the offending step instead of the aggregator.
 function runGuardsAndBuild(project: string, packageDir: string): void {
   console.log(`[publish] checking pnpm version pin`);
   run('bun', [join(workspaceRoot, 'scripts', 'assert-pnpm-version.ts')], {
@@ -695,17 +659,12 @@ function collectFiles(dir: string): string[] {
 // hygiene, forbidden import specifiers in every shipped text file, no
 // incremental-build droppings, every exports entry backed by a real file,
 // and the docs npm renders (README/LICENSE) present.
-function assertPublishPayload(
-  payloadDir: string,
-  config: PackagePublishConfig
-): void {
+function assertPublishPayload(payloadDir: string): void {
   const manifest = JSON.parse(
     readFileSync(join(payloadDir, 'package.json'), 'utf8')
   ) as PublishManifest;
 
-  const forbidden = [
-    ...new Set([...PRIVATE_PACKAGES, ...config.inlinedDependencies]),
-  ];
+  const forbidden = [...PRIVATE_PACKAGES];
   const offenders: string[] = [];
 
   for (const offender of findManifestDependencyOffenders(manifest, forbidden)) {
@@ -718,8 +677,8 @@ function assertPublishPayload(
       offenders.push(`${rel} (tsbuildinfo leaked into payload)`);
       continue;
     }
-    // Sourcemaps embed pre-bundling source text, including the original
-    // inlined import specifiers; nothing resolves those at runtime.
+    // Sourcemaps embed pre-bundling source text; nothing in them resolves
+    // at runtime.
     if (file.endsWith('.map')) {
       continue;
     }
@@ -812,7 +771,7 @@ async function assertConsumerCorrectness(
 }
 
 // Line-level manifest diff for the dry-run report: enough to eyeball that
-// only the inlined deps and release-only fields disappeared.
+// only the release-only fields disappeared.
 function describeDiff(before: string, after: string): string {
   const beforeLines = before.split('\n');
   const afterLines = after.split('\n');
@@ -896,13 +855,12 @@ async function main(): Promise<void> {
   const manifestPath = join(payloadDir, 'package.json');
   const before = readFileSync(manifestPath, 'utf8');
   const rewritten = rewritePublishManifest(
-    JSON.parse(before) as PublishManifest,
-    config.inlinedDependencies
+    JSON.parse(before) as PublishManifest
   );
   const after = `${JSON.stringify(rewritten, null, 2)}\n`;
   writeFileSync(manifestPath, after);
 
-  assertPublishPayload(payloadDir, config);
+  assertPublishPayload(payloadDir);
 
   // Repack the rewritten payload and verify the *extracted final tarball*
   // once more: the artifact that ships is the artifact that was checked.
@@ -910,7 +868,7 @@ async function main(): Promise<void> {
   const verifyRoot = join(workDir, 'verify');
   untar(finalTarballPath, verifyRoot);
   const finalPayloadDir = join(verifyRoot, 'package');
-  assertPublishPayload(finalPayloadDir, config);
+  assertPublishPayload(finalPayloadDir);
 
   // Consumer-correctness gate (publint + attw) on the same final artifact.
   // Deliberately before the dry-run/publish fork: a --dry-run that skipped

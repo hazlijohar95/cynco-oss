@@ -2,10 +2,10 @@
 
 `@cynco/importers` turns raw bank exports — CSV and OFX 1.x/2.x — into the
 statement lines and draft ledger entries the rest of the suite consumes. Pure
-data, zero dependencies, no DOM. Amounts are parsed straight from decimal
-strings to integer minor units, so no float ever touches money; a row the parser
-cannot trust is skipped with a reason, a file it cannot trust throws a typed
-error, and nothing is ever guessed, repaired, or silently dropped.
+data, no DOM, no third-party dependencies. Amounts are parsed straight from
+decimal strings to integer minor units, so no float ever touches money; a row
+the parser cannot trust is skipped with a reason, a file it cannot trust throws
+a typed error, and nothing is ever guessed, repaired, or silently dropped.
 
 ## Installation \{#installation\}
 
@@ -220,10 +220,9 @@ const reconciliation = new Reconciliation({
 reconciliation.render({ parentNode: document.querySelector('#host')! });
 ```
 
-The shared shapes (`StatementLine`, `Posting`, `LedgerEntry`) are deliberately
-duplicated, not imported — importers carries no dependency on `@cynco/journals`
-— and a lockstep parity test fails the moment either side drifts, the same idiom
-the suite uses for the engine's currency table.
+The shared shapes (`StatementLine`, `Posting`, `LedgerEntry`) come from
+[`@cynco/ledger-core`](/docs/ledger-core) — the same definitions the journals
+reconciliation UI consumes, so the two packages can never drift apart.
 
 ## API reference \{#api-reference\}
 
@@ -287,14 +286,14 @@ per-account group with `accountId`, `currency`, and `lines`) plus `skipped`.
 
 | Export              | Value          | Meaning                                                                                           |
 | ------------------- | -------------- | ------------------------------------------------------------------------------------------------- |
-| `CURRENCY_DECIMALS` | 26-entry table | ISO 4217 minor-unit exceptions, lockstep with the engine's canonical table; unlisted codes use 2. |
+| `CURRENCY_DECIMALS` | 26-entry table | ISO 4217 minor-unit exceptions — the engine's canonical table, re-exported; unlisted codes use 2. |
 
 ### Types \{#api-types\}
 
 - **Core data** — `MinorUnits`, `EntryFlag`
   (`'cleared' | 'pending' | 'flagged' | 'void'`), `Posting`, `LedgerEntry`,
-  `StatementLine` — deliberate lockstep duplicates of the `@cynco/journals`
-  shapes.
+  `StatementLine` — re-exported from the engine, the same definitions
+  `@cynco/journals` consumes.
 - **CSV** — `CsvColumnRef`, `CsvAmountColumns`, `CsvDateFormat`,
   `CsvAmountFormat`, `CsvMapping`, `CsvParseResult`.
 - **OFX** — `OfxParseOptions`, `OfxStatement`, `OfxParseResult`.

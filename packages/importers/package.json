@@ -49,6 +49,9 @@
   "scripts": {
     "prepublishOnly": "moon run importers:prepublish"
   },
+  "dependencies": {
+    "@cynco/ledger-core": "workspace:*"
+  },
   "devDependencies": {
     "@types/bun": "catalog:",
     "tsdown": "catalog:",

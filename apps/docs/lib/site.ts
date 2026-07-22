@@ -14,6 +14,7 @@ export const SITE_LINKS = [
   { href: '/docs/statements', label: 'Statements' },
   { href: '/docs/theming', label: 'Theming' },
   { href: '/docs/importers', label: 'Importers' },
+  { href: '/docs/ledger-core', label: 'Ledger core' },
   { href: '/playground', label: 'Playground' },
   { href: '/ledger-dev', label: 'Performance lab' },
 ] as const;
@@ -62,6 +63,14 @@ export const DOCS_ORDER = [
     description:
       'Bank exports (CSV, OFX) to statement lines and draft entries — ' +
       'integer minor units, running-balance proof, fail loud.',
+  },
+  {
+    href: '/docs/ledger-core',
+    label: 'Ledger core',
+    packageName: '@cynco/ledger-core',
+    description:
+      'The engine: double-entry data model, integer minor units, entry ' +
+      'and account stores, statement derivations — everything builds on it.',
   },
 ] as const;
 

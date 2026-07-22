@@ -21,6 +21,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---
 
-This package bundles @cynco/theme, whose color palette ramps are derived from
+This package depends on @cynco/theme, whose color palette ramps are derived from
 @pierre/theme, copyright (c) The Pierre Computer Company, used under the MIT
 License: https://github.com/pierrecomputer/pierre

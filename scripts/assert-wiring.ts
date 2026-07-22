@@ -249,47 +249,7 @@ export function findPublishArtifactViolations(
 }
 
 /**
- * Check 5: every PUBLISH_CONFIGS `inlinedDependencies` entry must be a real
- * workspace package that is safe to strip from the published manifest:
- * either private (never on npm — consumers COULD NOT resolve it, so inlining
- * is mandatory) or itself publishable (on npm, but deliberately bundled so
- * consumers do not need to install it — @cynco/theme inside accounts and
- * statements). Requiring literal `"private": true` for every entry would
- * false-positive that sanctioned theme inlining; anything neither private
- * nor publishable is a typo or a package the workspace no longer has.
- */
-export function findInlinedDependencyViolations(
-  configs: ReadonlyMap<string, readonly string[]>,
-  packagesByName: ReadonlyMap<string, WorkspacePackage>
-): WiringViolation[] {
-  const violations: WiringViolation[] = [];
-  for (const [name, inlined] of configs) {
-    for (const dep of inlined) {
-      const pkg = packagesByName.get(dep);
-      if (pkg == null) {
-        violations.push({
-          rule: 'inlined-dependencies',
-          message: `PUBLISH_CONFIGS[${name}].inlinedDependencies lists ${dep}, which is not a workspace package under packages/ — fix the name or remove it.`,
-        });
-        continue;
-      }
-      if (!pkg.isPrivate && !configs.has(dep)) {
-        violations.push({
-          rule: 'inlined-dependencies',
-          message:
-            `PUBLISH_CONFIGS[${name}].inlinedDependencies lists ${dep}, which is ` +
-            `neither private nor publishable — an inlined dependency must be ` +
-            `\`"private": true\` (never on npm) or a PUBLISH_CONFIGS package ` +
-            `(deliberately bundled).`,
-        });
-      }
-    }
-  }
-  return violations;
-}
-
-/**
- * Check 5b: PRIVATE_PACKAGES (the publish pipeline's never-on-npm blocklist)
+ * Check 5: PRIVATE_PACKAGES (the publish pipeline's never-on-npm blocklist)
  * must equal the set of `"private": true` packages under packages/, in both
  * directions. A private package missing from the list can leak into a
  * publish payload unchecked; a stale list entry means the blocklist guards a
@@ -418,13 +378,6 @@ function main(): void {
     process.exit(1);
   }
 
-  const inlinedByName = new Map(
-    Object.entries(PUBLISH_CONFIGS).map(([name, config]) => [
-      name,
-      config.inlinedDependencies,
-    ])
-  );
-
   const violations = [
     ...findMissingDependsOn(packages, dependsOn),
     ...findPublishConfigViolations(packages, Object.keys(PUBLISH_CONFIGS)),
@@ -434,7 +387,6 @@ function main(): void {
       packagesByName
     ),
     ...findPublishArtifactViolations(packages),
-    ...findInlinedDependencyViolations(inlinedByName, packagesByName),
     ...findPrivateRegistryViolations(packages, PRIVATE_PACKAGES),
   ];
 

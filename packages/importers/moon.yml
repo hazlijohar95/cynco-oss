@@ -1,10 +1,10 @@
 $schema: 'https://moonrepo.dev/schemas/project.json'
 
 # Pure data package: parses raw bank exports (CSV, OFX) into statement lines
-# and draft ledger entries. No DOM, no React, no CSS, and zero runtime
-# dependencies — like journals, the currency exponent table is duplicated
-# (with a drift guard in test/) rather than depending on the private engine,
-# so the inherited tsdown build needs no noExternal override here.
+# and draft ledger entries. No DOM, no React, no CSS, and no third-party
+# runtime dependencies — the shared money-kernel shapes and the currency
+# exponent table come from @cynco/ledger-core, the suite's one canonical
+# definition of each.
 language: 'typescript'
 layer: 'library'
 tags: ['tsdown', 'publishable', 'tier-domain']

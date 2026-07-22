@@ -28,7 +28,7 @@ export default function DocsIndexPage() {
           <section className="docs-prose contain-layout">
             <h1>Documentation</h1>
             <p>
-              Five packages, one contract: vanilla TypeScript cores, thin React
+              Six packages, one contract: vanilla TypeScript cores, thin React
               adapters, declarative shadow DOM SSR, and integer minor units end
               to end — no floats ever touch money.
             </p>

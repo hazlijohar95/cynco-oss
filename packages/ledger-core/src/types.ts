@@ -62,6 +62,26 @@ export interface LedgerEntry {
 }
 
 /**
+ * One line of a bank statement, already parsed to integer minor units. This
+ * is the reconciliation input shape shared by the whole suite: importers
+ * produce it from raw bank exports and the journals reconciliation UI
+ * consumes it as-is. Named to distinguish it from `StatementLine`, which is
+ * one account line of a derived *financial* statement — a different concept
+ * that happens to share the English word.
+ */
+export interface BankStatementLine {
+  /** Stable unique id (caller-provided). */
+  id: string;
+  /** ISO date `YYYY-MM-DD`. */
+  date: string;
+  description: string;
+  /** Signed from the account's perspective: deposits positive. */
+  amount: MinorUnits;
+  /** ISO 4217 or commodity code, e.g. `MYR`. */
+  currency: string;
+}
+
+/**
  * One visible row of the chart-of-accounts tree, as returned by
  * `AccountStore.getVisibleSlice`. Rows are materialized per slice call
  * (slices are viewport-sized, so the per-row allocation cost stays bounded);

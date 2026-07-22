@@ -5,7 +5,7 @@ export { parseCsvStatement } from './parseCsvStatement';
 export { parseOfx } from './parseOfx';
 export { proveRunningBalance } from './proveRunningBalance';
 export { toDraftEntries } from './toDraftEntries';
-export { negateMinorUnits } from './utils/negateMinorUnits';
+export { negateMinorUnits } from '@cynco/ledger-core';
 export { parseAmountToMinorUnits } from './utils/parseAmountToMinorUnits';
 export { parseDateToIso } from './utils/parseDateToIso';
 export type {

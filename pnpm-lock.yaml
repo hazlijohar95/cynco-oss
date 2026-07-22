@@ -407,6 +407,10 @@ importers:
         version: 8.1.0(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
 
   packages/importers:
+    dependencies:
+      '@cynco/ledger-core':
+        specifier: workspace:*
+        version: link:../ledger-core
     devDependencies:
       '@types/bun':
         specifier: 'catalog:'
@@ -420,6 +424,9 @@ importers:
 
   packages/journals:
     dependencies:
+      '@cynco/ledger-core':
+        specifier: workspace:*
+        version: link:../ledger-core
       '@cynco/theme':
         specifier: workspace:*
         version: link:../theme

@@ -1,9 +1,10 @@
+import { negateMinorUnits } from '@cynco/ledger-core';
+
 import type {
   LedgerEntry,
   StatementLine,
   ToDraftEntriesOptions,
 } from './types';
-import { negateMinorUnits } from './utils/negateMinorUnits';
 
 /**
  * Lifts single-sided statement lines into BALANCED draft ledger entries: the

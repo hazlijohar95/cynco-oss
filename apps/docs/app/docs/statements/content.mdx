@@ -5,8 +5,8 @@ import { TrialBalanceDemo } from '@/examples/TrialBalanceDemo';
 # Statements
 
 `@cynco/statements` is trial balance and financial statement renderers derived
-from ledger entries — derive and render from one package, with the data engine
-inlined at build time. Statements render as semantic tables inside a
+from ledger entries — derive and render from one package, built on the published
+`@cynco/ledger-core` engine. Statements render as semantic tables inside a
 `<statements-container>` shadow root, one table per currency (currencies are
 never mixed into one column), keyed by canonical colon-delimited account paths.
 Everything the numbers claim — the debit/credit tie, the accounting equation —
@@ -18,8 +18,8 @@ is computed and shown; nothing is asserted, guessed, or plugged.
 
 Install with the package manager of your choice. React is an optional peer
 dependency required only by the `/react` entry; the engine
-(`@cynco/ledger-core`) is inlined into the published bundle, so there are no
-runtime dependencies.
+([`@cynco/ledger-core`](/docs/ledger-core)) is a regular dependency, published
+on npm like the rest of the suite.
 
 ```bash
 pnpm add @cynco/statements
@@ -351,8 +351,8 @@ getCurrencyExponent('JPY'); // 0 — yen has no minor unit
 
 ## API reference \{#api-reference\}
 
-The full export surface of `@cynco/statements`, view options and the inlined
-engine's derivation options alike. Types are transcribed from the source.
+The full export surface of `@cynco/statements`, view options and the re-exported
+engine derivation options alike. Types are transcribed from the source.
 
 ### View options \{#api-view-options\}
 

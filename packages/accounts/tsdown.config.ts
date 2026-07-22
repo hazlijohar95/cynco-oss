@@ -23,10 +23,6 @@ const config: UserConfig = defineConfig({
   },
   unbundle: true,
   platform: 'neutral',
-  // The private data engine and the theme roles are inlined into dist so the
-  // published package carries no runtime import of unpublished workspace
-  // packages. scripts/assert-no-private-imports.ts guards this after every build.
-  noExternal: ['@cynco/ledger-core', '@cynco/theme'],
   plugins: [
     {
       name: 'postcss-accounts-css',

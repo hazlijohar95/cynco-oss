@@ -107,18 +107,16 @@ tasks:
     options:
       runInCI: 'always'
 
-  # Lockstep guard: the deliberately duplicated types/tables across packages
-  # (currency exponent table, AmountFormat + presets, importers' copies of
-  # the entry shapes, CSS px ↔ JS constants) are compared as normalized
-  # source text against a central registry — the mechanical form of every
-  # "MUST mirror" comment. Reads sources as text; no build needed.
+  # Lockstep guard for the mirrors that cannot be imports: CSS px/ms values
+  # that JS constants mirror by hand (a stylesheet cannot import a
+  # TypeScript constant). The type/table mirrors it once checked are gone —
+  # every package imports those from @cynco/ledger-core now. Reads sources
+  # as text; no build needed.
   assert-lockstep:
     command: 'bun scripts/assert-lockstep.ts'
     inputs:
       - 'scripts/assert-lockstep.ts'
-      - 'packages/*/src/types.ts'
       - 'packages/*/src/constants.ts'
-      - 'packages/ledger-core/src/currency.ts'
       - 'packages/*/src/style.css'
     options:
       runInCI: 'always'

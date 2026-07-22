@@ -14,9 +14,10 @@
  * throwing, consistent with the suite's parser rules; callers with exotic
  * commodities pass explicit overrides instead.
  *
- * `CURRENCY_DECIMALS` in `@cynco/journals/src/constants.ts` mirrors this
- * table by hand (journals carries no engine dependency) — keep both in sync
- * when editing.
+ * This is the one canonical table for the whole suite: every package
+ * (journals, accounts, statements, importers) imports it from here — never
+ * copy it, a partial hand-copy once mis-scaled zero- and three-decimal
+ * currencies 100×/10× in production.
  */
 export const DEFAULT_CURRENCY_EXPONENTS: Readonly<Record<string, number>> = {
   // Zero-decimal currencies: the minor unit is the whole unit.

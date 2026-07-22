@@ -1,61 +1,22 @@
-/** Integer minor units (sen, cents). Never floats. */
-export type MinorUnits = number;
+// The shared money-kernel shapes come from the engine — one definition for
+// the whole suite. Re-exported so importer output plugs into the journals
+// reconciliation UI with no adaptation (both packages speak the engine's
+// shapes), and every internal `./types` import keeps working.
+import type { BankStatementLine, MinorUnits } from '@cynco/ledger-core';
 
-export type EntryFlag = 'cleared' | 'pending' | 'flagged' | 'void';
-
+export type {
+  EntryFlag,
+  LedgerEntry,
+  MinorUnits,
+  Posting,
+} from '@cynco/ledger-core';
 /**
- * MUST mirror `Posting` in `@cynco/journals/src/types.ts`. Importers feed the
- * journals reconciliation UI, but a domain package may not depend on another
- * domain package (scripts/assert-tiers.ts forbids the sideways edge), so the
- * consumed shapes are duplicated here — the same lockstep-duplication idiom
- * journals uses for the engine's currency table. test/lockstepParity.test.ts
- * fails the moment either side drifts.
+ * One line of a bank statement, already parsed to integer minor units — the
+ * engine's `BankStatementLine`, re-exported under the name this package has
+ * always used. This is the exact shape `proposeMatches` and the journals
+ * Reconciliation UI consume.
  */
-export interface Posting {
-  /** Canonical colon-delimited account path, e.g. `Assets:Current:Cash-Maybank`. */
-  account: string;
-  /** Signed integer minor units. Positive = debit, negative = credit. */
-  amount: MinorUnits;
-  /** ISO 4217 or commodity code, e.g. `MYR`, `USD`. */
-  currency: string;
-}
-
-/**
- * MUST mirror `LedgerEntry` in `@cynco/journals/src/types.ts` — see the
- * {@link Posting} note for why the shape is duplicated rather than imported.
- */
-export interface LedgerEntry {
-  /** Stable unique id (caller-provided). */
-  id: string;
-  /** ISO date `YYYY-MM-DD`. */
-  date: string;
-  flag: EntryFlag;
-  payee: string | null;
-  narration: string;
-  tags: readonly string[];
-  links: readonly string[];
-  postings: readonly Posting[];
-}
-
-/**
- * One line of a bank statement, already parsed to integer minor units.
- *
- * MUST mirror `StatementLine` in `@cynco/journals/src/types.ts` — this is the
- * exact shape `proposeMatches` and the Reconciliation UI consume, so parser
- * output plugs into journals with no adaptation. Duplicated, not imported;
- * see the {@link Posting} note and test/lockstepParity.test.ts.
- */
-export interface StatementLine {
-  /** Stable unique id (caller-provided). */
-  id: string;
-  /** ISO date `YYYY-MM-DD`. */
-  date: string;
-  description: string;
-  /** Signed from the account's perspective: deposits positive. */
-  amount: MinorUnits;
-  /** ISO 4217 or commodity code, e.g. `MYR`. */
-  currency: string;
-}
+export type { BankStatementLine as StatementLine } from '@cynco/ledger-core';
 
 /**
  * A parsed statement line plus the import-only extras the source carried.
@@ -64,7 +25,7 @@ export interface StatementLine {
  * `proveRunningBalance` can verify the source's own balance column and so
  * hosts can trace a line back to its bank reference.
  */
-export interface ImportedStatementLine extends StatementLine {
+export interface ImportedStatementLine extends BankStatementLine {
   /** Running balance after this line in minor units, when the source has one. */
   balance?: MinorUnits;
   /** Source reference (cheque number, bank transaction code), when mapped. */

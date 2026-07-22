@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  findInlinedDependencyViolations,
   findMissingDependsOn,
   findMissingDocsBuilds,
   findPrivateRegistryViolations,
@@ -201,48 +200,6 @@ describe('findPublishArtifactViolations', () => {
       }),
     ];
     expect(findPublishArtifactViolations(packages)).toEqual([]);
-  });
-});
-
-describe('findInlinedDependencyViolations', () => {
-  const byName = new Map([
-    [
-      '@cynco/ledger-core',
-      pkg('@cynco/ledger-core', 'ledger-core', {
-        tags: ['tsdown', 'tier-engine'],
-        isPrivate: true,
-      }),
-    ],
-    ['@cynco/theme', pkg('@cynco/theme', 'theme')],
-    ['@cynco/accounts', pkg('@cynco/accounts', 'accounts')],
-  ]);
-
-  test('accepts private inlined deps and publishable inlined deps', () => {
-    const configs = new Map<string, readonly string[]>([
-      ['@cynco/accounts', ['@cynco/ledger-core', '@cynco/theme']],
-      ['@cynco/theme', []],
-    ]);
-    expect(findInlinedDependencyViolations(configs, byName)).toEqual([]);
-  });
-
-  test('flags an inlined dep that is neither private nor publishable', () => {
-    // accounts is a workspace package but not a config key here, so inlining
-    // it would strip a resolvable public dependency for no sanctioned reason.
-    const configs = new Map<string, readonly string[]>([
-      ['@cynco/theme', ['@cynco/accounts']],
-    ]);
-    const violations = findInlinedDependencyViolations(configs, byName);
-    expect(violations).toHaveLength(1);
-    expect(violations[0]?.message).toContain('@cynco/accounts');
-  });
-
-  test('flags an inlined dep that is not a workspace package', () => {
-    const configs = new Map<string, readonly string[]>([
-      ['@cynco/theme', ['@cynco/typo']],
-    ]);
-    const violations = findInlinedDependencyViolations(configs, byName);
-    expect(violations).toHaveLength(1);
-    expect(violations[0]?.message).toContain('@cynco/typo');
   });
 });
 

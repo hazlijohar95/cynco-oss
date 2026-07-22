@@ -1,0 +1,488 @@
+# Ledger core
+
+`@cynco/ledger-core` is the engine under the suite: the double-entry data model,
+the integer-minor-unit money kernel, the entry and account stores, the statement
+derivations, the account taxonomy, the canonical currency-exponent table, and
+the shared amount-format presets. `@cynco/journals`, `@cynco/accounts`,
+`@cynco/statements`, and `@cynco/importers` all build on it — the shapes
+documented here are the contract those packages exchange. Pure data,
+framework-free, no DOM: the engine holds and answers, renderers draw.
+
+Three invariants hold at every public boundary:
+
+- **Amounts are integer minor units** (sen, cents) end to end. No float ever
+  holds a monetary value, so equality is exact and balancing is a plain integer
+  comparison.
+- **Entries balance per currency or are reported unbalanced.** The sum of a
+  balanced entry's posting amounts is exactly zero in every currency it touches;
+  an entry that does not tie is surfaced (`isEntryBalanced` returns false),
+  never silently repaired.
+- **Account paths are canonical colon-delimited strings**
+  (`Assets:Current:Cash-Maybank`). Numeric node ids are an internal detail of
+  the store and never leak out of a public argument, return value, or event.
+
+## Installation \{#installation\}
+
+Install with the package manager of your choice. There are no runtime or peer
+dependencies — the engine is plain TypeScript and runs anywhere TypeScript does.
+
+```bash
+pnpm add @cynco/ledger-core
+```
+
+| Entry point          | What it exports                                                                                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@cynco/ledger-core` | The stores (`EntryStore`, `AccountStore`), the money kernel, the account-path helpers, the statement derivations and taxonomy, the currency-exponent table, the amount-format presets, the cooperative scheduler, and the types |
+
+## The data model \{#data-model\}
+
+A `LedgerEntry` is one transaction: an id, an ISO date, a lifecycle flag, a
+payee, a narration, tags and cross-reference links, and two or more `Posting`s —
+the double-entry legs. Every posting carries a canonical account path, a signed
+`MinorUnits` amount (positive = debit, negative = credit), and a currency code.
+Entries are immutable value objects from the store's perspective: mutation APIs
+replace whole entries by id, never patch fields in place.
+
+```ts
+import { isEntryBalanced, type LedgerEntry } from '@cynco/ledger-core';
+
+const entry: LedgerEntry = {
+  id: 'inv-2026-001',
+  date: '2026-01-15',
+  flag: 'cleared', // EntryFlag: 'cleared' | 'pending' | 'flagged' | 'void'
+  payee: 'TNB',
+  narration: 'January electricity',
+  tags: ['utilities'],
+  links: [],
+  postings: [
+    { account: 'Expenses:Utilities', amount: 21_450, currency: 'MYR' },
+    {
+      account: 'Assets:Current:Cash-Maybank',
+      amount: -21_450,
+      currency: 'MYR',
+    },
+  ],
+};
+
+isEntryBalanced(entry); // true — postings sum to exactly zero per currency
+```
+
+The `EntryFlag` values carry the reconciliation lifecycle: `cleared` (reconciled
+against an external source), `pending` (recorded, not yet reconciled), `flagged`
+(needs human attention), and `void` (kept for the audit trail but excluded from
+meaning by every derivation and renderer).
+
+`BankStatementLine` is the suite's shared reconciliation input shape: one line
+of a bank statement, already parsed to integer minor units, signed from the
+account holder's perspective (deposits positive).
+[`@cynco/importers`](/docs/importers) produces it from raw bank exports and the
+[`@cynco/journals` reconciliation UI](/docs/journals#reconciliation) consumes it
+as-is. It is named to distinguish it from `StatementLine`, which is one account
+line of a derived _financial_ statement — a different concept that happens to
+share the English word.
+
+## Money kernel \{#money\}
+
+Integer arithmetic with the invariant enforced at the boundaries.
+`assertSafeMinorUnits` is the one deliberate exception to the suite's
+graceful-degradation rule: a float or an overflowing amount reaching money math
+is a bug in the caller, not bad user data, so it throws a `TypeError` instead of
+poisoning every downstream balance.
+
+```ts
+import {
+  addMinorUnits,
+  negateMinorUnits,
+  sumPostingsByCurrency,
+  sumPostingsByCurrencyChecked,
+} from '@cynco/ledger-core';
+
+addMinorUnits(1_000, 234); // 1234 — asserts both inputs and the sum are safe
+negateMinorUnits(0); // 0, never IEEE -0
+
+sumPostingsByCurrency(entry.postings); // Map { 'MYR' => 0 }
+
+// The overflow-aware variant: individually-safe postings can still push an
+// aggregate past 2^53, where plain + silently loses integer precision.
+const { totals, overflowCurrencies } = sumPostingsByCurrencyChecked(postings);
+overflowCurrencies.size; // 0 in every non-pathological ledger
+```
+
+`sumPostingsByCurrency` runs over user-authored ledger data, so it degrades
+gracefully — postings with non-integer amounts are skipped, and a per-currency
+running total that crosses 2<sup>53</sup> lands in the `CheckedCurrencyTotals`
+overflow set (flagged, never repaired). `isMinorUnitsOverflow` is the same check
+for a single accumulated value, and `isEntryBalanced` reports an entry
+containing non-integer amounts as unbalanced rather than repairing it.
+
+## Account paths \{#account-paths\}
+
+Canonical colon-delimited paths are the only account identity that crosses the
+package boundary, and every consumer shares these parsers. All of them degrade
+gracefully: invalid input returns `false` / `null` / empty instead of throwing,
+because paths frequently arrive from user-authored ledger data.
+
+```ts
+import {
+  getAccountLeafName,
+  getAccountSegments,
+  getAncestorAccountPaths,
+  getParentAccountPath,
+  isValidAccountPath,
+} from '@cynco/ledger-core';
+
+isValidAccountPath('Assets:Current:Cash'); // true
+isValidAccountPath('Assets::Cash'); // false — no empty segments
+getAccountSegments('Assets:Current:Cash'); // ['Assets', 'Current', 'Cash']
+getParentAccountPath('Assets:Current:Cash'); // 'Assets:Current'
+getAncestorAccountPaths('Assets:Current:Cash'); // ['Assets', 'Assets:Current']
+getAccountLeafName('Assets:Current:Cash'); // 'Cash'
+```
+
+Segment content is otherwise unrestricted — unicode names like `Expenses:Makan`
+are valid — and the Assets/Liabilities/Equity/Income/Expenses top-level
+convention is the [taxonomy's](/docs/statements#taxonomy) job, not the path
+syntax's.
+
+## Currency exponents \{#currency\}
+
+The exponent — how many decimal places one minor unit sits below the whole unit
+— is the one piece of currency metadata correctness depends on: RM 12.34 is the
+integer `1234` only because MYR has exponent 2, while ¥1234 is 1234 whole yen
+(exponent 0) and BHD 1.234 is 1234 fils (exponent 3). Assuming 2 everywhere
+silently mis-scales those currencies, so the canonical table lives here in the
+engine and every package asks instead of assuming — never copy it.
+
+```ts
+import { getCurrencyExponent } from '@cynco/ledger-core';
+
+getCurrencyExponent('MYR'); // 2 — sen
+getCurrencyExponent('JPY'); // 0 — yen has no minor unit
+getCurrencyExponent('BHD'); // 3 — fils
+getCurrencyExponent('GOLD', { GOLD: 4 }); // 4 — caller overrides win
+```
+
+`DEFAULT_CURRENCY_EXPONENTS` is the 26-entry ISO 4217 exception table
+(zero-decimal, three-decimal, and four-decimal funds codes); every code absent
+from it — including commodities and unknown codes — falls back to 2.
+
+## Amount formats \{#amount-formats\}
+
+`AmountFormat` is a locale-shaped presentation descriptor: decimal separator,
+group separator, and group sizes. Plain data by design — it survives structured
+clone and JSON unchanged, which is what lets SSR, worker, and client render
+byte-identical amount strings. Renderers must never consult `Intl.NumberFormat`
+for this (ICU tables differ between Node versions and browsers); hosts resolve a
+descriptor once at their boundary and thread the same object everywhere. The
+five frozen presets are the shared vocabulary every rendering package imports
+instead of carrying copies:
+
+| Preset                         | Output                                                 |
+| ------------------------------ | ------------------------------------------------------ |
+| `AMOUNT_FORMAT_COMMA_DOT`      | `1,234.56` — the default                               |
+| `AMOUNT_FORMAT_DOT_COMMA`      | `1.234,56` — continental European                      |
+| `AMOUNT_FORMAT_SPACE_COMMA`    | `1 234,56` — SI/French, narrow no-break space (U+202F) |
+| `AMOUNT_FORMAT_APOSTROPHE_DOT` | `1'234.56` — Swiss                                     |
+| `AMOUNT_FORMAT_INDIAN`         | `12,34,567.89` — lakh/crore grouping                   |
+
+## EntryStore \{#entry-store\}
+
+`EntryStore` holds ledger entries in `(date, id)` order and answers slice-first
+register queries — one account's postings with running balances — plus
+entry-level filtering and point-in-time balances. Running balances are served
+from a per-account prefix-sum index, built once per query shape and cached until
+the next mutation, so virtualized register UIs can re-read slices on every
+scroll frame without re-scanning the entry list.
+
+```ts
+import { EntryStore } from '@cynco/ledger-core';
+
+const store = new EntryStore(entries);
+
+// Virtualization-ready rows: entry + posting + running balance in the
+// posting's own currency, for the half-open range [start, end).
+const rows = store.getRegisterRows('Assets:Current:Cash-Maybank', {
+  start: 0,
+  end: 50,
+  includeDescendants: false,
+  filter: { dateFrom: '2026-01-01', flag: 'cleared' },
+});
+
+// Point-in-time and period-activity balance queries — binary search plus
+// prefix-sum reads against the same cached index, never a re-scan:
+store.getBalancesAsOf('Assets:Current:Cash-Maybank', '2026-12-31');
+store.getBalanceChanges('Income:Sales', '2026-01-01', '2026-12-31');
+
+// Mutations replace whole entries by id and fire honest invalidation
+// events listing only what actually changed:
+const unsubscribe = store.onMutation((event) => {
+  event.entriesChanged; // ids added, removed, or replaced
+  event.accountsChanged; // account paths their postings touch
+});
+store.addEntries(newEntries); // duplicate ids are skipped, never overwritten
+store.replaceEntries(edited); // upsert by id
+store.removeEntries(['inv-2026-001']); // unknown ids are ignored
+```
+
+`EntryFilter` conditions (`dateFrom` / `dateTo` / `flag` / `tag` / `query`)
+combine with logical AND; `filterEntries` scans, `getRegisterRows` accepts the
+same filter, and the standalone `matchesEntryFilter` is the behavior-identical
+pure function report derivations use on plain entry arrays. `RegisterOptions`
+carries the slice bounds, `includeDescendants`, and the optional filter;
+`RegisterRow` is the returned shape. Register aggregates that cross
+2<sup>53</sup> are surfaced by `hasRunningBalanceOverflow` — a flag, never a
+repair.
+
+For bulk data, `addEntriesAsync` applies the source in atomic chunks through the
+same synchronous path — identical dedupe rules, events, and end state — yielding
+to the event loop between chunks (or running each chunk as a task on a shared
+[cooperative scheduler](#scheduler)). `EntryIngestOptions` carries the
+scheduler, chunk size, and an `AbortSignal`; the `EntryIngestResult` reports
+`added`, `skipped`, and `aborted`.
+
+## AccountStore \{#account-store\}
+
+`AccountStore` is the chart-of-accounts tree engine: built from entries and/or
+explicit account paths (`AccountStoreOptions`), incrementally mutable, and
+virtualization-ready. Hot per-node data lives in typed arrays rebuilt lazily
+after mutations, so a burst of edits pays for exactly one rebuild on the next
+read. `getVisibleSlice` returns `AccountRow`s — path, depth, group/leaf kind,
+expansion state, own and rolled-up balances per currency, and the aria set
+positions a tree renderer needs.
+
+```ts
+import { AccountStore } from '@cynco/ledger-core';
+
+const store = new AccountStore({
+  entries, // posting accounts seed the tree and its balances
+  accountPaths: ['Equity:Retained-Earnings'], // zero-activity chart accounts
+});
+
+store.getOwnBalances('Assets:Current'); // direct postings only
+store.getRolledBalances('Assets:Current'); // own + all descendants
+store.getPostingCount('Assets:Current:Cash-Maybank');
+
+// Expansion drives the visible projection:
+store.setExpanded('Assets', true);
+store.getVisibleSlice(0, 40); // AccountRow[]
+
+// Topology mutations edit O(changed paths) and report exactly what changed:
+const result = store.moveAccount('Assets:Cash', 'Assets:Current:Cash');
+result.ok; // false + a reason on rejection — never a throw
+```
+
+Topology mutations (`addAccounts`, `removeAccounts`, `moveAccount`, and the
+ordered `batchAccounts` over `AccountMutationOp`s) return an
+`AccountMutationResult` listing exactly the paths added, removed, and moved; a
+rejected move sets `ok: false` with a machine-readable
+`AccountMutationRejectionReason` and changes nothing. Subscribers get the same
+facts as an `AccountTopologyChange` on the `MutationEvent`, so path-keyed state
+can be remapped without re-deriving the subtree. The store deliberately does not
+rewrite journal entries referencing moved or removed paths — entries live
+outside it, and remapping their postings stays the caller's job.
+
+For lazily-loaded charts, `markUnloaded` / `beginChildLoad` /
+`completeChildLoad` / `failChildLoad` drive a per-path child-loading state
+machine (`AccountChildLoadStateKind`: `loaded`, `unloaded`, `loading`, `error`),
+queryable via `getChildLoadState` (an `AccountChildLoadState`) and surfaced to
+views as an `AccountChildLoadChange` on the mutation event.
+`AccountStore.fromPathsAsync` builds a store from a huge or async path source in
+chunks (`AccountStoreAsyncOptions`), and `hasBalanceOverflow` surfaces rolled-up
+totals that crossed 2<sup>53</sup>.
+
+## Statement derivations \{#derivations\}
+
+The derivations live in the engine and are documented in full on the
+[Statements page](/docs/statements), which re-exports them:
+[`deriveTrialBalance`](/docs/statements#trial-balance) (`TrialBalanceOptions` →
+`TrialBalanceData` / `TrialBalanceSection` / `TrialBalanceRow`),
+[`deriveIncomeStatement`](/docs/statements#income-statement)
+(`IncomeStatementOptions` → `IncomeStatementData` / `IncomeStatementSection`),
+and [`deriveBalanceSheet`](/docs/statements#balance-sheet)
+(`BalanceSheetOptions` → `BalanceSheetData` / `BalanceSheetSection`), plus
+[`createAccountTaxonomy`](/docs/statements#taxonomy) (`AccountTaxonomyOptions`,
+`AccountTaxonomyOverride`, `DEFAULT_ROOT_ACCOUNT_TYPES`) and its derived facts
+(`AccountClassification`, `AccountType`, `NormalBalance`, `StatementRole`,
+`getNormalBalanceForType`, `getStatementRoleForType`).
+
+Derivations are report-time queries — one linear pass over plain entries,
+grouped per currency, no store required — and they inherit the honesty rules:
+`void` entries are excluded from meaning, unclassifiable accounts surface as
+`UnclassifiedBalance` rows instead of being guessed into a section, ties and
+equations are computed and reported, and aggregate overflow is flagged. The
+column shapes are `StatementPeriod` (inclusive date range — income statement
+columns) and `StatementDate` (as-of date with an optional fiscal-year start —
+balance sheet columns); classified lines are `StatementLine`s,
+presentation-signed by section.
+
+Two workflow helpers documented
+[alongside the statements](/docs/statements#toolbox) also live here:
+`checkBalanceAssertions` (declarative `BalanceAssertion` facts checked against
+an `EntryStore`, each `BalanceAssertionResult` reporting the exact difference —
+surfacing, never repair) and `createOpeningBalanceEntry`
+(`OpeningBalanceOptions` with `OpeningBalanceLine`s and the
+`DEFAULT_OPENING_BALANCE_ACCOUNT` equity offset — an ordinary balanced day-one
+entry, balanced by construction).
+
+## Cooperative scheduler \{#scheduler\}
+
+`createCooperativeScheduler` runs queued tasks in slices of a fixed wall-clock
+budget (default 8ms — half a 60fps frame), then yields to the event loop so
+input and rendering never starve behind bulk data work. Deliberately generic: no
+ledger imports, no DOM dependencies, and the yield primitive is `setTimeout(0)`
+because it behaves the same in browsers, jsdom, Bun, Node, and SSR.
+
+```ts
+import { createCooperativeScheduler } from '@cynco/ledger-core';
+
+const scheduler = createCooperativeScheduler({ budgetMs: 8, maxQueue: 256 });
+
+// A task is a resumable step function, not a generator: each call does a
+// bounded amount of work sized by the deadline and reports done/not-done.
+const total = await scheduler.schedule((deadline) => {
+  let processed = 0;
+  while (hasWork() && deadline.timeRemaining() > 0) {
+    processed += processOne();
+  }
+  return hasWork() ? { done: false } : { done: true, value: processed };
+});
+
+scheduler.metrics(); // tasksCompleted, slicesRun, totalElapsedMs, maxSliceOverrunMs
+scheduler.abort(); // terminal: pending and future tasks reject
+```
+
+Tasks run FIFO to completion. A full queue rejects with
+`SchedulerQueueFullError`; `abort` is terminal and rejects every pending and
+future task with `SchedulerAbortedError`. Both stores accept a shared scheduler
+for their async paths, so one budget serializes all bulk work.
+
+## API reference \{#api-reference\}
+
+The full export surface of `@cynco/ledger-core`. Types are transcribed from the
+source.
+
+### EntryStore \{#api-entry-store\}
+
+`new EntryStore(entries?)` — constructor ingest applies the `addEntries` dedupe
+rules without firing an event.
+
+| Member                                               | Purpose                                                                                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `getEntryCount()`                                    | Total entries in the store.                                                                                         |
+| `getEntrySlice(start, end)`                          | Entries for the half-open range `[start, end)` in `(date, id)` order, clamped.                                      |
+| `getEntryById(id)`                                   | The entry, or `null` when unknown.                                                                                  |
+| `filterEntries(filter)`                              | All entries matching an `EntryFilter`, in order. A full scan — for palettes and reports, not per-frame reads.       |
+| `getRegisterRowCount(accountPath, options?)`         | Number of register rows for one account; unfiltered counts come from the cached index.                              |
+| `getRegisterRows(accountPath, options)`              | `RegisterRow[]` for `[start, end)` — entry, posting, and own-currency running balance.                              |
+| `getBalancesAsOf(accountPath, date, options?)`       | Per-currency balance through the end of `date` (inclusive). Zero balances are omitted; absence means zero.          |
+| `getBalanceChanges(accountPath, from, to, options?)` | Per-currency net movement across the inclusive range — the period-activity query financial statements are built on. |
+| `hasRunningBalanceOverflow(accountPath, options?)`   | True when a register's running balance left the exactly-representable range — surfaced, never repaired.             |
+| `onMutation(listener)`                               | Subscribes to `MutationEvent`s; returns an unsubscribe function. Events fire synchronously, once per mutation call. |
+| `addEntries(entries)`                                | Inserts in sorted position; duplicate ids are skipped, never overwritten.                                           |
+| `addEntriesAsync(entries, options?)`                 | Time-sliced bulk ingest of a sync or async iterable; resolves an `EntryIngestResult`.                               |
+| `removeEntries(ids)`                                 | Removes by id; unknown ids are ignored.                                                                             |
+| `replaceEntries(entries)`                            | Upserts whole entries by id — the only way to edit an entry.                                                        |
+
+### AccountStore \{#api-account-store\}
+
+`new AccountStore(options?)` with `AccountStoreOptions` (`entries`,
+`accountPaths`), or `AccountStore.fromPathsAsync(paths, options?)` with
+`AccountStoreAsyncOptions`.
+
+| Member                                                                                          | Purpose                                                                                              |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `getAccountCount()`                                                                             | Accounts in the store, implied ancestors included.                                                   |
+| `hasAccount(path)`                                                                              | True when the canonical path exists.                                                                 |
+| `getOwnBalances(path)`                                                                          | Per-currency balance of direct postings, or `null` for unknown paths.                                |
+| `getRolledBalances(path)`                                                                       | Own + all-descendant balances per currency.                                                          |
+| `getPostingCount(path)`                                                                         | Postings directly on the account.                                                                    |
+| `hasBalanceOverflow(currency?)`                                                                 | True when a rolled-up total crossed 2<sup>53</sup>.                                                  |
+| `onMutation(listener)`                                                                          | Subscribes to `MutationEvent`s carrying `AccountTopologyChange` / `AccountChildLoadChange` payloads. |
+| `addAccounts` / `removeAccounts` / `moveAccount` / `batchAccounts`                              | Topology mutations; each returns an `AccountMutationResult`.                                         |
+| `isExpanded` / `setExpanded` / `expandAll` / `collapseAll`                                      | Expansion state driving the visible projection.                                                      |
+| `markUnloaded` / `beginChildLoad` / `completeChildLoad` / `failChildLoad` / `getChildLoadState` | The lazy child-loading state machine.                                                                |
+| `getVisibleCount()` / `getVisibleSlice(start, end)`                                             | The virtualization read path: visible row count and `AccountRow[]` slices.                           |
+
+### Money & paths \{#api-money\}
+
+| Export                                      | Purpose                                                                                              |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `assertSafeMinorUnits(n)`                   | Throws `TypeError` unless `n` is a safe integer — the programmer-error boundary of the money kernel. |
+| `addMinorUnits(a, b)`                       | Checked addition; overflow surfaces at the addition site, not as a wrong balance later.              |
+| `negateMinorUnits(n)`                       | Exact negation that never produces `-0`.                                                             |
+| `isMinorUnitsOverflow(n)`                   | True when an accumulated amount left the exactly-representable integer range.                        |
+| `sumPostingsByCurrency(postings)`           | Per-currency posting totals; unsafe amounts are skipped (graceful degradation over user data).       |
+| `sumPostingsByCurrencyChecked(postings)`    | The overflow-aware variant: `CheckedCurrencyTotals` with `totals` plus `overflowCurrencies`.         |
+| `isEntryBalanced(entry)`                    | True when postings sum to exactly zero in every currency — the double-entry invariant.               |
+| `isValidAccountPath(path)`                  | True for canonical paths: non-empty, no leading/trailing/doubled colons.                             |
+| `getAccountSegments(path)`                  | `'A:B:C'` → `['A', 'B', 'C']`; empty for invalid paths.                                              |
+| `getParentAccountPath(path)`                | Parent path, or `null` for top-level and invalid paths.                                              |
+| `getAncestorAccountPaths(path)`             | Every strict ancestor, nearest the root first.                                                       |
+| `getAccountLeafName(path)`                  | Final segment — the display name of a tree row.                                                      |
+| `matchesEntryFilter(entry, filter)`         | Pure `EntryFilter` matching (logical AND), lockstep with the store's internal matcher.               |
+| `getCurrencyExponent(currency, overrides?)` | Minor-unit exponent: caller overrides, then the canonical table, then 2.                             |
+
+### Derivations & workflow helpers \{#api-derivations\}
+
+Documented in full on the [Statements page](/docs/statements#api-reference).
+
+| Export                                      | Purpose                                                                                      |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `deriveTrialBalance(entries, options)`      | Signed closing balances in debit/credit columns, per currency, with the totals proof.        |
+| `deriveIncomeStatement(entries, options)`   | Period activity of income and expense accounts, one column per period.                       |
+| `deriveBalanceSheet(entries, options)`      | Cumulative position with virtual retained/current-year earnings — computed, never booked.    |
+| `createAccountTaxonomy(options?)`           | The memoized path-classification oracle; `null` for unclassifiable paths, never a guess.     |
+| `getNormalBalanceForType(type)`             | `NormalBalance` for an `AccountType`.                                                        |
+| `getStatementRoleForType(type)`             | `StatementRole` for an `AccountType`.                                                        |
+| `checkBalanceAssertions(store, assertions)` | Checks declared balance facts against an `EntryStore`; reports differences, changes nothing. |
+| `createOpeningBalanceEntry(options)`        | An ordinary balanced day-one entry with one equity offset per currency.                      |
+
+### Scheduler \{#api-scheduler\}
+
+| Export                                 | Purpose                                                                               |
+| -------------------------------------- | ------------------------------------------------------------------------------------- |
+| `createCooperativeScheduler(options?)` | An independent time-sliced scheduler (`SchedulerOptions`: `budgetMs`, `maxQueue`).    |
+| `SchedulerAbortedError`                | Rejection value for tasks pending when `abort` was called (and every schedule after). |
+| `SchedulerQueueFullError`              | Rejection value for `schedule` calls beyond the queue capacity.                       |
+
+### Constants \{#api-constants\}
+
+| Export                                                                                                                                        | Value                       | Meaning                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------- |
+| `DEFAULT_CURRENCY_EXPONENTS`                                                                                                                  | 26-entry table              | The canonical ISO 4217 minor-unit exception table for the whole suite; unlisted codes use 2. |
+| `AMOUNT_FORMAT_COMMA_DOT` / `AMOUNT_FORMAT_DOT_COMMA` / `AMOUNT_FORMAT_SPACE_COMMA` / `AMOUNT_FORMAT_APOSTROPHE_DOT` / `AMOUNT_FORMAT_INDIAN` | frozen presets              | `1,234.56`, `1.234,56`, `1 234,56` (U+202F), `1'234.56`, `12,34,567.89`.                     |
+| `DEFAULT_OPENING_BALANCE_ACCOUNT`                                                                                                             | `'Equity:Opening-Balances'` | Default equity offset account for opening balances.                                          |
+| `DEFAULT_ROOT_ACCOUNT_TYPES`                                                                                                                  | 6-root map                  | `Assets` / `Liabilities` / `Equity` / `Income` / `Revenue` / `Expenses` → the five types.    |
+
+### Types \{#api-types\}
+
+- **Core data** — `MinorUnits`, `EntryFlag`
+  (`'cleared' | 'pending' | 'flagged' | 'void'`), `Posting`, `LedgerEntry`,
+  `BankStatementLine`, `EntryFilter`, `AmountFormat`.
+- **Register queries** — `RegisterOptions` (slice bounds, `includeDescendants`,
+  optional filter), `RegisterRow` (entry + posting + own-currency running
+  balance).
+- **Bulk ingest** — `EntryIngestOptions`, `EntryIngestResult`,
+  `AccountStoreOptions`, `AccountStoreAsyncOptions`.
+- **Events** — `MutationEvent`, `AccountTopologyChange` (added / removed / moved
+  paths), `AccountChildLoadChange`.
+- **Account tree** — `AccountRow`, `AccountMutationOp`, `AccountMutationResult`,
+  `AccountMutationRejectionReason`, `AccountChildLoadState`,
+  `AccountChildLoadStateKind`.
+- **Money** — `CheckedCurrencyTotals` (per-currency `totals` plus
+  `overflowCurrencies`).
+- **Taxonomy** — `AccountType`
+  (`'asset' | 'liability' | 'equity' | 'income' | 'expense'`), `NormalBalance`,
+  `StatementRole`, `AccountClassification`, `AccountTaxonomy`,
+  `AccountTaxonomyOptions`, `AccountTaxonomyOverride`.
+- **Statement shapes** — `StatementPeriod`, `StatementDate`, `StatementLine`
+  (presentation-signed by section), `UnclassifiedBalance` (raw ledger-signed,
+  listed outside every total).
+- **Derived data** — `TrialBalanceData` / `TrialBalanceSection` /
+  `TrialBalanceRow` / `TrialBalanceOptions`, `IncomeStatementData` /
+  `IncomeStatementSection` / `IncomeStatementOptions`, `BalanceSheetData` /
+  `BalanceSheetSection` / `BalanceSheetOptions`.
+- **Assertions & opening balances** — `BalanceAssertion`,
+  `BalanceAssertionResult`, `OpeningBalanceLine`, `OpeningBalanceOptions`.
+- **Scheduler** — `CooperativeScheduler`, `SchedulerDeadline`, `SchedulerStep`,
+  `SchedulerTask`, `SchedulerMetrics`, `SchedulerOptions`.

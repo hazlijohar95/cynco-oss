@@ -80,6 +80,7 @@
     "prepublishOnly": "moon run journals:prepublish"
   },
   "dependencies": {
+    "@cynco/ledger-core": "workspace:*",
     "@cynco/theme": "workspace:*",
     "lru_map": "catalog:"
   },

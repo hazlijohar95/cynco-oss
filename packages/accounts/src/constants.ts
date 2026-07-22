@@ -1,6 +1,4 @@
-import { DEFAULT_CURRENCY_EXPONENTS } from '@cynco/ledger-core';
-
-import type { AccountTreeDensity, AmountFormat } from './types';
+import type { AccountTreeDensity } from './types';
 
 export const ACCOUNTS_TAG_NAME = 'accounts-container' as const;
 
@@ -72,67 +70,16 @@ export const STICKY_ANCESTOR_STACK_MAX = 4;
 export const MINUS_SIGN = '\u2212';
 
 /*
- * Named amount-format presets ({@link AmountFormat} descriptors). Frozen so
- * a shared preset can never be mutated into disagreeing bytes between two
- * render surfaces holding the same reference.
- *
- * MUST mirror the presets in `@cynco/journals/src/constants.ts` and
- * `@cynco/statements/src/constants.ts`. The packages deliberately share no
- * runtime dependency for these, so the presets are duplicated — and
- * duplication is exactly how the currency table once drifted (a partial
- * copy mis-scaled zero- and three-decimal currencies 100×/10×), so treat
- * any edit here as an edit to all three files.
+ * Named amount-format presets and the ISO 4217 minor-unit exponent table
+ * come from the engine — one canonical definition for the whole suite.
+ * Re-exported so this package's public API keeps offering them under the
+ * names it always has.
  */
-
-/** `1,234.56` — the default; the package's original output bytes. */
-export const AMOUNT_FORMAT_COMMA_DOT: AmountFormat = Object.freeze({
-  decimal: '.',
-  group: ',',
-  groupSizes: Object.freeze([3]),
-});
-
-/** `1.234,56` — continental European convention. */
-export const AMOUNT_FORMAT_DOT_COMMA: AmountFormat = Object.freeze({
-  decimal: ',',
-  group: '.',
-  groupSizes: Object.freeze([3]),
-});
-
-/**
- * `1 234,56` with a narrow no-break space (U+202F) group separator — the
- * SI/French convention. Narrow no-break so amounts never wrap mid-figure.
- */
-export const AMOUNT_FORMAT_SPACE_COMMA: AmountFormat = Object.freeze({
-  decimal: ',',
-  group: '\u202f',
-  groupSizes: Object.freeze([3]),
-});
-
-/** `1'234.56` — Swiss convention. */
-export const AMOUNT_FORMAT_APOSTROPHE_DOT: AmountFormat = Object.freeze({
-  decimal: '.',
-  group: "'",
-  groupSizes: Object.freeze([3]),
-});
-
-/**
- * `12,34,567.89` — Indian lakh/crore grouping: three digits next to the
- * decimal point, then twos.
- */
-export const AMOUNT_FORMAT_INDIAN: AmountFormat = Object.freeze({
-  decimal: '.',
-  group: ',',
-  groupSizes: Object.freeze([3, 2]),
-});
-
-/**
- * ISO 4217 minor-unit exceptions. Currencies not listed here use 2 decimal
- * places. Commodity codes (stock tickers, points) also fall back to 2.
- *
- * Aliased from the engine's canonical table so the tree and the statements
- * package always scale the same ledger identically — a local copy drifted
- * once (5 exceptions vs the engine's ~26) and mis-scaled zero- and
- * three-decimal currencies 100×/10× relative to `@cynco/statements`.
- */
-export const CURRENCY_DECIMALS: Readonly<Record<string, number>> =
-  DEFAULT_CURRENCY_EXPONENTS;
+export {
+  AMOUNT_FORMAT_APOSTROPHE_DOT,
+  AMOUNT_FORMAT_COMMA_DOT,
+  AMOUNT_FORMAT_DOT_COMMA,
+  AMOUNT_FORMAT_INDIAN,
+  AMOUNT_FORMAT_SPACE_COMMA,
+  DEFAULT_CURRENCY_EXPONENTS as CURRENCY_DECIMALS,
+} from '@cynco/ledger-core';

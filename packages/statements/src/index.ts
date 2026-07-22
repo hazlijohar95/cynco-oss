@@ -16,10 +16,8 @@ export * from './utils/resolveAmountFormat';
 export * from './utils/statementsThemeVariables';
 
 // The statements DX surface of the data engine, re-exported so consumers
-// derive and render from one package. @cynco/ledger-core is private and
-// inlined into dist at build time (tsdown noExternal) — these re-exports are
-// rewritten to the inlined copies, and the post-build guard asserts no
-// engine specifier survives in the payload.
+// derive and render from one package without importing @cynco/ledger-core
+// directly.
 export {
   checkBalanceAssertions,
   createAccountTaxonomy,

@@ -131,41 +131,25 @@ describe('rewritePublishManifest', () => {
     exports: { '.': { types: './dist/index.d.ts', import: './dist/index.js' } },
   };
 
-  test('strips inlined deps, lifecycle scripts, and devDependencies', () => {
-    const rewritten = rewritePublishManifest(accountsLike, [
-      '@cynco/ledger-core',
-      '@cynco/theme',
-    ]);
-    // Both inlined deps removed left dependencies empty, so the field itself
-    // must disappear rather than publish an empty object.
-    expect(rewritten.dependencies).toBeUndefined();
+  test('strips lifecycle scripts and devDependencies', () => {
+    const rewritten = rewritePublishManifest(accountsLike);
     expect(rewritten.scripts).toBeUndefined();
     expect(rewritten.devDependencies).toBeUndefined();
-    // Consumer-facing fields survive untouched.
+    // Consumer-facing fields survive untouched — runtime dependencies ship
+    // exactly as declared (every workspace dep is on npm).
+    expect(rewritten.dependencies).toEqual({
+      '@cynco/ledger-core': '0.1.0',
+      '@cynco/theme': '0.1.0',
+    });
     expect(rewritten.peerDependencies).toEqual({ react: '^19.0.0' });
     expect(rewritten.exports).toEqual(accountsLike.exports);
     expect(rewritten.version).toBe('0.1.0-beta.1');
   });
 
-  test('keeps non-inlined runtime dependencies', () => {
-    const journalsLike: PublishManifest = {
-      name: '@cynco/journals',
-      version: '0.1.0-beta.1',
-      dependencies: { '@cynco/theme': '0.1.0', lru_map: '0.4.1' },
-      scripts: { prepublishOnly: 'moon run journals:prepublish' },
-    };
-    const rewritten = rewritePublishManifest(journalsLike, []);
-    expect(rewritten.dependencies).toEqual({
-      '@cynco/theme': '0.1.0',
-      lru_map: '0.4.1',
-    });
-  });
-
   test('does not mutate the input manifest', () => {
-    rewritePublishManifest(accountsLike, ['@cynco/ledger-core']);
-    expect(accountsLike.dependencies).toEqual({
-      '@cynco/ledger-core': '0.1.0',
-      '@cynco/theme': '0.1.0',
+    rewritePublishManifest(accountsLike);
+    expect(accountsLike.devDependencies).toEqual({
+      '@cynco/ledger-test-data': '0.1.0',
     });
     expect(accountsLike.scripts).toEqual({
       prepublishOnly: 'moon run accounts:prepublish',
@@ -433,24 +417,14 @@ describe('describeAttwProblem', () => {
 });
 
 describe('publish configuration invariants', () => {
-  test('accounts and statements are the only packages with inlined dependencies, and they match their tsdown noExternal lists', () => {
-    const enginePackages = ['@cynco/accounts', '@cynco/statements'];
-    for (const name of enginePackages) {
-      expect(PUBLISH_CONFIGS[name]?.inlinedDependencies).toEqual([
-        '@cynco/ledger-core',
-        '@cynco/theme',
-      ]);
-    }
-    for (const [name, config] of Object.entries(PUBLISH_CONFIGS)) {
-      if (!enginePackages.includes(name)) {
-        expect(config.inlinedDependencies).toEqual([]);
-      }
-    }
+  test('the engine is publishable — nothing is inlined anymore', () => {
+    expect(PUBLISH_CONFIGS['@cynco/ledger-core']).toEqual({
+      project: 'ledger-core',
+    });
   });
 
   test('every private package is covered by the payload scan', () => {
-    expect(PRIVATE_PACKAGES).toContain('@cynco/ledger-core');
-    expect(PRIVATE_PACKAGES).toContain('@cynco/ledger-test-data');
+    expect(PRIVATE_PACKAGES).toEqual(['@cynco/ledger-test-data']);
     // Private packages must never appear in the publishable allowlist.
     for (const name of PRIVATE_PACKAGES) {
       expect(PUBLISH_CONFIGS[name]).toBeUndefined();

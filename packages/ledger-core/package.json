@@ -1,13 +1,15 @@
 {
   "name": "@cynco/ledger-core",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Cynco ledger store: private data engine for accounts and entries",
+  "version": "0.1.0-beta.1",
+  "description": "Cynco ledger engine: the double-entry data model, integer-minor-unit money kernel, entry and account stores, and financial statement derivations",
   "keywords": [
     "accounting",
+    "balance-sheet",
     "cynco",
     "double-entry",
-    "ledger"
+    "income-statement",
+    "ledger",
+    "trial-balance"
   ],
   "homepage": "https://github.com/hazlijohar95/cynco-oss/tree/main/packages/ledger-core",
   "bugs": {
@@ -21,7 +23,9 @@
     "directory": "packages/ledger-core"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE.md",
+    "README.md"
   ],
   "type": "module",
   "sideEffects": false,
@@ -31,6 +35,12 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run ledger-core:prepublish"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

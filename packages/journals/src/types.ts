@@ -1,36 +1,21 @@
-/** Integer minor units (sen, cents). Never floats. */
-export type MinorUnits = number;
+// The shared money-kernel shapes come from the engine — one definition for
+// the whole suite. Re-exported so journals' public API keeps offering them
+// and every internal `./types` import keeps working.
+import type { LedgerEntry, MinorUnits, Posting } from '@cynco/ledger-core';
 
+export type {
+  AmountFormat,
+  EntryFlag,
+  LedgerEntry,
+  MinorUnits,
+  Posting,
+} from '@cynco/ledger-core';
 /**
- * Locale-shaped amount presentation: which separators to use and how to
- * group integer digits. Plain data by design — it survives structured clone
- * (the worker protocol) and JSON (SSR options) unchanged, which is what lets
- * SSR, worker, and client render byte-identical amounts. Renderers must
- * NEVER consult Intl.NumberFormat for this (ICU tables differ between Node
- * versions and browsers, so the same locale can format differently on
- * server and client); hosts resolve a descriptor once at their boundary
- * (see `resolveAmountFormat`) and thread the same object everywhere.
- *
- * MUST stay in lockstep with the identical interface in
- * `@cynco/accounts/src/types.ts` and `@cynco/statements/src/types.ts` —
- * journals deliberately carries no runtime dependency on either, so the
- * shape is duplicated (the CURRENCY_DECIMALS precedent).
+ * One line of a bank statement, already parsed to integer minor units — the
+ * engine's `BankStatementLine`, re-exported under the name the
+ * reconciliation API has always used.
  */
-export interface AmountFormat {
-  /** Decimal separator, e.g. `.` or `,`. */
-  decimal: string;
-  /**
-   * Group separator, e.g. `,`, `.`, `\u202f` (narrow no-break space), `'`.
-   * An empty string disables grouping entirely.
-   */
-  group: string;
-  /**
-   * Group sizes from the decimal point outward; the LAST size repeats for
-   * the remaining digits. `[3]` gives `1,234,567`; `[3,2]` gives the Indian
-   * `12,34,567`.
-   */
-  groupSizes: readonly number[];
-}
+export type { BankStatementLine as StatementLine } from '@cynco/ledger-core';
 
 /**
  * How the component's `light-dark()` color defaults resolve. `system`
@@ -38,30 +23,6 @@ export interface AmountFormat {
  * via an inline `color-scheme` on the host element.
  */
 export type ColorScheme = 'light' | 'dark' | 'system';
-
-export type EntryFlag = 'cleared' | 'pending' | 'flagged' | 'void';
-
-export interface Posting {
-  /** Canonical colon-delimited account path, e.g. `Assets:Current:Cash-Maybank`. */
-  account: string;
-  /** Signed integer minor units. Positive = debit, negative = credit. */
-  amount: MinorUnits;
-  /** ISO 4217 or commodity code, e.g. `MYR`, `USD`. */
-  currency: string;
-}
-
-export interface LedgerEntry {
-  /** Stable unique id (caller-provided). */
-  id: string;
-  /** ISO date `YYYY-MM-DD`. */
-  date: string;
-  flag: EntryFlag;
-  payee: string | null;
-  narration: string;
-  tags: readonly string[];
-  links: readonly string[];
-  postings: readonly Posting[];
-}
 
 /**
  * One line of a single-account register: the entry it came from, the posting
@@ -192,19 +153,6 @@ export interface RegisterSelection {
 export interface RegisterSelectionChange {
   indexes: number[];
   rows: RegisterRowData[];
-}
-
-/** One line from a bank statement, already parsed to integer minor units. */
-export interface StatementLine {
-  /** Stable unique id (caller-provided). */
-  id: string;
-  /** ISO date `YYYY-MM-DD`. */
-  date: string;
-  description: string;
-  /** Signed from the account's perspective: deposits positive. */
-  amount: MinorUnits;
-  /** ISO 4217 or commodity code, e.g. `MYR`. */
-  currency: string;
 }
 
 /**
