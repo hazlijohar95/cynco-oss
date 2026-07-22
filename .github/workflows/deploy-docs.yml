@@ -49,6 +49,13 @@ jobs:
           NEXT_OUTPUT: 'export'
         run: pnpm exec next build
 
+      # `next build` recreates out/ from scratch, so the search index must be
+      # generated after it and before the deploy — otherwise production ships
+      # the dialog's "no index" fallback instead of working search.
+      - name: Index search
+        working-directory: apps/docs
+        run: pnpm exec pagefind --site out
+
       # wrangler is a workspace devDependency (pnpm catalog) because the
       # action's ad-hoc fallback installs with npm, which cannot parse the
       # pnpm-only `catalog:` protocol in package.json. packageManager: pnpm

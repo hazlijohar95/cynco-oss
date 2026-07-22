@@ -1,8 +1,10 @@
 'use client';
 
-import { TableOfContents } from 'lucide-react';
+import { Search, TableOfContents } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
+import { DocsPagination } from './DocsPagination';
+import { DocsSearchDialog } from './DocsSearchDialog';
 import { DocsSidebar } from './DocsSidebar';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
@@ -18,8 +20,16 @@ export interface DocsLayoutProps {
 // The sidebar collapses into the shared mobile popover on small screens,
 // opened by the "On this page" trigger and closed by backdrop click, link
 // follow, or Escape (which returns focus to the trigger).
+//
+// The shell also owns the docs search dialog (⌘K / Ctrl+K toggles, '/'
+// opens outside text fields) and appends prev/next pagination under the
+// content column, so every docs page gets both without wiring anything.
+// The content wrapper carries data-pagefind-body: Pagefind indexes only
+// marked regions once any page has one, which scopes search to docs prose
+// and keeps the landing/playground chrome out of the index.
 export function DocsLayout({ toc, children }: DocsLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Prevent body scroll behind the mobile popover.
@@ -39,6 +49,41 @@ export function DocsLayout({ toc, children }: DocsLayoutProps) {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isMobileMenuOpen]);
 
+  // Search shortcuts. ⌘K/Ctrl+K toggles from anywhere (including inside the
+  // dialog); '/' only opens, and only when the keystroke doesn't belong to
+  // a text field. The dialog owns Escape itself.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setIsSearchOpen((open) => !open);
+        return;
+      }
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest('input, textarea, select') !== null)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setIsSearchOpen(true);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // The dialog and the mobile popover are both modal surfaces; opening one
+  // closes the other so focus is never trapped behind a backdrop.
+  const openSearch = () => {
+    setIsMobileMenuOpen(false);
+    setIsSearchOpen(true);
+  };
+
   return (
     <>
       <Header className="-mb-[1px]" />
@@ -47,26 +92,45 @@ export function DocsLayout({ toc, children }: DocsLayoutProps) {
         className="relative gap-6 pt-6 md:grid md:grid-cols-[220px_1fr] md:gap-12"
       >
         <div className="md:contents">
-          <Button
-            ref={triggerRef}
-            variant="outline"
-            size="sm"
-            aria-expanded={isMobileMenuOpen}
-            aria-controls="docs-sidebar"
-            className="text-muted-foreground mb-4 font-mono md:hidden"
-            onClick={() => setIsMobileMenuOpen(true)}
-          >
-            <TableOfContents size={14} />
-            On this page
-          </Button>
+          <div className="mb-4 flex gap-2 md:hidden" data-print-hidden>
+            <Button
+              ref={triggerRef}
+              variant="outline"
+              size="sm"
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="docs-sidebar"
+              className="text-muted-foreground font-mono"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <TableOfContents size={14} />
+              On this page
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-muted-foreground font-mono"
+              onClick={openSearch}
+            >
+              <Search size={14} />
+              Search
+            </Button>
+          </div>
           <DocsSidebar
             toc={toc}
             isMobileOpen={isMobileMenuOpen}
             onMobileClose={() => setIsMobileMenuOpen(false)}
+            onSearchOpen={openSearch}
           />
         </div>
-        {children}
+        <div className="min-w-0" data-pagefind-body>
+          {children}
+          <DocsPagination />
+        </div>
       </main>
+      <DocsSearchDialog
+        open={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+      />
     </>
   );
 }

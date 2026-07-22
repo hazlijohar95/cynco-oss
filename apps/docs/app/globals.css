@@ -522,3 +522,55 @@ accounts-container {
     color-scheme: dark;
   }
 }
+
+/* Print: the page reads as a plain document. Interactive chrome drops out —
+ * the header, footer, sidebar, and everything marked data-print-hidden
+ * (search triggers, copy buttons, heading anchors, pagination) — the docs
+ * grid collapses to one full-width column, and pinning color-scheme to
+ * light resolves every light-dark() token to black-on-white. External
+ * links reveal their targets, since paper can't be clicked. */
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  @page {
+    margin: 2cm;
+  }
+
+  header[data-slot='header'],
+  footer,
+  .docs-sidebar,
+  [data-print-hidden] {
+    display: none !important;
+  }
+
+  main {
+    display: block !important;
+  }
+
+  .docs-prose p,
+  .docs-prose li,
+  .docs-prose ul,
+  .docs-prose ol {
+    max-width: none;
+  }
+
+  /* Code wraps instead of clipping — a scroll overflow prints as cut-off
+   * text. Same for wide tables' scroll container. */
+  .docs-prose pre,
+  .docs-prose .table-scroll {
+    overflow-x: visible;
+  }
+
+  .docs-prose pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .docs-prose a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 0.85em;
+    color: var(--text-weak);
+  }
+}

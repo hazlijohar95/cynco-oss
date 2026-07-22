@@ -1,5 +1,6 @@
 'use client';
 
+import { Search } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -45,6 +46,8 @@ export interface DocsSidebarProps {
   toc?: readonly DocsTocEntry[];
   isMobileOpen?: boolean;
   onMobileClose?: () => void;
+  /** Opens the docs search dialog (owned by DocsLayout). */
+  onSearchOpen?: () => void;
 }
 
 // Sticky docs sidebar: package pages up top, then a scroll-spied table of
@@ -56,6 +59,7 @@ export function DocsSidebar({
   toc = [],
   isMobileOpen = false,
   onMobileClose,
+  onSearchOpen,
 }: DocsSidebarProps) {
   const pathname = usePathname();
   const navRef = useRef<HTMLElement>(null);
@@ -182,6 +186,24 @@ export function DocsSidebar({
         )}
         onClick={onMobileClose}
       >
+        {/* Desktop-only: on mobile this nav lives inside the popover, and
+         * DocsLayout renders a search trigger next to "On this page"
+         * instead — so closing the popover to open the dialog never leaves
+         * focus pointing at a hidden button. */}
+        {onSearchOpen !== undefined && (
+          <button
+            type="button"
+            data-print-hidden
+            className="border-border text-muted-foreground hover:text-foreground mb-4 hidden w-full cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 md:flex"
+            onClick={onSearchOpen}
+          >
+            <Search size={14} aria-hidden="true" />
+            <span>Search</span>
+            <kbd className="text-text-weak ml-auto text-[11px] tracking-tight">
+              ⌘K
+            </kbd>
+          </button>
+        )}
         <div className="border-border mb-4 border-b pb-4">
           {DOCS_LINKS.map(({ href, label }) => (
             <Link

@@ -87,6 +87,9 @@ catalog:
   'next-mdx-remote': '6.0.0'
   'oxfmt': '0.55.0'
   'oxlint': '1.70.0'
+  # Static search for the docs export: the CLI walks out/ after `next build`
+  # and writes the index + runtime module into out/pagefind/ (docs:build).
+  'pagefind': '1.5.2'
   'oxlint-tsgolint': '0.23.0'
   'postcss': '8.5.6'
   'postcss-calc': '10.1.1'

@@ -48,12 +48,77 @@
     line-height: 1.5;
   }
 
+  /* Identified h2/h3 host the copy-link affordance (HeadingAnchor via
+   * mdx-components); position: relative anchors it into the left gutter. */
+  h2,
+  h3 {
+    position: relative;
+  }
+
+  /* The affordance itself: parked in the heading's left margin zone
+   * (absolute, so revealing it never shifts text), sized to the first line
+   * box, hidden until the heading is hovered or the button itself is
+   * focused. -1.25rem + 1rem keeps it inside the page's 20px mobile
+   * padding. */
+  .heading-anchor {
+    position: absolute;
+    top: 0;
+    left: -1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1lh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-weak);
+    font-size: 0.75em;
+    font-weight: 400;
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity var(--motion-duration-fast) var(--motion-ease),
+      color var(--motion-duration-fast) var(--motion-ease);
+  }
+
+  h2:hover .heading-anchor,
+  h3:hover .heading-anchor,
+  .heading-anchor:focus-visible {
+    opacity: 1;
+  }
+
+  .heading-anchor:hover {
+    color: var(--color-foreground);
+  }
+
+  .heading-anchor:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  .heading-anchor.is-copied {
+    color: var(--color-success);
+    opacity: 1;
+  }
+
   p {
     margin-block: 0;
   }
 
-  > p {
+  /* The 72ch measure binds running text wherever it sits in the flow —
+   * paragraphs and list items at any depth, not just direct children —
+   * while tables, code panels, and demos keep the full column. Demo copy
+   * is layout, not prose, so demo containers lift the cap again. */
+  p,
+  li {
     max-width: var(--content-width);
+  }
+
+  .demo-container p,
+  .demo-container li {
+    max-width: none;
   }
 
   ul,
@@ -94,6 +159,19 @@
 
   strong {
     font-weight: var(--font-weight-semi);
+  }
+
+  /* Wide tables scroll sideways inside their own box (the mdx-components
+   * table wrapper) instead of stretching the page on narrow screens. The
+   * wrapper is a focusable named region, so it gets the house focus ring. */
+  .table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .table-scroll:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
   }
 
   table {

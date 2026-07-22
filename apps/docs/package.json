@@ -11,6 +11,7 @@
     "@cynco/ledger-test-data": "workspace:*",
     "@cynco/statements": "workspace:*",
     "@cynco/theme": "workspace:*",
+    "@cynco/theming": "workspace:*",
     "@mdx-js/loader": "catalog:",
     "@mdx-js/react": "catalog:",
     "@next/mdx": "catalog:",
@@ -35,6 +36,7 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "pagefind": "catalog:",
     "typescript": "catalog:",
     "wrangler": "catalog:"
   }

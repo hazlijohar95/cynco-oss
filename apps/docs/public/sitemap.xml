@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-maintained: one entry per route in SITE_LINKS order (lib/site.ts),
+     docs pages expanded. lastmod is the date of the last content-affecting
+     change, bumped alongside edits; a static export has no per-page dates
+     to derive it from. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://ledger.cynco.dev/</loc></url>
-  <url><loc>https://ledger.cynco.dev/docs</loc></url>
-  <url><loc>https://ledger.cynco.dev/docs/journals</loc></url>
-  <url><loc>https://ledger.cynco.dev/docs/accounts</loc></url>
-  <url><loc>https://ledger.cynco.dev/docs/statements</loc></url>
-  <url><loc>https://ledger.cynco.dev/docs/theming</loc></url>
-  <url><loc>https://ledger.cynco.dev/docs/importers</loc></url>
-  <url><loc>https://ledger.cynco.dev/playground</loc></url>
+  <url><loc>https://ledger.cynco.dev/</loc><lastmod>2026-07-22</lastmod></url>
+  <url><loc>https://ledger.cynco.dev/docs</loc><lastmod>2026-07-22</lastmod></url>
+  <url><loc>https://ledger.cynco.dev/docs/journals</loc><lastmod>2026-07-22</lastmod></url>
+  <url><loc>https://ledger.cynco.dev/docs/accounts</loc><lastmod>2026-07-22</lastmod></url>
+  <url><loc>https://ledger.cynco.dev/docs/statements</loc><lastmod>2026-07-22</lastmod></url>
+  <url><loc>https://ledger.cynco.dev/docs/theming</loc><lastmod>2026-07-22</lastmod></url>
+  <url><loc>https://ledger.cynco.dev/docs/importers</loc><lastmod>2026-07-22</lastmod></url>
+  <url><loc>https://ledger.cynco.dev/playground</loc><lastmod>2026-07-22</lastmod></url>
+  <url><loc>https://ledger.cynco.dev/ledger-dev</loc><lastmod>2026-07-22</lastmod></url>
 </urlset>

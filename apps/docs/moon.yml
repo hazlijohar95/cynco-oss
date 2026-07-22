@@ -16,10 +16,20 @@ tasks:
   # generated files are gitignored build artifacts: declared as outputs,
   # never inputs (inputs here are explicit, so they can't leak into the
   # hash anyway).
+  #
+  # The build always exports (NEXT_OUTPUT=export is the only deployed
+  # shape), and Pagefind then indexes the exported HTML into out/pagefind/
+  # — the search dialog imports /pagefind/pagefind.js at runtime, so the
+  # index must ship inside the same artifact as the pages. Any lane that
+  # runs `next build` outside moon (the wrangler deploy in
+  # .github/workflows/deploy-docs.yml) must run `pagefind --site out`
+  # between build and deploy or the export ships without search.
   build:
-    script: 'bun scripts/generate-llms-txt.ts && next build'
+    script:
+      'bun scripts/generate-llms-txt.ts && next build && pagefind --site out'
     env:
       NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_OUTPUT: 'export'
     deps:
       - '^:build'
     inputs:
@@ -37,6 +47,7 @@ tasks:
       - '/packages/theme/ACCESSIBILITY.md'
     outputs:
       - '.next'
+      - 'out'
       - 'public/llms.txt'
       - 'public/llms-full.txt'
 
@@ -81,6 +92,10 @@ tasks:
       runInCI: 'skip'
       envFile: '/.env.worktree'
 
+  # `next start` refuses export-mode builds (docs:build sets
+  # NEXT_OUTPUT=export), so run a plain `next build` first when using this.
+  # To preview the deployed shape (including /pagefind/ search), serve the
+  # out/ directory with any static file server instead.
   serve:
     script: 'next start --port $(( ${CYNCO_PORT_OFFSET:-0} + 4700 ))'
     options:

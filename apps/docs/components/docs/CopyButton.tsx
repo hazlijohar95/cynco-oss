@@ -83,6 +83,7 @@ export function CopyButton({ text, className }: CopyButtonProps) {
         onClick={() => void copyToClipboard()}
         aria-label="Copy code"
         title="Copy to clipboard"
+        data-print-hidden
         className={cn(
           'text-text-weak hover:text-foreground flex h-6 w-6 cursor-pointer items-center justify-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2',
           className

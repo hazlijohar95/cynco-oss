@@ -19,8 +19,9 @@ export const SITE_LINKS = [
 ] as const;
 
 /** The documentation pages in reading order — the /docs index renders one
- * row per entry, and the ordering is the prev/next contract for any future
- * pagination. Descriptions are the packages' one-line hard claims. */
+ * row per entry, and DOCS_LINKS below (index first, then this order) is the
+ * sequence DocsPagination pages through. Descriptions are the packages'
+ * one-line hard claims. */
 export const DOCS_ORDER = [
   {
     href: '/docs/journals',
@@ -64,7 +65,8 @@ export const DOCS_ORDER = [
   },
 ] as const;
 
-/** The docs sidebar list: the index first, then the pages in reading order. */
+/** The docs sidebar list and prev/next pagination sequence: the index
+ * first, then the pages in reading order. */
 export const DOCS_LINKS = [
   { href: '/docs', label: 'Overview' },
   ...DOCS_ORDER.map(({ href, label }) => ({ href, label })),
