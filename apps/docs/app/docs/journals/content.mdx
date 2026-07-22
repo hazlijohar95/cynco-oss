@@ -753,3 +753,282 @@ const register = new Register({
 Standalone registers own their `Virtualizer`; `LedgerView` shares one across
 sections and supplies per-section offsets, so offscreen sections keep only their
 two spacers in the DOM.
+
+## API reference \{#api-reference\}
+
+The full export surface of `@cynco/journals`. Types are transcribed from the
+source; defaults that live in `constants.ts` cite the constant's value.
+
+### Register options \{#api-register\}
+
+`RegisterOptions` extends `RegisterRenderOptions` — the render subset also
+drives `preloadRegisterHTML` and the worker, so SSR, worker, and client agree.
+
+| Option                      | Type                                            | Default                          | Description                                                                         |
+| --------------------------- | ----------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------- |
+| `account`                   | `string`                                        | required                         | Canonical colon-delimited path of the account this register shows.                  |
+| `density`                   | `'comfortable' \| 'compact'`                    | `'comfortable'`                  | Row density; affects CSS and JS row height, so it needs a full re-render to change. |
+| `groupBy`                   | `'none' \| 'month' \| 'quarter' \| 'year'`      | `'none'`                         | Interleaves period group header rows into the virtual row space.                    |
+| `id`                        | `string`                                        | auto-generated                   | Stable instance id baked into row ids; pass the same id to `preloadRegisterHTML`.   |
+| `label`                     | `string`                                        | the account path                 | Accessible name for the grid (`aria-label`).                                        |
+| `selectionMode`             | `'single' \| 'range'`                           | `'single'`                       | `range` adds shift-click extension and meta/ctrl toggling.                          |
+| `disableKeyboardNavigation` | `boolean`                                       | `false`                          | Opts out of the keydown listener and the grid's `tabindex="0"`.                     |
+| `filter`                    | `RegisterFilter`                                | none                             | Projection-level row filter; empty/absent query keeps the unfiltered fast path.     |
+| `maxSsrRows`                | `number`                                        | render all                       | Caps SSR-emitted rows; ignored when a filter or grouping is active; `<= 0` = all.   |
+| `emptyLabel`                | `string`                                        | `DEFAULT_REGISTER_EMPTY_LABEL`   | Guidance text for the zero-row state (`No transactions in this view`).              |
+| `amountFormat`              | `AmountFormat`                                  | `AMOUNT_FORMAT_COMMA_DOT`        | Separator/grouping descriptor for every amount the register renders.                |
+| `stickyGroupLabels`         | `boolean`                                       | `true` when `groupBy !== 'none'` | Pins the current period's label below the sticky header.                            |
+| `colorScheme`               | `'light' \| 'dark' \| 'system'`                 | `'system'`                       | Pins how `light-dark()` colors resolve on the host element.                         |
+| `lineHeight`                | `number`                                        | `20` (`DEFAULT_LINE_HEIGHT`)     | Pixel height of one text line; must match `--journals-line-height`.                 |
+| `headerHeight`              | `number`                                        | `44` (`DEFAULT_HEADER_HEIGHT`)   | Sticky header height in px; must match the header CSS `min-height`.                 |
+| `overscanRows`              | `number`                                        | `10` (`DEFAULT_OVERSCAN_ROWS`)   | Extra rows rendered above and below the pixel window.                               |
+| `virtualizer`               | `Virtualizer`                                   | owned instance                   | Shared Virtualizer (`LedgerView` passes one per scroll container).                  |
+| `getOffsetTop`              | `() => number`                                  | content top (0)                  | Top offset of this section within the scroll content, in px.                        |
+| `smoothScroller`            | `SmoothScroller`                                | owned instance                   | Shared spring so sections never fight over one `scrollTop`.                         |
+| `smoothScrollSettings`      | `SmoothScrollSettings`                          | `DEFAULT_SMOOTH_SCROLL_SETTINGS` | Spring tuning for the owned scroller; ignored when a shared one is supplied.        |
+| `workerPool`                | `WorkerPoolManager`                             | none (sync path)                 | Off-thread window HTML; any failure falls back to the identical sync path.          |
+| `onRowSelect`               | `(row: RegisterRowData, index: number) => void` | —                                | Fired when a row is clicked, after the selection attribute is applied.              |
+| `onFocusChange`             | `(entryIndex, row) => void`                     | —                                | Fired whenever the keyboard-focused row changes; `null` when focus leaves the rows. |
+| `onFocusBoundary`           | `(direction: 1 \| -1) => boolean`               | —                                | Cross-section focus handoff hook (`LedgerView`); return `true` when focus moved.    |
+| `onSelectionChange`         | `(selection: RegisterSelectionChange) => void`  | —                                | Fired on every user-driven selection change with sorted entry indexes plus rows.    |
+| `onFilterResult`            | `(result: RegisterFilterResult) => void`        | —                                | Fired after each application of an active filter with `{ matched, total }`.         |
+
+### JournalEntry options \{#api-journal-entry\}
+
+`JournalEntryOptions` extends `EntryRenderOptions` (the render subset shared
+with `preloadJournalEntryHTML`).
+
+| Option                    | Type                                                       | Default                   | Description                                                               |
+| ------------------------- | ---------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------- |
+| `showLineNumbers`         | `boolean`                                                  | `false`                   | Renders a 1-based posting number gutter before the account path.          |
+| `amountFormat`            | `AmountFormat`                                             | `AMOUNT_FORMAT_COMMA_DOT` | Separator/grouping descriptor for posting amounts and imbalance figures.  |
+| `colorScheme`             | `'light' \| 'dark' \| 'system'`                            | `'system'`                | Pins how `light-dark()` colors resolve on the host element.               |
+| `renderPostingAnnotation` | `(posting: Posting, index: number) => HTMLElement \| null` | —                         | Per-posting annotation slot, called after every render; client-side only. |
+
+### LedgerView options \{#api-ledger-view\}
+
+`LedgerViewOptions`:
+
+| Option                 | Type                            | Default                          | Description                                                              |
+| ---------------------- | ------------------------------- | -------------------------------- | ------------------------------------------------------------------------ |
+| `colorScheme`          | `'light' \| 'dark' \| 'system'` | `'system'`                       | Pins how `light-dark()` colors resolve on the host element.              |
+| `density`              | `'comfortable' \| 'compact'`    | `'comfortable'`                  | Row density shared by every section.                                     |
+| `lineHeight`           | `number`                        | `20`                             | Must match `--journals-line-height`.                                     |
+| `headerHeight`         | `number`                        | `44`                             | Must match the header CSS `min-height`.                                  |
+| `overscanRows`         | `number`                        | `10`                             | Extra rows rendered above/below the window per section.                  |
+| `id`                   | `string`                        | auto-generated                   | Stable view id threaded into per-section ARIA row ids; required for SSR. |
+| `emptyLabel`           | `string`                        | `DEFAULT_REGISTER_EMPTY_LABEL`   | Zero-row guidance text shared by every section.                          |
+| `amountFormat`         | `AmountFormat`                  | `AMOUNT_FORMAT_COMMA_DOT`        | Amount separators/grouping shared by every section.                      |
+| `smoothScrollSettings` | `SmoothScrollSettings`          | `DEFAULT_SMOOTH_SCROLL_SETTINGS` | Spring tuning for the shared smooth-scroll engine (one per view).        |
+| `onRowSelect`          | `(account, row, index) => void` | —                                | Fired when any row is clicked, with the owning account path.             |
+
+Sections are `LedgerSection` values:
+`{ account: string; rows: readonly RegisterRowData[] }`.
+
+### Reconciliation options \{#api-reconciliation\}
+
+`ReconciliationOptions`:
+
+| Option                 | Type                                   | Default                                    | Description                                                                     |
+| ---------------------- | -------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------- |
+| `account`              | `string`                               | required                                   | Canonical colon-delimited path of the account being reconciled.                 |
+| `periodLabel`          | `string`                               | —                                          | Optional period caption shown next to the account, e.g. `Jul 2026`.             |
+| `statementLines`       | `readonly StatementLine[]`             | required                                   | Parsed bank lines, integer minor units.                                         |
+| `postings`             | `readonly BookPostingRef[]`            | required                                   | Book-side posting references (`{ entry, postingIndex }`).                       |
+| `matches`              | `readonly ReconciliationMatch[]`       | `proposeMatches(statementLines, postings)` | Initial match set; pass your own (kind `manual` allowed) to seed a session.     |
+| `dateWindowDays`       | `number`                               | `3`                                        | Suggestion window forwarded to the default `proposeMatches`.                    |
+| `maxGroupSize`         | `number`                               | `3`                                        | Sum-pass group cap; pass `1` to disable sum matching.                           |
+| `amountFormat`         | `AmountFormat`                         | `AMOUNT_FORMAT_COMMA_DOT`                  | Descriptor for every figure the view renders and announces.                     |
+| `workerPool`           | `WorkerPoolManager`                    | none (inline)                              | Off-thread proposals; both paths produce the identical deterministic match set. |
+| `colorScheme`          | `'light' \| 'dark' \| 'system'`        | `'system'`                                 | Pins how `light-dark()` colors resolve on the host element.                     |
+| `disableAnnouncements` | `boolean`                              | `false`                                    | Opts out of the built-in per-currency difference announcements.                 |
+| `onAccept`             | `(match: ReconciliationMatch) => void` | —                                          | Fired after a match flips to `accepted`.                                        |
+| `onReject`             | `(match: ReconciliationMatch) => void` | —                                          | Fired after a match flips to `rejected`; state updates synchronously.           |
+| `onUndo`               | `(match: ReconciliationMatch) => void` | —                                          | Fired after an accepted/rejected match returns to `proposed`.                   |
+| `onCreateEntry`        | `(line: StatementLine) => void`        | —                                          | Fired from the create-entry affordance; the component never writes entries.     |
+
+`getState()` returns `ReconciliationState`: the current matches plus the
+per-currency difference map.
+
+### EntryStream options \{#api-entry-stream\}
+
+`EntryStreamOptions` extends `EntryRenderOptions`, so `showLineNumbers` and
+`amountFormat` apply per streamed card.
+
+| Option        | Type                                                        | Default    | Description                                                       |
+| ------------- | ----------------------------------------------------------- | ---------- | ----------------------------------------------------------------- |
+| `stream`      | `ReadableStream<LedgerEntry> \| AsyncIterable<LedgerEntry>` | required   | Source of entries; consumed exactly once, cancelled on `cleanUp`. |
+| `total`       | `number`                                                    | —          | Expected total, shown as `n / total` in the sticky footer.        |
+| `autoScroll`  | `boolean`                                                   | `true`     | Stick-to-bottom until the user scrolls up; re-engages at bottom.  |
+| `colorScheme` | `'light' \| 'dark' \| 'system'`                             | `'system'` | Pins `light-dark()` resolution on the host.                       |
+| `onEntry`     | `(entry: LedgerEntry, index: number) => void`               | —          | Fired per entry after it is queued for render (0-based index).    |
+| `onDone`      | `(count: number) => void`                                   | —          | Fired when the stream closes with the number of entries seen.     |
+
+### EntryDiff options \{#api-entry-diff\}
+
+`EntryDiffOptions` extends `EntryDiffRenderOptions`.
+
+| Option         | Type                            | Default                   | Description                                                       |
+| -------------- | ------------------------------- | ------------------------- | ----------------------------------------------------------------- |
+| `amountFormat` | `AmountFormat`                  | `AMOUNT_FORMAT_COMMA_DOT` | Descriptor for posting amounts and imbalance figures in the diff. |
+| `colorScheme`  | `'light' \| 'dark' \| 'system'` | `'system'`                | Pins how `light-dark()` colors resolve on the host element.       |
+
+### proposeMatches options \{#api-propose-matches\}
+
+`ProposeMatchesOptions`, the third argument of `proposeMatches`:
+
+| Option               | Type     | Default  | Description                                                                          |
+| -------------------- | -------- | -------- | ------------------------------------------------------------------------------------ |
+| `dateWindowDays`     | `number` | `3`      | Max `\|book − statement\|` days for the suggestion and sum passes; `0` = exact only. |
+| `maxGroupSize`       | `number` | `3`      | Max postings a sum match may group; `1` (or `0`) disables sum matching.              |
+| `maxSumCombinations` | `number` | `10_000` | Cap on combinations explored per statement line during the sum pass.                 |
+
+### Utilities \{#api-utilities\}
+
+Every remaining runtime export, one line each. Entries marked _internal_ are
+plumbing shared by the client, worker, and SSR paths — stable exports, but not
+the intended host API.
+
+**Formatting**
+
+| Export                                                   | Purpose                                                                                                                                                |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `formatMinorUnits(amount, currency, options?)`           | Integer minor units to a display string via digit slicing; `FormatMinorUnitsOptions` carries `sign: 'auto' \| 'always' \| 'never'` and `amountFormat`. |
+| `getCurrencyDecimals(currency)`                          | Minor-unit decimal places from `CURRENCY_DECIMALS`; unknown codes use 2.                                                                               |
+| `resolveAmountFormat(locale)`                            | Resolves a locale tag to an `AmountFormat` preset once at the host boundary — renderers never consult `Intl`.                                          |
+| `formatPeriodLabel(key)`                                 | Locale-free English label for a period key (`2026-03` → `March 2026`).                                                                                 |
+| `getRegisterPeriodKey(date, groupBy)`                    | Deterministic period key (`2026-03`, `2026-Q1`, `2026`) for an ISO date.                                                                               |
+| `escapeHtml(value)`                                      | HTML-escapes interpolated text; every renderer routes through it.                                                                                      |
+| `renderAccountPathHTML(account)` _internal_              | Account path markup with punctuation-colored separators.                                                                                               |
+| `renderFilterHighlightHTML(text, lowerQuery)` _internal_ | Escape-safe `<mark data-filter-match>` wrapping of filter matches.                                                                                     |
+
+**Data & diffing**
+
+| Export                                          | Purpose                                                                                                                 |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `diffEntryVersions(before, after)`              | Pure `EntryVersionDiff` between two entry versions; `null` on either side models creation/deletion.                     |
+| `diffWords(before, after)`                      | Word-level LCS diff (`WordDiff` of `WordDiffSegment` runs); space-separated changed runs merge.                         |
+| `getEntryImbalances(entry)`                     | Per-currency posting sums that are not exactly zero, as `Map<string, MinorUnits>`.                                      |
+| `proposeMatches(lines, postings, options?)`     | Deterministic reconciliation proposals: exact, suggested, then bounded sum matching.                                    |
+| `toRegisterRowData(row)`                        | Converts a `@cynco/ledger-core` register row (`LedgerCoreRegisterRow`) to `RegisterRowData`.                            |
+| `createEntryStreamFromArray(entries, options?)` | Demo/test helper: array → `ReadableStream` on a fixed cadence (`CreateEntryStreamFromArrayOptions.delayMs`, default 0). |
+| `computeReconciliationRows(state)` _internal_   | Derives the split-view rows (`ReconciliationRow`, typed by `ReconciliationRowType`) from a `ReconciliationRenderState`. |
+| `computeReconciliationTotals(state)` _internal_ | Statement / cleared / difference maps per currency (`ReconciliationTotals`), integer math.                              |
+| `getReconciliationRowKey(row)` _internal_       | Stable row key for the reconciliation leave-animation reconciler.                                                       |
+
+**Equality fast paths**
+
+| Export                                                                  | Purpose                                                                          |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `areEntriesEqual(a, b)`                                                 | Structural `LedgerEntry` equality — the re-render skip for `JournalEntry`.       |
+| `areEntryDiffInputsEqual(prevBefore, prevAfter, nextBefore, nextAfter)` | The same skip for `EntryDiff`'s before/after pair.                               |
+| `areRegisterRowArraysEqual(a, b)`                                       | Structural row-array equality, so fresh-but-identical arrays count as unchanged. |
+| `areVirtualWindowSpecsEqual(a, b)`                                      | Pixel-window equality (`VirtualWindowSpecs`).                                    |
+
+**Row models & windowing** — _internal_: the pure math between scroll position
+and rendered range.
+
+| Export                                                              | Purpose                                                                                                                                               |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `buildRegisterRowModel(rows, groupBy)`                              | One O(n) pass building the grouped `RegisterVirtualRow[]` model.                                                                                      |
+| `buildFilteredRegisterRowModel(rows, groupBy, matchedEntryIndexes)` | The grouped model restricted to matches, with recomputed group summaries.                                                                             |
+| `buildRegisterFilterCorpus(rows)`                                   | Lazy lowercase search corpus (`RegisterFilterCorpus`), built once per data set.                                                                       |
+| `computeRegisterFilterMatches(rows, filter, corpus?)`               | Matched entry indexes for a `RegisterFilter`.                                                                                                         |
+| `prepareRegisterFilter(filter)`                                     | Normalizes a filter to a `PreparedRegisterFilter` (lowercased query, field set).                                                                      |
+| `computeRowModelOffsets(model, entryRowHeight, groupRowHeight)`     | Prefix-sum pixel offsets (`Float64Array`) for the two-height row space.                                                                               |
+| `computeRowWindow(props)` / `computeGroupedRowWindow(props)`        | Visible `RowRange` from a pixel window (`ComputeRowWindowProps` / `ComputeGroupedRowWindowProps`); flat is pure arithmetic, grouped is binary search. |
+| `createWindowFromScrollPosition(props)`                             | `VirtualWindowSpecs` from scroll metrics (`WindowFromScrollPositionProps`).                                                                           |
+| `findRowIndexAtOffset(offsets, y)`                                  | Binary search: model index at a pixel offset.                                                                                                         |
+| `findFirstRowOnOrAfterDate(rows, isoDate)`                          | Binary search behind `scrollToDate`; `null` past the last row.                                                                                        |
+| `finalRegisterBalances(rows)`                                       | Closing per-currency balances for the sticky header.                                                                                                  |
+| `commitRegisterRowsHTML(rowsElement, html)`                         | Commits a window with a single write; returns the `RegisterCommitMode` used (`'replace' \| 'morph'`).                                                 |
+
+**HTML string builders** — _internal_: DOM-free renderers shared verbatim by
+client, worker, and SSR, which is what makes byte parity provable.
+`renderEntryHTML`, `renderEntryFooterHTML`, `renderFlagDotHTML`,
+`renderEntryDiffHTML`, `renderRegisterHTML`, `renderRegisterHeaderHTML`,
+`renderRegisterRowHTML`, `renderRegisterRowsHTML`,
+`renderRegisterVirtualRowsHTML`, `renderRegisterWindowHTML`,
+`renderRegisterGroupRowHTML`, `renderRegisterEmptyStateHTML`,
+`renderStickyGroupLabelHTML`, `renderStickyGroupContainerHTML`,
+`renderReconciliationHTML`, `renderReconciliationHeaderHTML`, and
+`renderReconciliationRowHTML`.
+
+**Infrastructure**
+
+| Export                                         | Purpose                                                                                                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Virtualizer`                                  | Scroll-window engine; `VirtualizerConfig` carries `overscrollSize` and `intersectionObserverMargin`, registered instances implement `VirtualizedInstance`. |
+| `SmoothScroller`                               | Critically-damped spring animator; `SmoothScrollerOptions` carries `settings` and an `onScrollFrame` hook.                                                 |
+| `InteractionManager`                           | Delegated row hover/click wiring; `InteractionManagerOptions` callbacks receive `RowSelectModifiers`.                                                      |
+| `queueRender(cb)` / `dequeueRender(cb)`        | The shared animation-frame render queue every component commits through — one layout per frame.                                                            |
+| `createLiveRegion(parent)`                     | Visually-hidden `aria-live="polite"` region (`LiveRegion`: `announce`, `destroy`), created empty.                                                          |
+| `applyHostColorScheme(container, colorScheme)` | Applies or removes the inline `color-scheme` pin on a host element.                                                                                        |
+| `prefersReducedMotion()`                       | True when the OS requests reduced motion; every smooth scroll and leave animation checks it.                                                               |
+| `isComposingEvent(event)`                      | True for keydown events inside an active IME composition (including legacy `keyCode === 229`).                                                             |
+| `journalsThemeVariables(roles)`                | Maps a `@cynco/theme` role set onto the `--journals-theme-*` variable layer.                                                                               |
+
+**Minor-unit boundary guards** — the fail-loud rail for non-integer amounts:
+
+| Export                                  | Purpose                                                          |
+| --------------------------------------- | ---------------------------------------------------------------- |
+| `isValidMinorUnits(value)`              | True for safe-integer minor-unit amounts.                        |
+| `warnInvalidMinorUnits(context, value)` | Warn-once console report for an unsafe amount, keyed by context. |
+| `warnIfInvalidRegisterRows(rows)`       | Boundary sweep over register rows entering a render.             |
+| `warnIfInvalidEntryAmounts(entry)`      | Boundary sweep over one entry's posting amounts.                 |
+| `resetInvalidMinorUnitsWarnings()`      | Resets the warn-once state — exported for tests.                 |
+
+### Constants \{#api-constants\}
+
+| Export                                                                                                                                        | Value                                                     | Meaning                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `JOURNALS_TAG_NAME`                                                                                                                           | `'journals-container'`                                    | The custom element every component renders into.                                |
+| `DEFAULT_FONT_SIZE` / `DEFAULT_LINE_HEIGHT`                                                                                                   | `13` / `20`                                               | Type metrics mirroring `--journals-font-size` / `--journals-line-height`.       |
+| `DEFAULT_HEADER_HEIGHT`                                                                                                                       | `44`                                                      | Sticky register header height (1lh + 24px padding).                             |
+| `DEFAULT_OVERSCAN_ROWS`                                                                                                                       | `10`                                                      | Extra rows rendered above/below the visible window.                             |
+| `DEFAULT_VIEWPORT_HEIGHT`                                                                                                                     | `400`                                                     | Fallback viewport height when the scroller reports no layout.                   |
+| `GROUP_HEADER_EXTRA_HEIGHT` / `DEFAULT_GROUP_HEADER_HEIGHT`                                                                                   | `8` / `28`                                                | Group header padding beyond one line, and the resulting default row height.     |
+| `REGISTER_EMPTY_EXTRA_HEIGHT`                                                                                                                 | `56`                                                      | Empty-state height beyond one line; feeds section offset estimates.             |
+| `DEFAULT_REGISTER_EMPTY_LABEL`                                                                                                                | `'No transactions in this view'`                          | Default zero-row guidance text.                                                 |
+| `RECON_VERDICT_LEAVE_MS`                                                                                                                      | `180`                                                     | Reconciliation leave-animation duration; mirrors `--journals-verdict-duration`. |
+| `MAX_FIELD_DIFF_LENGTH`                                                                                                                       | `1000`                                                    | Field length cap for word-level diffing; longer fields render wholly changed.   |
+| `DEFAULT_SMOOTH_SCROLL_SETTINGS`                                                                                                              | `{ omega: 0.015, epsilonPx: 0.5, epsilonVelocity: 0.05 }` | Default spring tuning (~440ms glide to 99% settle).                             |
+| `MAX_SMOOTH_SCROLL_FRAME_DT`                                                                                                                  | `50`                                                      | Frame-delta clamp (ms) so tab-wake never teleports a glide.                     |
+| `SSR_MAX_PRELOADED_ROWS_PER_SECTION` / `SSR_MAX_PRELOADED_TOTAL_ROWS`                                                                         | `128` / `512`                                             | `preloadLedgerViewHTML` row caps, per section and across the view.              |
+| `REGISTER_COLUMN_COUNT`                                                                                                                       | `5`                                                       | Gridcell columns per entry row; group headers span all of them.                 |
+| `MINUS_SIGN`                                                                                                                                  | `'\u2212'`                                                | Proper minus for credit amounts and negative balances.                          |
+| `AMOUNT_FORMAT_COMMA_DOT` / `AMOUNT_FORMAT_DOT_COMMA` / `AMOUNT_FORMAT_SPACE_COMMA` / `AMOUNT_FORMAT_APOSTROPHE_DOT` / `AMOUNT_FORMAT_INDIAN` | frozen presets                                            | `1,234.56`, `1.234,56`, `1 234,56` (U+202F), `1'234.56`, `12,34,567.89`.        |
+| `CURRENCY_DECIMALS`                                                                                                                           | 26-entry table                                            | ISO 4217 minor-unit exceptions; unlisted codes use 2.                           |
+| `JournalsContainerLoaded`                                                                                                                     | `true`                                                    | Custom-element registration flag — component wiring, not host API.              |
+
+### Types \{#api-types\}
+
+Component lifecycle props: `JournalEntryRenderProps` /
+`JournalEntryHydrateProps`, `RegisterRenderProps` / `RegisterHydrateProps` /
+`RegisterHydrateSectionProps`, `LedgerViewRenderProps` /
+`LedgerViewHydrateProps`, `ReconciliationRenderProps` /
+`ReconciliationHydrateProps`, `EntryDiffRenderProps` / `EntryDiffHydrateProps`,
+and `EntryStreamRenderProps` — each pairs the component's data with an optional
+`container` / `parentNode` mount target.
+
+Everything else, grouped:
+
+- **Core data** — `MinorUnits`, `EntryFlag`
+  (`'cleared' | 'pending' | 'flagged' | 'void'`), `Posting`, `LedgerEntry`,
+  `RegisterRowData`, `StatementLine`, `BookPostingRef`, `AmountFormat`,
+  `ColorScheme`.
+- **Register** — `RegisterDensity`, `RegisterGroupBy`, `RegisterGroupSummary`,
+  `RegisterVirtualRow` (= `RegisterGroupVirtualRow | RegisterEntryVirtualRow`),
+  `RegisterFilterField` (`'description' | 'date' | 'flag'`),
+  `RegisterFilterResult`, `RegisterSelectionMode`, `RegisterSelection`,
+  `RegisterSelectionChange`, `RegisterSelectedRows`
+  (`number | ReadonlySet<number> | null`), `RowRange`, `ScrollToRowOptions`,
+  `SmoothScrollSettings`.
+- **Reconciliation** — `MatchKind` (`'exact' | 'suggested' | 'sum' | 'manual'`),
+  `MatchStatus` (`'proposed' | 'accepted' | 'rejected'`), `ReconciliationMatch`,
+  `ReconciliationState`.
+- **Diff** — `FieldChangeKind`, `WordDiffSegment`, `EntryFieldDiff`,
+  `EntryListItemDiff`, `EntryListDiff`, `PostingDiff`, `PostingDiffKind`
+  (`'unchanged' | 'amount-changed' | 'added' | 'removed'`), `EntryVersionDiff`,
+  `EntryVersionDiffKind` (`'created' | 'deleted' | 'modified' | 'unchanged'`).
+- **View** — `LedgerSection`, `VirtualWindowSpecs`.

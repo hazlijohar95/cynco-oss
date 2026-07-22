@@ -89,7 +89,7 @@ only then update. Blind-updating baselines deletes the lane's entire value.
 
 ## Repo-invariant guards
 
-Three root tasks turn architectural comments into CI failures (all wired as
+Four root tasks turn architectural comments into CI failures (all wired as
 `runInCI: 'always'` targets in `ci.yml`; unit tests for their pure logic live in
 `scripts/*.test.ts` and run via `root:test`):
 
@@ -114,6 +114,17 @@ Three root tasks turn architectural comments into CI failures (all wired as
   it: that suite also asserts runtime/compile-time facts (the exported table
   agrees with its own source; parser output is assignable to the reconciliation
   input shape) that only the package's own test context can check.
+- **`root:assert-docs`** (`scripts/assert-docs.ts`): every public export of a
+  `publishable`-tagged package (parsed from `src/index.ts` as source text,
+  following relative `export * from` one level) must be mentioned — a
+  word-boundary match — in that package's `apps/docs/app/docs/<pkg>/content.mdx`
+  or carry a `DOCS_MENTION_ALLOWLIST` entry with a per-name reason; stale
+  allowlist entries fail so the escape hatch cannot rot. Every publishable
+  package must also have a docs page reachable through `DOCS_ORDER` in
+  `apps/docs/lib/site.ts` (`@cynco/theme` maps to the theming page via
+  `DOCS_PAGE_OVERRIDES`). Motivated by an audit that measured ~19% export
+  coverage in the docs — nothing made an export and its documentation move
+  together.
 
 ## CI
 

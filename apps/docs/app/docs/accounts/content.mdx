@@ -637,3 +637,122 @@ relaxed 36), so the visible range is pure arithmetic over the scroll position.
 Give the host element a fixed height to turn the internal scroller into a
 window; a 10,000-account chart renders the same handful of rows as a 50-account
 one.
+
+## API reference \{#api-reference\}
+
+The full export surface of `@cynco/accounts`. Types are transcribed from the
+source; defaults that live in `constants.ts` cite the constant's value.
+
+### AccountTree options \{#api-account-tree\}
+
+`AccountTreeOptions` extends `AccountTreeControllerOptions` — the controller
+subset (first block) also constructs a headless `AccountTreeController`
+directly.
+
+| Option               | Type                                           | Default                        | Description                                                                           |
+| -------------------- | ---------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------- |
+| `entries`            | `readonly LedgerEntry[]`                       | —                              | Entries whose posting accounts seed the tree and its balances.                        |
+| `accounts`           | `readonly string[]`                            | —                              | Explicit paths to include with zero activity; invalid paths are skipped silently.     |
+| `initialExpansion`   | `'all' \| 'top-level' \| string[]`             | `'all'`                        | Initial expansion state (`AccountTreeInitialExpansion`).                              |
+| `density`            | `'compact' \| 'default' \| 'relaxed'`          | `'default'`                    | Row density preset (`AccountTreeDensity`): 24 / 30 / 36 px rows.                      |
+| `currency`           | `string`                                       | `'MYR'` (`DEFAULT_CURRENCY`)   | Primary display currency for the balance column.                                      |
+| `showBalances`       | `boolean`                                      | `true`                         | Whether rows render the right-aligned balance column.                                 |
+| `amountFormat`       | `AmountFormat`                                 | `AMOUNT_FORMAT_COMMA_DOT`      | Descriptor for the balance column; pass the same one to `preloadAccountTreeHTML`.     |
+| `flattenEmptyGroups` | `boolean`                                      | `false`                        | Collapses single-child group chains into one row; projection-level only.              |
+| `loadChildren`       | `(path: string) => Promise<readonly string[]>` | —                              | Async child loader for lazy subtrees; resolves to canonical child paths.              |
+| `initiallyUnloaded`  | `readonly string[]`                            | —                              | Paths whose children are unfetched at construction; meaningful with `loadChildren`.   |
+| `onChildLoadError`   | `(path: string, error: unknown) => void`       | —                              | Fired once per failed `loadChildren` attempt with the original rejection value.       |
+| `id`                 | `string`                                       | auto-generated                 | Stable instance id baked into row ids; pass the same id to `preloadAccountTreeHTML`.  |
+| `ariaLabel`          | `string`                                       | `'Accounts'`                   | Accessible name for the tree.                                                         |
+| `colorScheme`        | `'light' \| 'dark' \| 'system'`                | `'system'`                     | Pins how `light-dark()` colors resolve on the host element.                           |
+| `overscanRows`       | `number`                                       | `10` (`DEFAULT_OVERSCAN_ROWS`) | Extra rows rendered above and below the pixel window.                                 |
+| `unsafeCSS`          | `string`                                       | —                              | Raw CSS appended into the shadow root's `unsafe` layer — an escape hatch.             |
+| `dropCollision`      | `'reject' \| 'skip' \| 'replace'`              | `'reject'`                     | How drops resolve leaf-name collisions (`AccountDropCollision`).                      |
+| `dragExpandDelayMs`  | `number`                                       | `700` (`DRAG_EXPAND_DELAY_MS`) | Spring-loaded expansion delay for drags hovering a collapsed group.                   |
+| `icons`              | `AccountTreeIconOptions`                       | no icons                       | Per-row icon resolver over the built-in closed icon set.                              |
+| `renderDecorations`  | `AccountRowDecorationsRenderer`                | —                              | Host-driven trailing decoration lane; at most 3 render per row.                       |
+| `nameTruncation`     | `'end' \| 'middle'`                            | `'end'`                        | Name overflow handling (`AccountTreeNameTruncation`); `middle` measures and rewrites. |
+| `stickyAncestors`    | `'nearest' \| 'stack'`                         | `'nearest'`                    | Sticky ancestor header shape (`AccountTreeStickyAncestors`).                          |
+| `contextMenu`        | `AccountTreeContextMenuOptions`                | —                              | Context-menu composition surface; the host renders the menu from `onOpen`.            |
+| `onSelect`           | `AccountTreeSelectCallback`                    | —                              | Fired when the selection changes, with selected paths and the focused path.           |
+| `onRename`           | `AccountRenameListener`                        | —                              | Fired after a committed inline rename with `(oldPath, newPath)`.                      |
+| `onMove`             | `AccountMoveListener`                          | —                              | Fired after a drag & drop re-parenting with the applied `AccountMove[]`.              |
+| `onDropComplete`     | `(result: AccountDropCompleteEvent) => void`   | —                              | Fired after every applied drop with moves, skipped candidates, and replaced roots.    |
+| `onDropError`        | `(error: AccountDropErrorEvent) => void`       | —                              | Fired when a drop applies nothing for an error-shaped `AccountDropErrorReason`.       |
+
+### Utilities \{#api-utilities\}
+
+Every remaining runtime export, one line each. Entries marked _internal_ are
+plumbing shared by the client and SSR paths — stable exports, but not the
+intended host API.
+
+| Export                                                                                                             | Purpose                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `createDefaultAccountIconResolver()`                                                                               | Pragmatic default `AccountIconResolver` over top-level segment heuristics.                                              |
+| `computeMiddleTruncation(fullText, fullWidth, availableWidth)`                                                     | Code-point-safe `head…tail` truncation; tail keeps ~3/4 of the budget, `null` when nothing fits.                        |
+| `accountsThemeVariables(roles)`                                                                                    | Maps a `@cynco/theme` role set onto the `--accounts-theme-*` variable layer.                                            |
+| `formatMinorUnits(amount, currency, options?)`                                                                     | Integer minor units to a display string via digit slicing; `FormatMinorUnitsOptions` carries `sign` and `amountFormat`. |
+| `getCurrencyDecimals(currency)`                                                                                    | Minor-unit decimal places from `CURRENCY_DECIMALS`; unknown codes use 2.                                                |
+| `resolveAmountFormat(locale)`                                                                                      | Resolves a locale tag to an `AmountFormat` preset once at the host boundary — renderers never consult `Intl`.           |
+| `escapeHtml(value)`                                                                                                | HTML-escapes interpolated text; every renderer routes through it.                                                       |
+| `applyHostColorScheme(container, colorScheme)`                                                                     | Applies or removes the inline `color-scheme` pin on a host element.                                                     |
+| `isComposingEvent(event)`                                                                                          | True for keydown events inside an active IME composition (including legacy `keyCode === 229`).                          |
+| `isValidMinorUnits(value)`                                                                                         | True for safe-integer minor-unit amounts.                                                                               |
+| `warnInvalidMinorUnits(context, value)`                                                                            | Warn-once console report for an unsafe amount, keyed by context.                                                        |
+| `warnIfInvalidLedgerEntries(entries)`                                                                              | Boundary sweep over entries entering the store.                                                                         |
+| `resetInvalidMinorUnitsWarnings()`                                                                                 | Resets the warn-once state — exported for tests.                                                                        |
+| `makeChildLoadPlaceholderPath(parentPath)` _internal_                                                              | Synthetic non-path projection marker for a group's load placeholder row.                                                |
+| `getChildLoadPlaceholderParent(value)` _internal_                                                                  | The owning group path of a placeholder marker, or `null`.                                                               |
+| `isChildLoadPlaceholderPath(value)` _internal_                                                                     | True when a projection value is a placeholder marker, not an account path.                                              |
+| `renderAccountRowHTML` / `renderAccountRowsHTML` / `renderStickyRowHTML` / `renderAccountTreeShellHTML` _internal_ | DOM-free string builders (driven by `AccountTreeRenderOptions`) shared by client and SSR.                               |
+
+### Constants \{#api-constants\}
+
+| Export                                                                                                                                        | Value                                        | Meaning                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `ACCOUNTS_TAG_NAME`                                                                                                                           | `'accounts-container'`                       | The custom element the tree renders into.                                                |
+| `DENSITY_ROW_HEIGHTS`                                                                                                                         | `{ compact: 24, default: 30, relaxed: 36 }`  | Fixed pixel row height per density preset; mirrors `--accounts-row-height`.              |
+| `DENSITY_SCALE_FACTORS`                                                                                                                       | `{ compact: 0.8, default: 1, relaxed: 1.2 }` | Density scale mirrored by `--accounts-density-scale`.                                    |
+| `DEFAULT_OVERSCAN_ROWS`                                                                                                                       | `10`                                         | Extra rows rendered above/below the visible window.                                      |
+| `DEFAULT_VIEWPORT_HEIGHT`                                                                                                                     | `420`                                        | Viewport height assumed when the scroller has no measurable layout.                      |
+| `DEFAULT_CURRENCY`                                                                                                                            | `'MYR'`                                      | Primary display currency when the caller does not specify one.                           |
+| `SSR_MAX_PRELOADED_ROWS`                                                                                                                      | `512`                                        | `preloadAccountTreeHTML` row cap; the client re-windows on first scroll.                 |
+| `DRAG_EXPAND_DELAY_MS`                                                                                                                        | `700`                                        | Spring-loaded expansion delay for drags.                                                 |
+| `STICKY_ANCESTOR_STACK_MAX`                                                                                                                   | `4`                                          | Mirror-row cap for `stickyAncestors: 'stack'`; nearest ancestors win.                    |
+| `MINUS_SIGN`                                                                                                                                  | `'\u2212'`                                   | Proper minus for negative balances.                                                      |
+| `AMOUNT_FORMAT_COMMA_DOT` / `AMOUNT_FORMAT_DOT_COMMA` / `AMOUNT_FORMAT_SPACE_COMMA` / `AMOUNT_FORMAT_APOSTROPHE_DOT` / `AMOUNT_FORMAT_INDIAN` | frozen presets                               | `1,234.56`, `1.234,56`, `1 234,56` (U+202F), `1'234.56`, `12,34,567.89`.                 |
+| `CURRENCY_DECIMALS`                                                                                                                           | the engine's table                           | ISO 4217 minor-unit exceptions, aliased from `@cynco/ledger-core`; unlisted codes use 2. |
+| `ACCOUNT_ICON_PATHS`                                                                                                                          | 10-entry record                              | SVG path data for the closed `AccountIconName` set — the XSS boundary's render source.   |
+| `AccountsContainerLoaded`                                                                                                                     | `true`                                       | Custom-element registration flag — component wiring, not host API.                       |
+
+### Types \{#api-types\}
+
+`AccountTreeRenderProps` pairs an optional `container` / `parentNode` mount
+target for `render`. Everything else, grouped:
+
+- **Core data** — `MinorUnits`, `EntryFlag`
+  (`'cleared' | 'pending' | 'flagged' | 'void'`), `Posting`, `LedgerEntry`,
+  `AmountFormat`, `ColorScheme`, `RowRange`.
+- **Rows & status** — `AccountTreeRowData` (the materialized row shape from
+  `AccountTreeController.getRows`), `AccountStatusKind`
+  (`'unreconciled' | 'flagged' | 'pending'`), `AccountStatusEntry`,
+  `StatusAggregate`, `AccountChildLoadState`
+  (`'loaded' | 'unloaded' | 'loading' | 'error'`),
+  `AccountChildLoadPlaceholder`.
+- **Controller** — `AccountTreeChange` (the honest per-facet invalidation
+  record), `AccountTreeChangeListener`, `SelectPathOptions` (`additive` /
+  `range`), `BeginSearchOptions`, `AccountTreeSearchMode`
+  (`'expand-matches' | 'collapse-non-matches' | 'hide-non-matches'`),
+  `AccountSearchMatchState`, `AccountSearchResult`.
+- **Icons & decorations** — `AccountIconName` (the closed 10-name union),
+  `AccountIconContext`, `AccountDecorationTone`
+  (`'neutral' | 'info' | 'success' | 'warn' | 'danger'`), `AccountRowDecoration`
+  (text badge or dot), `AccountRowDecorationContext`.
+- **Rename & moves** — `RenameErrorReason`
+  (`'unknown-path' | 'invalid-name' | 'collision'`), `RenameResult`
+  (`{ ok: true; newPath } | { ok: false; reason }`), `AccountMove`,
+  `AccountMovePlan`.
+- **Context menus** — `AccountTreeContextMenuSource`
+  (`'pointer' | 'keyboard' | 'button'`), `AccountTreeContextMenuAnchor`
+  (`{ x, y } | { rect: DOMRect }`), `AccountTreeContextMenuRequest`,
+  `AccountTreeContextMenuCloseOptions` (`restoreFocus`, default `true`).

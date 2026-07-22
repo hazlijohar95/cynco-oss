@@ -239,3 +239,78 @@ const snapshot = controller.getSnapshot();
 const style = themeToCSSVariables('journals', snapshot.roles);
 // { '--journals-theme-bg-editor': '#ffffff', ... }
 ```
+
+## API reference \{#api-reference\}
+
+The full export surface of `@cynco/theming`, plus the `@cynco/theme` package it
+pairs with (role sets, palettes, and the color science behind the CVD gate).
+Types are transcribed from the source.
+
+### createThemeController options \{#api-controller-options\}
+
+`createThemeController(options)` takes a `ThemeControllerOptions` and returns a
+`ThemeController`:
+
+| Option         | Type                                | Default          | Description                                                                       |
+| -------------- | ----------------------------------- | ---------------- | --------------------------------------------------------------------------------- |
+| `catalog`      | `ThemeCatalog`                      | required         | The validated set of selectable themes.                                           |
+| `initialMode`  | `'light' \| 'dark' \| 'system'`     | `'system'`       | Starting mode when nothing is persisted.                                          |
+| `initialTheme` | `{ light?: string; dark?: string }` | catalog defaults | Starting theme name per scheme slot; unknown names fall back instead of throwing. |
+| `persistence`  | `ThemePersistence`                  | —                | Custom `load` / `save` adapter; takes precedence over `storageKey`.               |
+| `storageKey`   | `string`                            | —                | Enables the built-in localStorage adapter (one JSON entry of selection names).    |
+
+### applyThemeToElement options \{#api-apply-options\}
+
+`applyThemeToElement(element, snapshot, options?)` and
+`connectThemeController(controller, element, options?)` share
+`ApplyThemeOptions`:
+
+| Option     | Type                | Default                    | Description                                                    |
+| ---------- | ------------------- | -------------------------- | -------------------------------------------------------------- |
+| `prefixes` | `readonly string[]` | `['journals', 'accounts']` | Component variable namespaces to write (`--<prefix>-theme-*`). |
+
+### Utilities \{#api-utilities\}
+
+| Export                                                  | Purpose                                                                                           |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `createThemeController(options)`                        | The store: mode, per-scheme theme choice, persistence, and the OS-preference subscription.        |
+| `createThemeCatalog(entries, defaults)`                 | Builds a validated, frozen `ThemeCatalog`; construction errors throw, lookups degrade.            |
+| `defaultCatalog`                                        | Every role set `@cynco/theme` ships, entry names matching the export names.                       |
+| `applyThemeToElement(element, snapshot, options?)`      | Writes theme variables + a `color-scheme` pin inline; removes stale properties on the next apply. |
+| `connectThemeController(controller, element, options?)` | Apply now and on every change; the returned disconnect only unsubscribes.                         |
+
+### Types \{#api-types\}
+
+- `ColorMode` (`'light' | 'dark' | 'system'`) — the user-facing mode choice.
+- `ResolvedColorScheme` (`'light' | 'dark'`) — a mode collapsed against the OS
+  preference; always concrete.
+- `ThemeSelection` — the persisted names: `{ mode, light, dark }`.
+- `ThemePersistence` — the pluggable `load` / `save` adapter contract.
+- `ThemeCatalogEntry` — `{ name, label, scheme, roles }`.
+- `ThemeCatalog` — `get` (null for unknown names), `list`, and `defaultFor`
+  (always resolves; validated at creation).
+- `ThemeControllerOptions` / `ThemeControllerSnapshot` — the options bag above
+  and the frozen, reference-stable published state.
+- `ThemeController` — the controller surface: `getSnapshot`, `setMode`,
+  `setTheme`, `subscribe`, `destroy`.
+
+### From @cynco/theme \{#api-theme\}
+
+The paired package's full surface — install it directly when you only need role
+data or the color science:
+
+| Export                                           | Purpose                                                                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `light` / `dark`                                 | The base role sets (`Roles`): bg, fg, border, accent, states, and ledger colors.                                         |
+| `lightSoft` / `darkSoft`                         | Contrast-compressed variants.                                                                                            |
+| `lightCvd` / `darkCvd`                           | Protanopia/deuteranopia-safe variants (blue ↔ orange debit/credit axis).                                                 |
+| `lightTritan` / `darkTritan`                     | Tritanopia-safe variants (teal ↔ vermillion axis).                                                                       |
+| `Roles`                                          | The role-set shape every theme conforms to.                                                                              |
+| `palettes`                                       | The raw chromatic scales the role sets draw from.                                                                        |
+| `themeToCSSVariables(prefix, roles)`             | Serializes a role set to `--<prefix>-theme-<group>-<token>` custom properties.                                           |
+| `parseHex(hex)`                                  | `#rgb` / `#rrggbb` to `Rgb` (`{ r, g, b }`); `null` on malformed input.                                                  |
+| `contrastRatio(a, b)`                            | WCAG 2.x contrast ratio between two `Rgb` colors.                                                                        |
+| `relativeLuminance(rgb)`                         | WCAG relative luminance of an `Rgb` color.                                                                               |
+| `deltaE2000(a, b)` / `deltaE2000Lab(lab1, lab2)` | CIEDE2000 color difference, from `Rgb` or from `Lab` (`{ l, a, b }`) directly.                                           |
+| `simulateCvd(rgb, kind)`                         | Machado et al. (2009) severity-1.0 dichromacy simulation; `CvdKind` is `'protanopia' \| 'deuteranopia' \| 'tritanopia'`. |
+| `srgbToLinear(channel)` / `linearToSrgb(linear)` | The sRGB transfer function and its inverse, per channel.                                                                 |

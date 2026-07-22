@@ -224,3 +224,81 @@ The shared shapes (`StatementLine`, `Posting`, `LedgerEntry`) are deliberately
 duplicated, not imported — importers carries no dependency on `@cynco/journals`
 — and a lockstep parity test fails the moment either side drifts, the same idiom
 the suite uses for the engine's currency table.
+
+## API reference \{#api-reference\}
+
+The full export surface of `@cynco/importers`. Types are transcribed from the
+source.
+
+### parseCsvStatement mapping \{#api-csv-mapping\}
+
+`parseCsvStatement(text, mapping)` takes a `CsvMapping` — every locale-shaped
+decision is stated, never sniffed:
+
+| Option                | Type                                                           | Default  | Description                                                                       |
+| --------------------- | -------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------- |
+| `delimiter`           | `',' \| ';' \| '\t'`                                           | `','`    | Field delimiter.                                                                  |
+| `hasHeader`           | `boolean`                                                      | inferred | `true` when any column reference is a header name; an explicit value always wins. |
+| `columns.date`        | `CsvColumnRef` (`number \| string`)                            | required | Date column, by 0-based index or header name.                                     |
+| `columns.description` | `CsvColumnRef`                                                 | required | Description column.                                                               |
+| `columns.amount`      | `CsvAmountColumns` (`CsvColumnRef \| { debit; credit }`)       | required | One signed column, or the split debit/credit pair (`amount = credit − debit`).    |
+| `columns.balance`     | `CsvColumnRef`                                                 | —        | Running balance column; enables `proveRunningBalance`.                            |
+| `columns.reference`   | `CsvColumnRef`                                                 | —        | Bank reference column, surfaced as `ImportedStatementLine.reference`.             |
+| `dateFormat`          | `'YYYY-MM-DD' \| 'DD/MM/YYYY' \| 'MM/DD/YYYY' \| 'DD.MM.YYYY'` | required | Stated date format (`CsvDateFormat`) — `01/02/2026` is ambiguous otherwise.       |
+| `amountFormat`        | `CsvAmountFormat` (`{ decimal: '.' \| ','; group?: string }`)  | required | Stated decimal and group separators.                                              |
+| `currency`            | `string`                                                       | required | ISO 4217 or commodity code applied to every line.                                 |
+
+The result is a `CsvParseResult`: `lines` (`ImportedStatementLine[]`) plus
+`skipped` (`SkippedLine[]`, 1-based physical line and reason).
+
+### parseOfx options \{#api-ofx-options\}
+
+`parseOfx(text, options?)` takes an `OfxParseOptions`:
+
+| Option            | Type     | Default | Description                                                                                    |
+| ----------------- | -------- | ------- | ---------------------------------------------------------------------------------------------- |
+| `defaultCurrency` | `string` | —       | Used when a statement carries no CURDEF; without either, a statement with transactions throws. |
+
+The result is an `OfxParseResult`: `statements` (`OfxStatement[]` — one
+per-account group with `accountId`, `currency`, and `lines`) plus `skipped`.
+
+### toDraftEntries options \{#api-draft-options\}
+
+`toDraftEntries(lines, options)` takes a `ToDraftEntriesOptions`:
+
+| Option            | Type     | Default        | Description                                                             |
+| ----------------- | -------- | -------------- | ----------------------------------------------------------------------- |
+| `account`         | `string` | required       | Ledger account the statement belongs to.                                |
+| `suspenseAccount` | `string` | required       | Counterposting account for the unclassified side.                       |
+| `currency`        | `string` | the lines' own | Overrides the lines' currency when the ledger books under another code. |
+
+### Utilities \{#api-utilities\}
+
+| Export                                            | Purpose                                                                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `proveRunningBalance(lines, opening?)`            | Proves `opening + Σ amounts` against every claimed balance; returns a `BalanceProof` (`{ ok: true }` or the `BalanceBreak[]`). |
+| `parseAmountToMinorUnits(text, format, currency)` | Signed decimal string to integer minor units by string slicing — no float, no rounding, ever.                                  |
+| `parseDateToIso(text, format)`                    | Calendar-validated date parse to ISO `YYYY-MM-DD`; throws `DATE_INVALID` — no `Date` object involved.                          |
+| `getCurrencyDecimals(currency)`                   | Minor-unit decimal places from `CURRENCY_DECIMALS`; unknown codes use 2.                                                       |
+| `negateMinorUnits(n)`                             | Exact negation that never produces `-0`.                                                                                       |
+| `ImportError`                                     | The only thrown error type: `code: ImportErrorCode` plus an optional 1-based `line`.                                           |
+
+### Constants \{#api-constants\}
+
+| Export              | Value          | Meaning                                                                                           |
+| ------------------- | -------------- | ------------------------------------------------------------------------------------------------- |
+| `CURRENCY_DECIMALS` | 26-entry table | ISO 4217 minor-unit exceptions, lockstep with the engine's canonical table; unlisted codes use 2. |
+
+### Types \{#api-types\}
+
+- **Core data** — `MinorUnits`, `EntryFlag`
+  (`'cleared' | 'pending' | 'flagged' | 'void'`), `Posting`, `LedgerEntry`,
+  `StatementLine` — deliberate lockstep duplicates of the `@cynco/journals`
+  shapes.
+- **CSV** — `CsvColumnRef`, `CsvAmountColumns`, `CsvDateFormat`,
+  `CsvAmountFormat`, `CsvMapping`, `CsvParseResult`.
+- **OFX** — `OfxParseOptions`, `OfxStatement`, `OfxParseResult`.
+- **Results & proof** — `ImportedStatementLine` (a `StatementLine` plus optional
+  `balance` and `reference`), `SkippedLine`, `BalanceBreak`, `BalanceProof`,
+  `ToDraftEntriesOptions`, `ImportErrorCode` (the nine-code union the error
+  table above enumerates).

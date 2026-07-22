@@ -348,3 +348,141 @@ results[0]; // { ok: true, actual: 5_000_000, difference: 0, … }
 getCurrencyExponent('MYR'); // 2 — sen
 getCurrencyExponent('JPY'); // 0 — yen has no minor unit
 ```
+
+## API reference \{#api-reference\}
+
+The full export surface of `@cynco/statements`, view options and the inlined
+engine's derivation options alike. Types are transcribed from the source.
+
+### View options \{#api-view-options\}
+
+The three view classes share one shape: an optional `amountFormat` on the render
+subset plus a `colorScheme` pin. `TrialBalanceViewOptions` extends
+`TrialBalanceRenderOptions`, `IncomeStatementViewOptions` extends
+`IncomeStatementRenderOptions`, and `BalanceSheetViewOptions` extends
+`BalanceSheetRenderOptions`.
+
+`TrialBalance` (`TrialBalanceViewOptions`):
+
+| Option               | Type                            | Default                   | Description                                                                            |
+| -------------------- | ------------------------------- | ------------------------- | -------------------------------------------------------------------------------------- |
+| `showClassification` | `boolean`                       | `false`                   | Adds a classification column between the account path and the amounts.                 |
+| `amountFormat`       | `AmountFormat`                  | `AMOUNT_FORMAT_COMMA_DOT` | Separator/grouping descriptor for every amount; debit/credit semantics are unaffected. |
+| `colorScheme`        | `'light' \| 'dark' \| 'system'` | `'system'`                | Pins how `light-dark()` colors resolve on the host element.                            |
+
+`IncomeStatement` (`IncomeStatementViewOptions`) and `BalanceSheet`
+(`BalanceSheetViewOptions`):
+
+| Option         | Type                            | Default                   | Description                                                 |
+| -------------- | ------------------------------- | ------------------------- | ----------------------------------------------------------- |
+| `amountFormat` | `AmountFormat`                  | `AMOUNT_FORMAT_COMMA_DOT` | Separator/grouping descriptor for every amount.             |
+| `colorScheme`  | `'light' \| 'dark' \| 'system'` | `'system'`                | Pins how `light-dark()` colors resolve on the host element. |
+
+### Derivation options \{#api-derivation-options\}
+
+`deriveTrialBalance(entries, options)` — `TrialBalanceOptions`:
+
+| Option         | Type                | Default  | Description                                                                             |
+| -------------- | ------------------- | -------- | --------------------------------------------------------------------------------------- |
+| `asOf`         | `string`            | all-time | Inclusive ISO date the balances report through.                                         |
+| `taxonomy`     | `AccountTaxonomy`   | —        | Classifies and orders rows; without one every row is unclassified and sorts by path.    |
+| `adjustments`  | `EntryFilter`       | —        | Working-trial-balance mode: matching entries count as adjustments, rows split in three. |
+| `accountPaths` | `readonly string[]` | —        | Zero-activity accounts printed at zero in every currency section.                       |
+
+`deriveIncomeStatement(entries, options)` — `IncomeStatementOptions`:
+
+| Option     | Type                         | Default  | Description                                                                  |
+| ---------- | ---------------------------- | -------- | ---------------------------------------------------------------------------- |
+| `periods`  | `readonly StatementPeriod[]` | required | Reporting periods, one column each, in display order. At least one.          |
+| `taxonomy` | `AccountTaxonomy`            | —        | Classifies accounts into the sections; without one both sections stay empty. |
+
+`deriveBalanceSheet(entries, options)` — `BalanceSheetOptions`:
+
+| Option     | Type                       | Default  | Description                                                              |
+| ---------- | -------------------------- | -------- | ------------------------------------------------------------------------ |
+| `dates`    | `readonly StatementDate[]` | required | Reporting dates, one column each, in display order. At least one.        |
+| `taxonomy` | `AccountTaxonomy`          | —        | Classifies accounts into the sections; without one all three stay empty. |
+
+`createAccountTaxonomy(options?)` — `AccountTaxonomyOptions`:
+
+| Option      | Type                                                | Default                      | Description                                                                      |
+| ----------- | --------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------- |
+| `rootTypes` | `Readonly<Record<string, AccountType>>`             | `DEFAULT_ROOT_ACCOUNT_TYPES` | Maps a path's first segment to a type; replaces (never merges with) the default. |
+| `overrides` | `Readonly<Record<string, AccountTaxonomyOverride>>` | —                            | Per-path overrides, inherited by descendants; nearest ancestor wins per field.   |
+
+`createOpeningBalanceEntry(options)` — `OpeningBalanceOptions`:
+
+| Option           | Type                            | Default                                                         | Description                                                 |
+| ---------------- | ------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------- |
+| `id`             | `string`                        | required                                                        | Stable unique entry id.                                     |
+| `date`           | `string`                        | required                                                        | ISO date the opening balances take effect.                  |
+| `lines`          | `readonly OpeningBalanceLine[]` | required                                                        | Carried-forward balances, one line per (account, currency). |
+| `equityAccount`  | `string`                        | `DEFAULT_OPENING_BALANCE_ACCOUNT` (`'Equity:Opening-Balances'`) | Equity account the offsetting postings book against.        |
+| `flag`           | `EntryFlag`                     | `'cleared'`                                                     | Opening balances are agreed facts.                          |
+| `narration`      | `string`                        | `'Opening balances'`                                            | Entry narration.                                            |
+| `tags` / `links` | `readonly string[]`             | —                                                               | Entry tags (no `#` prefix) and cross-reference link ids.    |
+
+### Utilities \{#api-utilities\}
+
+Every remaining runtime export, one line each. Entries marked _internal_ are
+string-builder plumbing shared by the client and any future SSR path.
+
+| Export                                                                                                                                      | Purpose                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `checkBalanceAssertions(store, assertions)`                                                                                                 | Checks declared `BalanceAssertion[]` facts; each `BalanceAssertionResult` reports the exact difference.                              |
+| `matchesEntryFilter(entry, filter)`                                                                                                         | True when an entry satisfies every present `EntryFilter` condition (logical AND).                                                    |
+| `getCurrencyExponent(currency, overrides?)`                                                                                                 | ISO 4217 minor-unit exponent with caller overrides; unknown codes use 2.                                                             |
+| `getNormalBalanceForType(type)`                                                                                                             | `NormalBalance` (`'debit' \| 'credit'`) for an `AccountType`.                                                                        |
+| `getStatementRoleForType(type)`                                                                                                             | `StatementRole` (`'balance-sheet' \| 'income-statement'`) for an `AccountType`.                                                      |
+| `negateMinorUnits(n)`                                                                                                                       | Exact negation that never produces `-0`.                                                                                             |
+| `formatMinorUnits(amount, currency, options?)`                                                                                              | Integer minor units to a display string via digit slicing; `FormatMinorUnitsOptions` carries `sign` and `amountFormat`.              |
+| `resolveAmountFormat(locale)`                                                                                                               | Resolves a locale tag to an `AmountFormat` preset once at the host boundary — renderers never consult `Intl`.                        |
+| `escapeHtml(value)`                                                                                                                         | HTML-escapes interpolated text; every renderer routes through it.                                                                    |
+| `applyHostColorScheme(container, colorScheme)`                                                                                              | Applies or removes the inline `color-scheme` pin on a host element.                                                                  |
+| `statementsThemeVariables(roles)`                                                                                                           | Maps a `@cynco/theme` role set onto the `--statements-theme-*` variable layer.                                                       |
+| `isValidMinorUnits(value)`                                                                                                                  | True for safe-integer minor-unit amounts.                                                                                            |
+| `warnInvalidMinorUnits(context, value)`                                                                                                     | Warn-once console report for an unsafe amount, keyed by context.                                                                     |
+| `warnIfInvalidTrialBalanceAmounts` / `warnIfInvalidIncomeStatementAmounts` / `warnIfInvalidBalanceSheetAmounts`                             | Boundary sweeps over derived data entering a render.                                                                                 |
+| `resetInvalidMinorUnitsWarnings()`                                                                                                          | Resets the warn-once state — exported for tests.                                                                                     |
+| `renderTrialBalanceHTML` / `renderIncomeStatementHTML` / `renderBalanceSheetHTML` _internal_                                                | DOM-free statement renderers (driven by `TrialBalanceRenderOptions` / `IncomeStatementRenderOptions` / `BalanceSheetRenderOptions`). |
+| `renderAmountCellsHTML` / `renderGroupHeaderHTML` / `renderGroupTotalHTML` / `renderLineRowHTML` / `renderUnclassifiedGroupHTML` _internal_ | Shared statement-table fragment builders.                                                                                            |
+
+### Constants \{#api-constants\}
+
+| Export                                                                                                                                        | Value                       | Meaning                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------- |
+| `STATEMENTS_TAG_NAME`                                                                                                                         | `'statements-container'`    | The custom element every view renders into.                                               |
+| `MINUS_SIGN`                                                                                                                                  | `'\u2212'`                  | Proper minus for negative amounts and differences.                                        |
+| `AMOUNT_FORMAT_COMMA_DOT` / `AMOUNT_FORMAT_DOT_COMMA` / `AMOUNT_FORMAT_SPACE_COMMA` / `AMOUNT_FORMAT_APOSTROPHE_DOT` / `AMOUNT_FORMAT_INDIAN` | frozen presets              | `1,234.56`, `1.234,56`, `1 234,56` (U+202F), `1'234.56`, `12,34,567.89`.                  |
+| `DEFAULT_CURRENCY_EXPONENTS`                                                                                                                  | 26-entry table              | The engine's canonical ISO 4217 minor-unit exception table.                               |
+| `DEFAULT_OPENING_BALANCE_ACCOUNT`                                                                                                             | `'Equity:Opening-Balances'` | Default equity offset account for opening balances.                                       |
+| `DEFAULT_ROOT_ACCOUNT_TYPES`                                                                                                                  | 6-root map                  | `Assets` / `Liabilities` / `Equity` / `Income` / `Revenue` / `Expenses` → the five types. |
+| `StatementsContainerLoaded`                                                                                                                   | `true`                      | Custom-element registration flag — component wiring, not host API.                        |
+
+### Types \{#api-types\}
+
+Component lifecycle props: `TrialBalanceRenderProps`,
+`IncomeStatementRenderProps`, and `BalanceSheetRenderProps` — each pairs the
+derived `data` with an optional `container` / `parentNode` mount target and a
+`forceRender` escape from the data-reference fast path.
+
+Everything else, grouped:
+
+- **Core data** — `MinorUnits`, `EntryFlag`
+  (`'cleared' | 'pending' | 'flagged' | 'void'`), `Posting`, `LedgerEntry`,
+  `EntryFilter`, `AmountFormat`, `ColorScheme`.
+- **Taxonomy** — `AccountType`
+  (`'asset' | 'liability' | 'equity' | 'income' | 'expense'`), `NormalBalance`,
+  `StatementRole`, `AccountClassification` (type + `contra` + derived facts),
+  `AccountTaxonomyOverride`, `AccountTaxonomy` (the memoized `classify` oracle).
+- **Statement shapes** — `StatementPeriod` (`label` / `dateFrom` / `dateTo`),
+  `StatementDate` (`label` / `asOf` / `fiscalYearStart?`), `StatementLine`
+  (account + classification + presentation-signed `amounts` per column),
+  `UnclassifiedBalance` (raw ledger-signed amounts, listed outside every total).
+- **Derived data** — `TrialBalanceData` / `TrialBalanceSection` /
+  `TrialBalanceRow` (with the `abnormal` review flag), `IncomeStatementData` /
+  `IncomeStatementSection`, `BalanceSheetData` / `BalanceSheetSection` — every
+  section carries its computed proofs and a `hasOverflow` flag instead of
+  silently losing precision.
+- **Assertions & opening balances** — `BalanceAssertion`,
+  `BalanceAssertionResult`, `OpeningBalanceLine`, `OpeningBalanceOptions`.

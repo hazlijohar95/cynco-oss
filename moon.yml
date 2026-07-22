@@ -88,6 +88,25 @@ tasks:
     options:
       runInCI: 'always'
 
+  # Docs-coverage guard: every public export of a publishable package must be
+  # mentioned in that package's docs page (or carry a per-entry allowlist
+  # reason), and every publishable package must have a content.mdx wired into
+  # apps/docs/lib/site.ts DOCS_ORDER. Reads package sources and MDX as text;
+  # no build needed, so it runs everywhere including CI.
+  assert-docs:
+    command: 'bun scripts/assert-docs.ts'
+    inputs:
+      - 'scripts/assert-docs.ts'
+      - 'scripts/assert-wiring.ts'
+      - 'packages/*/moon.yml'
+      - 'packages/*/package.json'
+      - 'packages/*/src/**/*.ts'
+      - 'packages/*/src/**/*.tsx'
+      - 'apps/docs/app/docs/*/content.mdx'
+      - 'apps/docs/lib/site.ts'
+    options:
+      runInCI: 'always'
+
   # Lockstep guard: the deliberately duplicated types/tables across packages
   # (currency exponent table, AmountFormat + presets, importers' copies of
   # the entry shapes, CSS px ↔ JS constants) are compared as normalized
