@@ -1,6 +1,6 @@
 {
   "name": "@cynco/statements",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Cynco statements: trial balance and financial statement renderers derived from ledger entries",
   "keywords": [
     "accounting",

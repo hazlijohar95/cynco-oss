@@ -62,7 +62,7 @@ Published: `@cynco/ledger-core@0.1.0-beta.1` (new),
   the amount-format presets are re-exported from the engine. Public API and
   rendered output are unchanged.
 
-### @cynco/importers — 0.1.0-beta.1 (new package)
+### @cynco/importers — 0.1.0-beta.2 (new package)
 
 #### Added
 
@@ -88,7 +88,7 @@ Published: `@cynco/ledger-core@0.1.0-beta.1` (new),
   same definitions the reconciliation UI consumes, so parser output feeds it
   unadapted.
 
-### @cynco/statements — 0.1.0-beta.1 (new package)
+### @cynco/statements — 0.1.0-beta.2 (new package)
 
 #### Added
 

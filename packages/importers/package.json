@@ -1,6 +1,6 @@
 {
   "name": "@cynco/importers",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Cynco importers: bank statement parsers (CSV, OFX) producing statement lines and draft ledger entries",
   "keywords": [
     "accounting",
