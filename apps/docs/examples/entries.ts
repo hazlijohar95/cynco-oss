@@ -9,6 +9,13 @@ import type { LedgerEntry } from '@cynco/journals';
 export const ACCOUNT_TREE_DEMO_ID = 'home-accounts';
 
 /**
+ * Instance id for the accounts docs page's hero tree, shared by the page
+ * wrapper's `preloadAccountTreeHTML` call and the client demo. Lives here
+ * (a plain module) for the same client-reference-proxy reason as above.
+ */
+export const ACCOUNTS_DOCS_TREE_ID = 'docs-accounts-tree';
+
+/**
  * Workspace hero tree: instance id and the controller options mirrored
  * between `preloadAccountTreeHTML` and the client hook. Shared from this
  * plain module (not the 'use client' demo file) for the same

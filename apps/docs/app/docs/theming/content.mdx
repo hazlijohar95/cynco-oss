@@ -1,3 +1,7 @@
+import { CvdComparison } from '@/examples/theming/CvdComparison';
+import { RolesSwatchGrid } from '@/examples/theming/RolesSwatchGrid';
+import { ThemeControllerDemo } from '@/examples/theming/ThemeControllerDemo';
+
 # Theming
 
 `@cynco/theming` is runtime theming for the ledger components: a
@@ -5,6 +9,8 @@ framework-agnostic theme controller (light / dark / system with OS-preference
 tracking), pluggable persistence, DOM application helpers, and a React hook. It
 pairs with the role sets and CSS variable convention from `@cynco/theme` that
 `@cynco/journals` and `@cynco/accounts` consume.
+
+<ThemeControllerDemo entryHTML={props.switcherEntryHTML} />
 
 ## Installation \{#installation\}
 
@@ -136,6 +142,12 @@ const controller = createThemeController({
 
 ## Theme catalogs \{#catalogs\}
 
+Every theme is a `Roles` object from `@cynco/theme`. These are the `light` and
+`dark` sets — the swatches below are read from the exported role data at build
+time, not copied:
+
+<RolesSwatchGrid />
+
 `defaultCatalog` wraps every role set `@cynco/theme` ships — `light` / `dark`,
 the contrast-compressed `lightSoft` / `darkSoft`, and the accessible `lightCvd`
 / `darkCvd` / `lightTritan` / `darkTritan` variants — with entry names matching
@@ -163,6 +175,8 @@ duplicate names, unknown default names, or a default pointing at the wrong
 scheme are programmer errors and throw with a clear message at creation time.
 
 ## CVD-safe themes \{#cvd-accessibility\}
+
+<CvdComparison entryHTML={props.cvdEntryHTML} />
 
 The base themes map debit to green and credit to red — mirror diff semantics —
 and that is exactly the axis protanopia and deuteranopia collapse (together the

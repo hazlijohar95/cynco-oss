@@ -1,7 +1,15 @@
-import { JournalEntry } from '@cynco/journals/react';
+import { EntryDiff, JournalEntry } from '@cynco/journals/react';
 
 import { CodeTabs } from '@/components/docs/CodeTabs';
-import { PAYROLL_ENTRY } from '@/examples/entries';
+import { Footnote } from '@/components/Footnote';
+import {
+  FIT_OUT_ENTRY_AFTER,
+  FIT_OUT_ENTRY_BEFORE,
+  PAYROLL_ENTRY,
+} from '@/examples/entries';
+import { ReconciliationDemo } from '@/examples/ReconciliationDemo';
+import { RegisterDemo } from '@/examples/RegisterDemo';
+import { RegisterOptionsPlayground } from '@/examples/RegisterOptionsPlayground';
 
 # Journals
 
@@ -99,6 +107,11 @@ card.cleanUp();
 A virtualized single-account register (bank-statement style) with a sticky
 balance header. Give the host element a fixed height to turn the internal
 scroller into a window.
+
+The options below drive the live register — the snippet is the exact options
+object it was constructed with:
+
+<RegisterOptionsPlayground />
 
 ```ts
 import { Register } from '@cynco/journals';
@@ -336,6 +349,8 @@ instant jump. Keyboard focus reveal stays instant so it never lags typing.
 
 ## Reconciliation \{#reconciliation\}
 
+<ReconciliationDemo docsLink={false} />
+
 The accounting analog of a merge-conflict resolver: statement lines on the left,
 book postings on the right, proposed matches as tinted pairs with accept /
 reject in a center gutter. `proposeMatches` is deterministic and runs three
@@ -393,6 +408,19 @@ const { matches: current, difference } = reconciliation.getState();
   hydration contract as the other components.
 
 ## EntryDiff \{#entry-diff\}
+
+<div className="demo-container">
+  <EntryDiff
+    before={FIT_OUT_ENTRY_BEFORE}
+    after={FIT_OUT_ENTRY_AFTER}
+    ssrHTML={props.entryDiffHTML}
+  />
+</div>
+
+<Footnote>
+  Server-rendered via <code>preloadEntryDiffHTML</code> — hydration adopts this
+  exact DOM with zero writes. Both versions balance to exactly zero.
+</Footnote>
 
 The audit-trail view: the diff between two versions of a journal entry, rendered
 like a file diff. `diffEntryVersions` is pure data — scalar header fields (date,
@@ -702,6 +730,8 @@ its repo and set the hook to match this look, or point it at your own mono
 stack.
 
 ## Virtualization \{#virtualization\}
+
+<RegisterDemo />
 
 Fixed row heights make the window math pure arithmetic: the rendered range and
 spacer heights derive from the scroll position with no per-row measurement, so

@@ -1,5 +1,6 @@
 import { AccountTreeDocsDemo } from './AccountTreeDocsDemo';
 import { CodeTabs } from '@/components/docs/CodeTabs';
+import { AccountTreeDemo } from '@/examples/AccountTreeDemo';
 
 # Accounts
 
@@ -9,7 +10,7 @@ keyboard-navigable tree — rolled-up balances, status dots, search — into an
 are canonical colon-delimited strings at every public boundary; numeric node ids
 never leak out of the store.
 
-<AccountTreeDocsDemo />
+<AccountTreeDocsDemo ssrHTML={props.heroTreeHTML} />
 
 ## Installation \{#installation\}
 
@@ -628,6 +629,8 @@ its repo and set the hook to match this look, or point it at your own mono
 stack.
 
 ## Virtualization \{#virtualization\}
+
+<AccountTreeDemo ssrHTML={props.densityTreeHTML} />
 
 Each density preset maps to a fixed pixel row height (compact 24 / default 30 /
 relaxed 36), so the visible range is pure arithmetic over the scroll position.

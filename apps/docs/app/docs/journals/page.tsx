@@ -1,11 +1,18 @@
 import '@/app/prose.css';
-import { preloadJournalEntryHTML } from '@cynco/journals/ssr';
+import {
+  preloadEntryDiffHTML,
+  preloadJournalEntryHTML,
+} from '@cynco/journals/ssr';
 import type { Metadata } from 'next';
 
 import JournalsContent, { tableOfContents } from './content.mdx';
 import { DocsLayout } from '@/components/docs/DocsLayout';
 import { Footer } from '@/components/Footer';
-import { PAYROLL_ENTRY } from '@/examples/entries';
+import {
+  FIT_OUT_ENTRY_AFTER,
+  FIT_OUT_ENTRY_BEFORE,
+  PAYROLL_ENTRY,
+} from '@/examples/entries';
 
 const docsTitle = 'Journals';
 const docsDescription =
@@ -19,19 +26,23 @@ export const metadata: Metadata = {
 };
 
 // The prose lives in content.mdx; this wrapper owns the async work the MDX
-// body can't — preloading the hero demo's declarative shadow DOM — and
-// hands it in as a prop.
+// body can't — preloading the demos' declarative shadow DOM — and hands the
+// results in as props.
 export default async function JournalsDocsPage() {
-  const heroEntryHTML = await preloadJournalEntryHTML(PAYROLL_ENTRY, {
-    showLineNumbers: true,
-  });
+  const [heroEntryHTML, entryDiffHTML] = await Promise.all([
+    preloadJournalEntryHTML(PAYROLL_ENTRY, { showLineNumbers: true }),
+    preloadEntryDiffHTML(FIT_OUT_ENTRY_BEFORE, FIT_OUT_ENTRY_AFTER),
+  ]);
 
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5">
       <DocsLayout toc={tableOfContents}>
         <div className="min-w-0 space-y-8">
           <section className="docs-prose contain-layout">
-            <JournalsContent heroEntryHTML={heroEntryHTML} />
+            <JournalsContent
+              heroEntryHTML={heroEntryHTML}
+              entryDiffHTML={entryDiffHTML}
+            />
           </section>
         </div>
       </DocsLayout>

@@ -31,11 +31,22 @@ function formatDifference(difference: Map<string, number>): string {
   return parts.length === 0 ? '0' : parts.join(' · ');
 }
 
+export interface ReconciliationDemoProps {
+  /**
+   * Whether the footnote links to the matching-engine docs. The landing
+   * page keeps the default; the docs page embeds this demo inside that very
+   * section, where a self-link would be noise.
+   */
+  docsLink?: boolean;
+}
+
 // Interactive reconciliation demo built on the vanilla class through the
 // shared instance hook (the plain React wrapper exposes no imperative
 // surface, and the control bar needs acceptMatch/setOptions). The component
 // owns match state; the page listens and narrates.
-export function ReconciliationDemo() {
+export function ReconciliationDemo({
+  docsLink = true,
+}: ReconciliationDemoProps = {}) {
   // The journals instance hook (unlike the accounts one) exposes no
   // getInstance, so the demo captures the vanilla instance itself in
   // create() — the control bar needs acceptMatch/getState/setOptions.
@@ -162,10 +173,18 @@ export function ReconciliationDemo() {
       </div>
       <Footnote>
         <span data-reconciliation-readout>{readout}</span> Matching is
-        deterministic — exact 1:1 pairs plus bounded sum matches —{' '}
-        <Link href="/docs/journals#reconciliation" className="footnote-link">
-          read the matching engine docs
-        </Link>
+        deterministic — exact 1:1 pairs plus bounded sum matches
+        {docsLink ? (
+          <>
+            {' — '}
+            <Link
+              href="/docs/journals#reconciliation"
+              className="footnote-link"
+            >
+              read the matching engine docs
+            </Link>
+          </>
+        ) : null}
         .
       </Footnote>
     </div>
