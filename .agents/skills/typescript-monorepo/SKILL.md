@@ -48,12 +48,10 @@ stale; rebuild it.
 ## Build config (tsdown)
 
 - Packages bundled with tsdown carry `tags: ['tsdown']`; overrides
-  (`merge: 'replace'`) live in the project's `moon.yml`. `@cynco/accounts`
-  replaces the shared `build` to inline the private engine (`noExternal`) and
-  run `assert-no-ledger-core.ts` afterward.
-- When a task inlines another package's source, list that source in the task
-  `inputs` (e.g. `/packages/ledger-core/src/**/*`) so cache invalidation is
-  honest.
+  (`merge: 'replace'`) live in the project's `moon.yml`.
+- If a task ever bundles another package's source (journals' portable worker
+  bundles everything, for example), list that source in the task `inputs` so
+  cache invalidation is honest.
 
 ## Published packages
 

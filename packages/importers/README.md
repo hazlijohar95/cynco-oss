@@ -5,9 +5,9 @@ Docs: <https://ledger.cynco.dev/docs/importers> · npm:
 
 `@cynco/importers` turns raw bank exports (CSV, OFX 1.x/2.x) into the statement
 lines and draft ledger entries the rest of the Cynco suite consumes. Pure data,
-zero dependencies, no DOM — and exact to the minor unit: amounts are parsed
-straight from decimal strings to integer minor units, so no float ever touches
-money.
+no DOM, no third-party dependencies — and exact to the minor unit: amounts are
+parsed straight from decimal strings to integer minor units, so no float ever
+touches money.
 
 ## Features
 

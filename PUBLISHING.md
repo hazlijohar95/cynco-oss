@@ -16,28 +16,26 @@ gets published.
 
 ## What is published (and what is not)
 
-| Package             | npm | Notes                                                    |
-| ------------------- | --- | -------------------------------------------------------- |
-| `@cynco/theme`      | yes | No workspace dependencies.                               |
-| `@cynco/theming`    | yes | Depends on `@cynco/theme` (real npm dependency).         |
-| `@cynco/journals`   | yes | Depends on `@cynco/theme` (real npm dependency).         |
-| `@cynco/accounts`   | yes | Inlines `@cynco/ledger-core` and `@cynco/theme` in dist. |
-| `@cynco/statements` | yes | Inlines `@cynco/ledger-core` and `@cynco/theme` in dist. |
-| `@cynco/importers`  | yes | No workspace dependencies (types lockstep-duplicated).   |
+| Package              | npm | Notes                                               |
+| -------------------- | --- | --------------------------------------------------- |
+| `@cynco/ledger-core` | yes | The engine. No workspace dependencies.              |
+| `@cynco/theme`       | yes | No workspace dependencies.                          |
+| `@cynco/theming`     | yes | Depends on `@cynco/theme`.                          |
+| `@cynco/journals`    | yes | Depends on `@cynco/ledger-core` and `@cynco/theme`. |
+| `@cynco/accounts`    | yes | Depends on `@cynco/ledger-core` and `@cynco/theme`. |
+| `@cynco/statements`  | yes | Depends on `@cynco/ledger-core` and `@cynco/theme`. |
+| `@cynco/importers`   | yes | Depends on `@cynco/ledger-core`.                    |
 
-`@cynco/ledger-core` and `@cynco/ledger-test-data` are **never** published. The
-ledger-core engine ships inside `@cynco/accounts`' `dist/` via tsdown's
-`noExternal` bundling, so consumers only ever install `@cynco/accounts`. Because
-the workspace `package.json` of accounts still declares the inlined packages as
-dependencies (local resolution needs them), the publish script strips them from
-the packed manifest before upload — publishing accounts any other way would ship
-a dependency on a package that does not exist on npm.
+`@cynco/ledger-test-data` is **never** published: it is deterministic test
+fixtures, and no published payload may reference it (the payload verification
+scans for it). Every other workspace dependency is a real npm dependency —
+nothing is inlined or stripped.
 
-**Publish order matters for a coordinated release**: `@cynco/theme` first, then
-`@cynco/theming` / `@cynco/journals` / `@cynco/accounts`. `pnpm pack` rewrites
+**Publish order matters for a coordinated release**: `@cynco/ledger-core` and
+`@cynco/theme` first, then everything that depends on them. `pnpm pack` rewrites
 `workspace:*` ranges to the exact resolved version, so a consumer of
-`@cynco/journals@X` needs the pinned `@cynco/theme` version to already exist on
-the registry.
+`@cynco/journals@X` needs the pinned `@cynco/ledger-core` and `@cynco/theme`
+versions to already exist on the registry.
 
 ## Version bump policy
 
@@ -60,34 +58,25 @@ To cut a release:
 
 ## The guard chain
 
-Two layers protect a release:
+Every published package's `prepublishOnly` points at
+`moon run <project>:prepublish` (pnpm-version pin check + build), so even a
+direct `pnpm publish` builds and checks first. The sanctioned path is still
+`moonx <project>:publish`, which adds full payload verification.
 
-- **Build-time gate** (accounts only): `accounts:build` runs
-  `scripts/assert-no-ledger-core.ts` after every tsdown build, failing if any
-  dist runtime/type file still references `@cynco/ledger-core`. Inlining is
-  asserted, not assumed.
-- **prepublishOnly** (every published package): points at
-  `moon run <project>:prepublish` (pnpm-version pin check + build). For accounts
-  it also runs `scripts/assert-safe-publish.ts`, which **fails by design** while
-  the workspace manifest still carries the inlined dependencies — this is what
-  makes a direct `pnpm publish` from `packages/accounts` impossible. The publish
-  script is the sanctioned path around it because it rewrites the manifest
-  first.
-
-The publish script itself then:
+The publish script:
 
 1. Refuses to run on a dirty working tree (override with `--dirty`).
 2. Checks the pnpm version pin and runs `moon run <project>:build`.
 3. `pnpm pack` into a tempdir (this rewrites `workspace:*` to resolved versions)
    and untars the payload.
-4. Rewrites the packed `package.json`: strips inlined workspace dependencies,
-   drops `scripts` (the only entry is the repo-only prepublishOnly hook) and
-   `devDependencies` (npm ignores it, but it names private workspace packages).
-5. Verifies the payload: no private/inlined package appears in any runtime
-   dependency field or as a quoted import specifier in any shipped file
-   (sourcemaps excluded — they embed pre-bundling source text that nothing
-   resolves), no `*.tsbuildinfo` leaked, every `exports` entry points at a file
-   that exists, README.md and LICENSE.md are present.
+4. Rewrites the packed `package.json`: drops `scripts` (the only entry is the
+   repo-only prepublishOnly hook) and `devDependencies` (npm ignores it, but it
+   names private workspace packages).
+5. Verifies the payload: no private package appears in any runtime dependency
+   field or as a quoted import specifier in any shipped file (sourcemaps
+   excluded — they embed pre-bundling source text that nothing resolves), no
+   `*.tsbuildinfo` leaked, every `exports` entry points at a file that exists,
+   README.md and LICENSE.md are present.
 6. Repacks the rewritten payload into the final tarball and verifies the
    extracted final tarball again — the artifact that ships is the artifact that
    was checked.
@@ -157,11 +146,14 @@ moonx theme:publish -- --dry-run
 # 2. Confirm auth (must have publish access to the @cynco scope)
 pnpm whoami
 
-# 3. Publish to beta, theme first
+# 3. Publish to beta, foundations first
+moonx ledger-core:publish -- --tag=beta
 moonx theme:publish -- --tag=beta
 moonx theming:publish -- --tag=beta
 moonx journals:publish -- --tag=beta
 moonx accounts:publish -- --tag=beta
+moonx statements:publish -- --tag=beta
+moonx importers:publish -- --tag=beta
 
 # 4. Verify on npm
 pnpm view @cynco/accounts@<version> version
@@ -177,7 +169,7 @@ Create a fresh consumer app **outside** the monorepo so workspace resolution
 cannot mask packaging bugs — either against the beta publish or by installing
 the final tarball path printed by `--dry-run`. Check at minimum:
 
-- `ls node_modules/@cynco` shows only published packages (no `ledger-core`, no
+- `ls node_modules/@cynco` shows only published packages (no
   `ledger-test-data`).
 - Typecheck and production-build the consumer.
 - Exercise each subpath export (e.g. `@cynco/journals`, `/react`, `/ssr`,
@@ -203,10 +195,9 @@ leave the broken version stranded with its bad dist-tag.
 - [ ] `CHANGELOG.md` entry added (dated, per-package subsections)
 - [ ] `pnpm install` run, lockfile committed, release PR merged
 - [ ] `pnpm whoami` confirms publish access to `@cynco`
-- [ ] `moonx <pkg>:publish -- --dry-run` reviewed for each package (for
-      accounts: `@cynco/ledger-core` and `@cynco/theme` gone from
-      `dependencies`, `scripts`/`devDependencies` gone everywhere)
-- [ ] published to `beta` in dependency order (`theme` first)
+- [ ] `moonx <pkg>:publish -- --dry-run` reviewed for each package
+      (`scripts`/`devDependencies` gone everywhere)
+- [ ] published to `beta` in dependency order (`ledger-core` and `theme` first)
 - [ ] consumer smoke tests passed (no private packages in `node_modules`)
 - [ ] `--promote-latest` run per package after smoke verification
 - [ ] git tags pushed (`--tag-release` or manual `<pkg>@<version>` tags)

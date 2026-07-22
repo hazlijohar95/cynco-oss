@@ -18,8 +18,9 @@ tables keyed by canonical colon-delimited account paths
 format via digit-string slicing — no float ever touches a monetary value.
 Out-of-balance sections render flagged, never repaired.
 
-The data engine (`@cynco/ledger-core`) is inlined into the published bundle at
-build time; the package has no runtime dependencies.
+The data engine (`@cynco/ledger-core`) is a regular dependency — the derivations
+documented below are re-exported from it, so consumers install one package and
+derive and render from it.
 
 ## Usage
 

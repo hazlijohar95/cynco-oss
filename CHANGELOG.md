@@ -7,19 +7,43 @@ and the packages adhere to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with a manual,
 human-driven bump policy (see `PUBLISHING.md` — no changesets, by design).
 
-Private workspace packages (`@cynco/ledger-core`, `@cynco/ledger-test-data`) are
-not tracked here: they never reach npm. The ledger-core engine ships inlined
-inside `@cynco/accounts`.
+The private fixtures package (`@cynco/ledger-test-data`) is not tracked here: it
+never reaches npm.
 
 ## [Unreleased]
+
+### @cynco/ledger-core — 0.1.0-beta.1 (new package)
+
+#### Added
+
+- The engine is now a published package — previously private and inlined into
+  `@cynco/accounts` and `@cynco/statements` at build time, it is the suite's
+  foundation and ships on npm like everything else: the double-entry data model
+  (`LedgerEntry`, `Posting`, `BankStatementLine`), the integer minor-unit money
+  kernel, `EntryStore` / `AccountStore`, the statement derivations, the account
+  taxonomy, the canonical ISO 4217 exponent table, and the shared `AmountFormat`
+  presets.
+- `BankStatementLine`: the bank-statement reconciliation input shape moved into
+  the engine as the canonical definition; `@cynco/journals` and
+  `@cynco/importers` re-export it as `StatementLine`, unchanged.
+- `AmountFormat` and the five `AMOUNT_FORMAT_*` presets moved into the engine
+  from `@cynco/journals`; every rendering package re-exports the same objects.
+- Consequence across the suite: the lockstep-duplicated types and tables (entry
+  shapes, currency exponent table, amount-format presets) are deleted — every
+  package imports the one canonical definition from the engine, so the drift
+  class that once mis-scaled zero- and three-decimal currencies 100×/10× can no
+  longer exist. `@cynco/journals`, `@cynco/accounts`, `@cynco/statements`, and
+  `@cynco/importers` now declare `@cynco/ledger-core` as a regular npm
+  dependency; published manifests are no longer rewritten to strip inlined
+  dependencies.
 
 ### @cynco/importers — 0.1.0-beta.1 (new package)
 
 #### Added
 
 - New package: bank statement parsers producing reconciliation-ready statement
-  lines and balanced draft ledger entries. Pure data, zero runtime dependencies,
-  no DOM.
+  lines and balanced draft ledger entries. Pure data, no DOM, no third-party
+  runtime dependencies (the shared shapes come from `@cynco/ledger-core`).
 - `parseCsvStatement` — explicit column mapping (indices or header names, no
   sniffing), RFC 4180 tokenizer (quoted fields, escaped quotes, embedded
   delimiters/newlines, CRLF), single-amount or debit/credit split columns, four
@@ -35,16 +59,17 @@ inside `@cynco/accounts`.
   entries against a caller-named suspense account with deterministic ids.
 - Amounts parse from digit strings against the ISO 4217 exponent table — no
   floats anywhere; over-precise amounts are rejected, not rounded.
-- Statement-line and ledger types are duplicated from `@cynco/journals` with a
-  mechanical lockstep parity test, so parser output feeds the reconciliation UI
+- Statement-line and ledger types are imported from `@cynco/ledger-core` — the
+  same definitions the reconciliation UI consumes, so parser output feeds it
   unadapted.
 
 ### @cynco/statements — 0.1.0-beta.1 (new package)
 
 #### Added
 
-- New package: financial statement derivations and renderers, with the
-  ledger-core engine inlined like `@cynco/accounts`.
+- New package: financial statement derivations and renderers, built on the
+  published `@cynco/ledger-core` engine (re-exported, so consumers install one
+  package).
 - Statement derivations (report-time, one linear pass, per-currency sections —
   cross-currency totals are refused, never silently converted):
   - `deriveTrialBalance` — debit/credit columns from signed balances, abnormal
@@ -88,7 +113,7 @@ inside `@cynco/accounts`.
   the workload entries, with the tie and equation proofs narrated in the
   readout.
 
-### Engine (inlined; surfaces through `@cynco/accounts` and `@cynco/statements`)
+### Engine (surfaces through `@cynco/accounts` and `@cynco/statements`)
 
 #### Added
 

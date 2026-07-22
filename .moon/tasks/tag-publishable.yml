@@ -23,8 +23,8 @@ tasks:
       internal: true
       runInCI: 'skip'
 
-  # Aggregator the prepublishOnly lifecycle hook points at. Projects append
-  # extra guards via dep merge (e.g. accounts adds assert-no-ledger-core).
+  # Aggregator the prepublishOnly lifecycle hook points at. Projects may
+  # append extra guards via dep merge.
   prepublish:
     command: 'noop'
     deps:
@@ -35,8 +35,8 @@ tasks:
       runInCI: 'skip'
 
   # The sanctioned release path for every published package: build + guards,
-  # pnpm pack, manifest rewrite (strip inlined workspace deps and
-  # release-only fields), payload verification, repack, publish. The script
+  # pnpm pack, manifest rewrite (drop release-only fields), payload
+  # verification, repack, publish. The script
   # keys its per-package behavior off the task cwd (the project root).
   # Forward flags with `moonx <project>:publish -- --dry-run` or `--tag=x`.
   # `interactive` keeps stdio available for npm 2FA prompts; the script also

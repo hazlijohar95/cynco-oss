@@ -46,15 +46,16 @@ style preferences — a violation is a data-integrity bug.
 
 ## The engine boundary
 
-- `@cynco/ledger-core` is a private engine. `@cynco/accounts`,
-  `@cynco/journals`, and `@cynco/statements` own the public product API.
-- Package code, published payloads, and published manifests must never import or
-  depend on `@cynco/ledger-core` or `@cynco/ledger-test-data`. The engine source
-  is inlined into `@cynco/accounts` and `@cynco/statements` at build time
-  (tsdown `noExternal`) and the leak is asserted after every build by the shared
-  `scripts/assert-no-private-imports.ts` guard.
-- Do not "fix" a build/publish failure by re-adding the engine as a dependency.
-  If the guard fires, the inlining or an import is wrong.
+- `@cynco/ledger-core` is the published engine and the single source of truth
+  for the shared money-kernel shapes (`LedgerEntry`, `Posting`,
+  `BankStatementLine`), the currency exponent table, and the `AmountFormat`
+  presets. Every other package imports these from it — never copy them.
+- Published payloads and manifests must never import or depend on
+  `@cynco/ledger-test-data` (private fixtures). The publish payload verification
+  in `scripts/publish.ts` scans for it.
+- Domain packages (journals, accounts, statements, importers) may depend on the
+  engine, never on each other sideways — `scripts/assert-tiers.ts` enforces the
+  direction.
 
 ## Statements derive, they never plug
 
@@ -86,7 +87,5 @@ style preferences — a violation is a data-integrity bug.
 
 - `moonx accounts:test` / `moonx journals:test` — unit and integration suites
   that exercise balancing, canonical paths, and parsing.
-- `packages/accounts/build` runs `assert-no-ledger-core.ts` on every build.
-- The publish payload verification (`scripts/publish.ts`,
-  `packages/accounts/scripts/assert-safe-publish.ts`) blocks any release that
-  still references a private package.
+- The publish payload verification (`scripts/publish.ts`) blocks any release
+  that references a private package.

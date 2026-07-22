@@ -86,13 +86,15 @@ const html = await preloadJournalEntryHTML(ledgerEntry);
 
 | Package | | What it is |
 | --- | --- | --- |
+| [`@cynco/ledger-core`](packages/ledger-core) | [![npm](https://img.shields.io/npm/v/%40cynco%2Fledger-core?color=black&label=)](https://www.npmjs.com/package/@cynco/ledger-core) | The engine: double-entry data model, integer minor-unit money kernel, entry/account stores, statement derivations. Everything below builds on it. |
 | [`@cynco/journals`](packages/journals) | [![npm](https://img.shields.io/npm/v/%40cynco%2Fjournals?color=black&label=)](https://www.npmjs.com/package/@cynco/journals) | Journal entries, virtualized registers, reconciliation, entry streaming. The diff library of ledgers. |
 | [`@cynco/accounts`](packages/accounts) | [![npm](https://img.shields.io/npm/v/%40cynco%2Faccounts?color=black&label=)](https://www.npmjs.com/package/@cynco/accounts) | The chart of accounts as a path-first virtualized tree with per-account balances. |
 | [`@cynco/statements`](packages/statements) | [![npm](https://img.shields.io/npm/v/%40cynco%2Fstatements?color=black&label=)](https://www.npmjs.com/package/@cynco/statements) | Trial balance, income statement, and balance sheet renderers derived from entries. |
+| [`@cynco/importers`](packages/importers) | [![npm](https://img.shields.io/npm/v/%40cynco%2Fimporters?color=black&label=)](https://www.npmjs.com/package/@cynco/importers) | Bank statement parsers (CSV, OFX) producing reconciliation-ready lines and balanced draft entries. |
 | [`@cynco/theming`](packages/theming) | [![npm](https://img.shields.io/npm/v/%40cynco%2Ftheming?color=black&label=)](https://www.npmjs.com/package/@cynco/theming) | Runtime theme controller — light / dark / system, persistence, React bindings. |
 | [`@cynco/theme`](packages/theme) | [![npm](https://img.shields.io/npm/v/%40cynco%2Ftheme?color=black&label=)](https://www.npmjs.com/package/@cynco/theme) | Palettes and semantic roles for ledger UIs, including CVD-safe sets. |
 
-Every published package ships vanilla web components, React adapters (`/react`), and SSR preloaders (`/ssr`) from one codebase.
+Every rendering package ships vanilla web components, React adapters (`/react`), and SSR preloaders (`/ssr`) from one codebase; `@cynco/ledger-core` and `@cynco/importers` are pure data — no DOM, no framework.
 
 ```mermaid
 flowchart LR
