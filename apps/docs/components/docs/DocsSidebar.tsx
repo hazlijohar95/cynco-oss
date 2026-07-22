@@ -2,16 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import type { DocsTocEntry } from '@/lib/docs-toc';
 import { DOCS_LINKS } from '@/lib/site';
 import { cn } from '@/lib/utils';
-
-interface HeadingItem {
-  id: string;
-  text: string;
-  element: HTMLElement;
-}
 
 // useLayoutEffect fires before paint in the browser; during prerender React
 // warns on it, so the server side falls back to useEffect (the effect only
@@ -25,16 +20,40 @@ const useIsomorphicLayoutEffect =
 const navLinkClass =
   'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-[color,background-color] duration-150 cursor-pointer text-muted-foreground hover:text-foreground';
 
+/** One measurable TOC row: the h3 rows carry their nesting depth. */
+interface FlatTocItem {
+  id: string;
+  text: string;
+  depth: 2 | 3;
+}
+
+// The nested build-time TOC, flattened into document order for the
+// scroll-spy sweep (h3s always follow their h2).
+function flattenToc(toc: readonly DocsTocEntry[]): FlatTocItem[] {
+  const items: FlatTocItem[] = [];
+  for (const entry of toc) {
+    items.push({ id: entry.id, text: entry.text, depth: 2 });
+    for (const child of entry.children) {
+      items.push({ id: child.id, text: child.text, depth: 3 });
+    }
+  }
+  return items;
+}
+
 export interface DocsSidebarProps {
+  /** Build-time table of contents exported by the page's MDX module. */
+  toc?: readonly DocsTocEntry[];
   isMobileOpen?: boolean;
   onMobileClose?: () => void;
 }
 
 // Sticky docs sidebar: package pages up top, then a scroll-spied table of
-// contents built from the page's `h2[id]` elements. On mobile the same nav
-// renders inside the shared popover surface, opened by DocsLayout's
-// "On this page" trigger.
+// contents. Headings arrive as build-time data extracted from the MDX
+// sources (lib/mdx/rehype-docs.mjs) — the DOM is only touched to measure
+// offsets, never to discover content. On mobile the same nav renders inside
+// the shared popover surface, opened by DocsLayout's "On this page" trigger.
 export function DocsSidebar({
+  toc = [],
   isMobileOpen = false,
   onMobileClose,
 }: DocsSidebarProps) {
@@ -43,32 +62,24 @@ export function DocsSidebar({
   // Absolute document offsets per heading, precomputed so the scroll
   // handler never reads layout. Refreshed when headings or viewport change.
   const headingTopsRef = useRef<number[]>([]);
-  const [headings, setHeadings] = useState<HeadingItem[]>([]);
   const [activeHeading, setActiveHeading] = useState<string>('');
 
-  // Collect the page's h2 ids once after layout; ids are authored directly
-  // on the headings in the docs content.
-  useIsomorphicLayoutEffect(() => {
-    const headingElements = document.querySelectorAll('h2[id]');
-    const items: HeadingItem[] = [];
-    for (const element of headingElements) {
-      if (!(element instanceof HTMLElement)) continue;
-      items.push({
-        id: element.id,
-        text: element.textContent ?? '',
-        element,
-      });
-    }
-    setHeadings(items);
+  // Memoized so the measurement effect keys on the data, not on a fresh
+  // array identity per render (which would tear down and re-add the scroll
+  // listeners on every spy update).
+  const headings = useMemo(() => flattenToc(toc), [toc]);
 
-    if (items.length > 0 && window.location.hash.trim() === '') {
-      setActiveHeading(items[0].id);
+  // Restore the deep-link scroll position after layout and seed the active
+  // heading; the heading list itself is static per page.
+  useIsomorphicLayoutEffect(() => {
+    if (headings.length > 0 && window.location.hash.trim() === '') {
+      setActiveHeading(headings[0].id);
     }
     if (window.location.hash.trim() !== '') {
       const element = document.getElementById(window.location.hash.slice(1));
       element?.scrollIntoView({ behavior: 'instant', block: 'start' });
     }
-  }, [pathname]);
+  }, [pathname, headings]);
 
   // Scroll-spy: the last heading above the 100px line wins. Offsets are
   // measured once per headings/resize change (one batched read pass), and
@@ -78,10 +89,11 @@ export function DocsSidebar({
     if (headings.length === 0) return undefined;
 
     const measure = () => {
-      headingTopsRef.current = headings.map(
-        (heading) =>
-          heading.element.getBoundingClientRect().top + window.scrollY
-      );
+      headingTopsRef.current = headings.map((heading) => {
+        const element = document.getElementById(heading.id);
+        if (element === null) return Number.POSITIVE_INFINITY;
+        return element.getBoundingClientRect().top + window.scrollY;
+      });
     };
 
     let frame = 0;
@@ -177,7 +189,10 @@ export function DocsSidebar({
               href={href}
               className={cn(
                 navLinkClass,
-                pathname.startsWith(href) &&
+                // The index route would prefix-match every docs page.
+                (href === '/docs'
+                  ? pathname === href
+                  : pathname.startsWith(href)) &&
                   'text-foreground bg-muted font-medium'
               )}
             >
@@ -193,6 +208,7 @@ export function DocsSidebar({
               navLinkClass,
               // 2px of clearance between the hover pill and the scrollbar.
               'mr-0.5',
+              heading.depth === 3 && 'pl-6',
               activeHeading === heading.id &&
                 'text-foreground bg-muted font-medium'
             )}

@@ -1,0 +1,350 @@
+import { BalanceSheetDemo } from '@/examples/BalanceSheetDemo';
+import { IncomeStatementDemo } from '@/examples/IncomeStatementDemo';
+import { TrialBalanceDemo } from '@/examples/TrialBalanceDemo';
+
+# Statements
+
+`@cynco/statements` is trial balance and financial statement renderers derived
+from ledger entries — derive and render from one package, with the data engine
+inlined at build time. Statements render as semantic tables inside a
+`<statements-container>` shadow root, one table per currency (currencies are
+never mixed into one column), keyed by canonical colon-delimited account paths.
+Everything the numbers claim — the debit/credit tie, the accounting equation —
+is computed and shown; nothing is asserted, guessed, or plugged.
+
+<TrialBalanceDemo />
+
+## Installation \{#installation\}
+
+Install with the package manager of your choice. React is an optional peer
+dependency required only by the `/react` entry; the engine
+(`@cynco/ledger-core`) is inlined into the published bundle, so there are no
+runtime dependencies.
+
+```bash
+pnpm add @cynco/statements
+```
+
+| Entry point               | What it exports                                                                                                                                                                                                                                                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@cynco/statements`       | The derivations (`deriveTrialBalance`, `deriveIncomeStatement`, `deriveBalanceSheet`), `createAccountTaxonomy`, the vanilla `TrialBalance` / `IncomeStatement` / `BalanceSheet` views, the pure HTML renderers, utilities (`createOpeningBalanceEntry`, `checkBalanceAssertions`, `getCurrencyExponent`), and the types |
+| `@cynco/statements/react` | `<TrialBalance />`, `<IncomeStatement />`, and `<BalanceSheet />`                                                                                                                                                                                                                                                       |
+
+## Vanilla API \{#vanilla-api\}
+
+Derive, then render: derivations are pure report-time queries (one linear pass
+over plain entries — no store, no index rebuilds), and each view class only
+manages DOM lifecycle around a shared string renderer, so client output and any
+future SSR preload can never drift apart.
+
+```ts
+import {
+  createAccountTaxonomy,
+  deriveTrialBalance,
+  TrialBalance,
+} from '@cynco/statements';
+
+const taxonomy = createAccountTaxonomy();
+const data = deriveTrialBalance(entries, {
+  taxonomy,
+  asOf: '2026-12-31',
+});
+
+const view = new TrialBalance({ showClassification: true });
+view.render({
+  data,
+  parentNode: document.getElementById('mount')!,
+});
+
+// Derivations return a fresh immutable object per call, so re-render is a
+// reference comparison — pass new data to rebuild, same data to no-op …
+view.render({ data: deriveTrialBalance(nextEntries, { taxonomy }) });
+// … and tear down.
+view.cleanUp();
+```
+
+The view options are named `TrialBalanceViewOptions` /
+`IncomeStatementViewOptions` / `BalanceSheetViewOptions` because the package
+also re-exports the engine’s `TrialBalanceOptions` (and friends) — the options
+bags of the derivations — and the two surfaces must not collide.
+
+## React API \{#react-api\}
+
+The React components wrap the vanilla views one-to-one and take the same derived
+data. `colorScheme` pins how the built-in `light-dark()` colors resolve — the
+shadow stylesheet follows the user’s OS preference by default, so sites with
+their own light/dark toggle should pin `light` / `dark` or scope a
+`color-scheme` on the host element.
+
+```tsx
+import {
+  createAccountTaxonomy,
+  deriveBalanceSheet,
+  deriveIncomeStatement,
+  deriveTrialBalance,
+  type LedgerEntry,
+} from '@cynco/statements';
+import {
+  BalanceSheet,
+  IncomeStatement,
+  TrialBalance,
+} from '@cynco/statements/react';
+
+const taxonomy = createAccountTaxonomy();
+
+export function YearEnd({ entries }: { entries: LedgerEntry[] }) {
+  return (
+    <>
+      <TrialBalance
+        data={deriveTrialBalance(entries, { taxonomy, asOf: '2026-12-31' })}
+        options={{ showClassification: true }}
+        colorScheme="system" // 'light' | 'dark' | 'system'
+      />
+      <IncomeStatement
+        data={deriveIncomeStatement(entries, {
+          taxonomy,
+          periods: [
+            { label: 'FY2025', dateFrom: '2025-01-01', dateTo: '2025-12-31' },
+            { label: 'FY2026', dateFrom: '2026-01-01', dateTo: '2026-12-31' },
+          ],
+        })}
+      />
+      <BalanceSheet
+        data={deriveBalanceSheet(entries, {
+          taxonomy,
+          dates: [
+            {
+              label: '31 Dec 2026',
+              asOf: '2026-12-31',
+              fiscalYearStart: '2026-01-01',
+            },
+          ],
+        })}
+      />
+    </>
+  );
+}
+```
+
+## Trial balance \{#trial-balance\}
+
+`deriveTrialBalance` reports every account with direct postings at its signed
+closing balance, positive in the debit column and negative in the credit column,
+with the totals proof line computed per section. `asOf` bounds the balances
+(inclusive); `accountPaths` prints zero-activity chart accounts so the statement
+shows the full chart, not just accounts that saw postings; and `adjustments` —
+any `EntryFilter`, conventionally `{ tag: 'adjustment' }` — switches on the
+six-column working trial balance.
+
+```ts
+// The plain trial balance: signed closing balance per (account, currency),
+// split into the conventional debit/credit columns.
+const closing = deriveTrialBalance(entries, {
+  taxonomy,
+  asOf: '2026-12-31', // inclusive; omitted = all-time
+  // Zero-activity chart accounts to print at zero in every section:
+  accountPaths: ['Equity:Retained-Earnings', 'Assets:Current:Petty-Cash'],
+});
+
+// The working trial balance: tag adjusting entries, pass an EntryFilter,
+// and every row splits into unadjusted / adjustments / adjusted pairs —
+// the six-column year-end working paper.
+const working = deriveTrialBalance(entries, {
+  taxonomy,
+  asOf: '2026-12-31',
+  adjustments: { tag: 'adjustment' },
+});
+```
+
+Rows sort in statement convention — assets, liabilities, equity, income,
+expenses, then the unclassified residue last so the flagged rows are always
+visible at the bottom. An account holding the opposite of its normal balance (an
+asset in credit, income in debit) flags `abnormal` — the classic review flag on
+a printed trial balance.
+
+## Income statement \{#income-statement\}
+
+`deriveIncomeStatement` reports period activity — the net movement of each
+income and expense account inside each period, one column per period. Cumulative
+balances never appear here; that is the balance sheet’s job. Amounts are
+presentation-signed by _section_: income lines flip so revenue reads positive,
+and because the flip follows the section rather than the account, contra income
+(sales returns) naturally reads negative inside its section.
+
+<IncomeStatementDemo />
+
+```ts
+const profitAndLoss = deriveIncomeStatement(entries, {
+  taxonomy,
+  // One column per period, inclusive on both ends, in display order:
+  periods: [
+    { label: 'FY2025', dateFrom: '2025-01-01', dateTo: '2025-12-31' },
+    { label: 'FY2026', dateFrom: '2026-01-01', dateTo: '2026-12-31' },
+  ],
+});
+
+// Per currency section: income / expenses lines with one amount per
+// period, totals, netIncome, and the unclassified residue.
+const [myr] = profitAndLoss.sections;
+myr.netIncome; // [1_790_000, 1_340_000] — minor units per column
+```
+
+## Balance sheet \{#balance-sheet\}
+
+`deriveBalanceSheet` reports the cumulative position of asset, liability, and
+equity accounts through each as-of date. The retained-earnings problem is solved
+_virtually_: income and expense accounts never physically close in this suite,
+so each column carries computed earnings lines — the cumulative P&L result
+folded into equity at derivation time, computed and clearly marked, never
+booked. A column’s `fiscalYearStart` splits that result into retained earnings
+(before the fiscal year) and current-year earnings (inside it); without one,
+everything reports as retained earnings.
+
+<BalanceSheetDemo />
+
+```ts
+const position = deriveBalanceSheet(entries, {
+  taxonomy,
+  // One column per as-of date; fiscalYearStart splits the computed
+  // earnings lines for that column:
+  dates: [
+    { label: '31 Dec 2025', asOf: '2025-12-31', fiscalYearStart: '2025-01-01' },
+    { label: '31 Dec 2026', asOf: '2026-12-31', fiscalYearStart: '2026-01-01' },
+  ],
+});
+
+const [myr] = position.sections;
+myr.retainedEarnings; // computed P&L result before each column's fiscal year
+myr.currentEarnings; // computed result inside it — never booked entries
+myr.balancedByDate; // the accounting equation, checked per column
+```
+
+## Account taxonomy \{#taxonomy\}
+
+`createAccountTaxonomy` classifies account paths into the five fundamental types
+and derives the presentation facts (normal balance, statement role) the
+statements are built on. The default convention maps the five plural English
+roots — `Assets`, `Liabilities`, `Equity`, `Income`, `Expenses` — plus `Revenue`
+as a widely-used synonym root for income. Every opinion has an escape hatch:
+per-path overrides inherit through subtrees with the nearest ancestor winning
+_per field_, so an override may set only `contra` and let `type` fall through.
+
+```ts
+import { createAccountTaxonomy } from '@cynco/statements';
+
+const taxonomy = createAccountTaxonomy({
+  overrides: {
+    // Contra asset: still an asset, but credit-normal — accumulated
+    // depreciation stops flagging as abnormal.
+    'Assets:Fixed:Accumulated-Depreciation': { contra: true },
+    // Subtrees outside the root convention can be typed wholesale;
+    // descendants inherit, nearest ancestor wins per field.
+    'Clearing:Card-Settlements': { type: 'asset' },
+  },
+});
+
+taxonomy.classify('Assets:Fixed:Accumulated-Depreciation');
+// { type: 'asset', contra: true, normalBalance: 'credit',
+//   statement: 'balance-sheet' }
+taxonomy.classify('Suspense:Pending-Query');
+// null — unclassified. Statements flag it; they never guess.
+```
+
+```ts
+// rootTypes replaces (not merges with) the default map, so a localized
+// chart states its own complete convention:
+const bahasaMalaysia = createAccountTaxonomy({
+  rootTypes: {
+    Aset: 'asset',
+    Liabiliti: 'liability',
+    Ekuiti: 'equity',
+    Hasil: 'income',
+    Belanja: 'expense',
+  },
+});
+```
+
+A path with no root mapping and no override classifies to `null` — unclassified.
+That is a flag, never a guess: the trial balance sorts it last and labels it,
+the income statement and balance sheet list it outside every total, and no
+statement ever invents a type to make output look complete. Classification is
+memoized per instance (O(path depth) once, then O(1)), so `classify` is safe in
+per-row render loops.
+
+## Honesty rules \{#honesty-rules\}
+
+The derivations inherit the suite-wide rule that the data layer never invents
+meaning:
+
+- **Per-currency sections.** Every statement renders one table per currency
+  touched — mixing currencies in one column would be a lie, and cross-currency
+  translation is an explicit, separate feature, never a silent default.
+- **Computed, never asserted.** The trial balance’s debit/credit tie and the
+  balance sheet’s accounting equation are checked and reported per section — an
+  out-of-balance ledger renders honestly with the exact difference, no plug
+  booked to make it tie.
+- **Void is excluded from meaning.** Entries flagged `void` contribute to no
+  balance, in any derivation.
+- **Unclassified is surfaced.** Accounts the taxonomy cannot place are listed
+  and flagged, excluded from every total, and never guessed into a section.
+- **Integer minor units end to end.** Amounts format via digit-string slicing —
+  no float ever touches a monetary value, and a negative zero can never leak
+  into output. Aggregates that cross 2<sup>53</sup> flag `hasOverflow` on the
+  section instead of silently losing precision.
+
+## Also in the box \{#toolbox\}
+
+Three engine utilities re-exported for the workflows around statements:
+
+- `checkBalanceAssertions` — declarative “this account held exactly this balance
+  on this date” checks, the mechanism imports and migrations use to prove
+  themselves. A failed assertion reports the discrepancy and changes nothing.
+- `createOpeningBalanceEntry` — opening balances are not a special mechanism,
+  just an ordinary balanced day-one entry; this builds it with one equity offset
+  per currency so it balances by construction.
+- `getCurrencyExponent` — the ISO 4217 minor-unit registry (with caller
+  overrides), for formatting integer minor units in currencies that don’t carry
+  two decimals.
+
+```ts
+import {
+  checkBalanceAssertions,
+  createOpeningBalanceEntry,
+  getCurrencyExponent,
+} from '@cynco/statements';
+
+// Opening balances are ordinary balanced entries: one posting per line
+// plus one equity offset per currency, balanced by construction.
+const opening = createOpeningBalanceEntry({
+  id: 'opening-2025',
+  date: '2025-01-01',
+  lines: [
+    {
+      account: 'Assets:Current:Cash-Maybank',
+      amount: 5_000_000,
+      currency: 'MYR',
+    },
+    {
+      account: 'Liabilities:Current:SST-Payable',
+      amount: -80_000,
+      currency: 'MYR',
+    },
+  ],
+  // equityAccount defaults to 'Equity:Opening-Balances'
+});
+
+// Imports and migrations prove themselves with declared balance facts;
+// a failed assertion reports the exact difference and changes nothing.
+const results = checkBalanceAssertions(store, [
+  {
+    account: 'Assets:Current:Cash-Maybank',
+    date: '2025-01-01',
+    amount: 5_000_000,
+    currency: 'MYR',
+  },
+]);
+results[0]; // { ok: true, actual: 5_000_000, difference: 0, … }
+
+getCurrencyExponent('MYR'); // 2 — sen
+getCurrencyExponent('JPY'); // 0 — yen has no minor unit
+```

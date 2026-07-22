@@ -11,6 +11,9 @@
     "@cynco/ledger-test-data": "workspace:*",
     "@cynco/statements": "workspace:*",
     "@cynco/theme": "workspace:*",
+    "@mdx-js/loader": "catalog:",
+    "@mdx-js/react": "catalog:",
+    "@next/mdx": "catalog:",
     "@remotion/player": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
@@ -18,7 +21,9 @@
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "remark-gfm": "catalog:",
     "remotion": "catalog:",
+    "shiki": "catalog:",
     "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",
     "tw-animate-css": "catalog:"
@@ -26,6 +31,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "catalog:",
     "@types/bun": "catalog:",
+    "@types/mdx": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

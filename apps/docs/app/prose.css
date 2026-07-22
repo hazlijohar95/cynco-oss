@@ -132,4 +132,70 @@
       color: var(--color-foreground);
     }
   }
+
+  /* Shiki chrome: the highlighter emits inline `var(--shiki-*)` colors (the
+   * CSS-variables theme), so token colors are defined once here with
+   * light-dark() and follow the site's color-scheme pipeline like every
+   * other color on the page — no per-mode stylesheet, no flash. The palette
+   * stays in the brand families: jade strings (the ledger debit/reconciled
+   * hue), violet keywords (the match hue), blue constants (the accent). */
+  .code-block {
+    --shiki-foreground: var(--color-foreground);
+    --shiki-background: color-mix(
+      in lab,
+      var(--color-background) 97%,
+      currentcolor
+    );
+    --shiki-token-comment: var(--color-text-weak);
+    --shiki-token-punctuation: var(--color-muted-foreground);
+    --shiki-token-keyword: light-dark(#7c3aed, #b79df8);
+    --shiki-token-string: light-dark(#18794e, #62c98d);
+    --shiki-token-string-expression: light-dark(#18794e, #62c98d);
+    --shiki-token-link: light-dark(#18794e, #62c98d);
+    --shiki-token-constant: light-dark(#1d4ed8, #85b6ff);
+    --shiki-token-function: light-dark(#a35200, #e0a869);
+    --shiki-token-parameter: var(--color-muted-foreground);
+
+    position: relative;
+    margin: 0;
+  }
+
+  /* Floating copy affordance for untitled blocks, sitting inside the
+   * panel's top-right padding. */
+  .code-block-copy-floating {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 1;
+  }
+
+  /* Filename/label bar from the fence meta (```ts title="register.ts"):
+   * a slim strip fused onto the panel top. */
+  .code-block-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem 0.375rem 1.25rem;
+    border: 1px solid var(--color-border);
+    border-bottom: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background: color-mix(in lab, var(--color-background) 94%, currentcolor);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 20px;
+    color: var(--color-muted-foreground);
+  }
+
+  .code-block-title + .code-block-body pre {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  /* Parallel code variants: the tab strip reads as part of the block. */
+  .code-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
 }

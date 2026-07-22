@@ -9,10 +9,13 @@ layer: 'application'
 
 tasks:
   # The llms.txt generator runs before every build so the static export
-  # always ships fresh /llms.txt + /llms-full.txt, assembled from the package
-  # READMEs with versions read live from each package.json. The generated
-  # files are gitignored build artifacts: declared as outputs, never inputs
-  # (inputs here are explicit, so they can't leak into the hash anyway).
+  # always ships fresh /llms.txt + /llms-full.txt, assembled from the docs
+  # pages' MDX sources (app/docs/*/content.mdx, already covered by the
+  # app/** input) with versions read live from each package.json; theme has
+  # no docs page and contributes its README + ACCESSIBILITY.md. The
+  # generated files are gitignored build artifacts: declared as outputs,
+  # never inputs (inputs here are explicit, so they can't leak into the
+  # hash anyway).
   build:
     script: 'bun scripts/generate-llms-txt.ts && next build'
     env:
@@ -25,11 +28,12 @@ tasks:
       - 'examples/**'
       - 'lib/**'
       - 'scripts/**'
+      - 'mdx-components.tsx'
       - 'next.config.ts'
       - 'postcss.config.mjs'
       - 'tsconfig.json'
-      - '/packages/{journals,accounts,statements,theming,theme}/README.md'
-      - '/packages/{journals,accounts,statements,theming,theme}/package.json'
+      - '/packages/{journals,accounts,statements,theming,theme,importers}/package.json'
+      - '/packages/theme/README.md'
       - '/packages/theme/ACCESSIBILITY.md'
     outputs:
       - '.next'

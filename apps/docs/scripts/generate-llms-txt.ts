@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { buildLlmsFullTxt } from './llms/buildLlmsFullTxt';
 import { buildLlmsTxt } from './llms/buildLlmsTxt';
+import { extractMdxDoc } from './llms/extractMdxDoc';
 import type {
   LlmsDocsPage,
   LlmsPackageSection,
@@ -14,10 +15,12 @@ import { transformPackageDoc } from './llms/transformPackageDoc';
 // Generates public/llms.txt (the https://llmstxt.org index) and
 // public/llms-full.txt (all package docs concatenated) so the Next static
 // export serves them at /llms.txt and /llms-full.txt. Content is assembled
-// from the canonical package READMEs with versions read live from each
-// package.json — the docs pages themselves are TSX and carry no extractable
-// markdown. Runs via `bun scripts/generate-llms-txt.ts` before `next build`
-// (see moon.yml); the outputs are gitignored build artifacts.
+// from the docs pages' MDX sources (app/docs/*/content.mdx) — the same
+// prose the site renders, lowered to plain markdown — with versions read
+// live from each package.json; packages without a docs page fall back to
+// their canonical README. Runs via `bun scripts/generate-llms-txt.ts`
+// before `next build` (see moon.yml); the outputs are gitignored build
+// artifacts.
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DOCS_ROOT = join(SCRIPT_DIR, '..');
@@ -56,16 +59,52 @@ interface PackageDocSource {
   dir: string;
   /** Docs-site path for the package, or null when no dedicated page exists. */
   docsPath: string | null;
-  /** Companion markdown docs appended after the README, nested one level deeper. */
+  /**
+   * Whether the docs body comes from the page's MDX source
+   * (app/docs/<dir>/content.mdx). False falls back to the package README.
+   */
+  hasMdxPage: boolean;
+  /** Companion markdown docs appended after the body, nested one level deeper. */
   extraDocs: readonly string[];
 }
 
 const PACKAGE_SOURCES: readonly PackageDocSource[] = [
-  { dir: 'journals', docsPath: '/docs/journals', extraDocs: [] },
-  { dir: 'accounts', docsPath: '/docs/accounts', extraDocs: [] },
-  { dir: 'statements', docsPath: '/docs/statements', extraDocs: [] },
-  { dir: 'theming', docsPath: '/docs/theming', extraDocs: [] },
-  { dir: 'theme', docsPath: null, extraDocs: ['ACCESSIBILITY.md'] },
+  {
+    dir: 'journals',
+    docsPath: '/docs/journals',
+    hasMdxPage: true,
+    extraDocs: [],
+  },
+  {
+    dir: 'accounts',
+    docsPath: '/docs/accounts',
+    hasMdxPage: true,
+    extraDocs: [],
+  },
+  {
+    dir: 'statements',
+    docsPath: '/docs/statements',
+    hasMdxPage: true,
+    extraDocs: [],
+  },
+  {
+    dir: 'theming',
+    docsPath: '/docs/theming',
+    hasMdxPage: true,
+    extraDocs: [],
+  },
+  {
+    dir: 'importers',
+    docsPath: '/docs/importers',
+    hasMdxPage: true,
+    extraDocs: [],
+  },
+  {
+    dir: 'theme',
+    docsPath: null,
+    hasMdxPage: false,
+    extraDocs: ['ACCESSIBILITY.md'],
+  },
 ];
 
 // One-line descriptions mirror each page's own <Metadata> description.
@@ -93,6 +132,12 @@ const DOCS_PAGES: readonly LlmsDocsPage[] = [
     url: `${SITE.baseUrl}/docs/theming`,
     description:
       '@cynco/theming — runtime theme controller (light / dark / system), persistence, catalogs, and the CVD-safe role sets from @cynco/theme',
+  },
+  {
+    label: 'Importers docs',
+    url: `${SITE.baseUrl}/docs/importers`,
+    description:
+      '@cynco/importers — CSV and OFX bank statement parsers producing statement lines and balanced draft entries, with running-balance proofs and typed fail-loud errors',
   },
   {
     label: 'Playground',
@@ -128,20 +173,28 @@ function readPackageManifest(packageDir: string): PackageManifest {
 }
 
 // Assembles one package's llms-full.txt section: manifest facts plus the
-// transformed README, with companion docs (e.g. theme's ACCESSIBILITY.md)
-// appended one heading level deeper so they read as subsections.
+// docs body — the page's MDX source lowered to markdown, or the README for
+// packages without a page — with companion docs (e.g. theme's
+// ACCESSIBILITY.md) appended one heading level deeper so they read as
+// subsections.
 function buildPackageSection(source: PackageDocSource): LlmsPackageSection {
   const packageDir = join(PACKAGES_ROOT, source.dir);
   const manifest = readPackageManifest(packageDir);
 
-  const readme = transformPackageDoc(
-    readFileSync(join(packageDir, 'README.md'), 'utf8'),
-    {
-      headingShift: 1,
-      dropTitle: true,
-      stripSections: REPO_INTERNAL_SECTIONS,
-    }
-  );
+  const rawBody = source.hasMdxPage
+    ? extractMdxDoc(
+        readFileSync(
+          join(DOCS_ROOT, 'app', 'docs', source.dir, 'content.mdx'),
+          'utf8'
+        )
+      )
+    : readFileSync(join(packageDir, 'README.md'), 'utf8');
+
+  const body = transformPackageDoc(rawBody, {
+    headingShift: 1,
+    dropTitle: true,
+    stripSections: REPO_INTERNAL_SECTIONS,
+  });
   const extras = source.extraDocs.map((file) =>
     transformPackageDoc(readFileSync(join(packageDir, file), 'utf8'), {
       headingShift: 2,
@@ -154,7 +207,7 @@ function buildPackageSection(source: PackageDocSource): LlmsPackageSection {
     ...manifest,
     docsUrl:
       source.docsPath === null ? null : `${SITE.baseUrl}${source.docsPath}`,
-    body: [readme, ...extras].join('\n\n'),
+    body: [body, ...extras].join('\n\n'),
   };
 }
 

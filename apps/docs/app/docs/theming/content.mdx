@@ -1,0 +1,227 @@
+# Theming
+
+`@cynco/theming` is runtime theming for the ledger components: a
+framework-agnostic theme controller (light / dark / system with OS-preference
+tracking), pluggable persistence, DOM application helpers, and a React hook. It
+pairs with the role sets and CSS variable convention from `@cynco/theme` that
+`@cynco/journals` and `@cynco/accounts` consume.
+
+## Installation \{#installation\}
+
+Install with the package manager of your choice. React is an optional peer
+dependency required only by the `/react` entry.
+
+```bash
+pnpm add @cynco/theming
+```
+
+| Entry point            | What it exports                                                                                                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@cynco/theming`       | `createThemeController`, `createThemeCatalog` + `defaultCatalog`, `applyThemeToElement` / `connectThemeController`, and the types (`ThemeController`, `ThemeCatalog`, `ThemePersistence`, …) |
+| `@cynco/theming/react` | The `useThemeController` hook                                                                                                                                                                |
+
+## Vanilla API \{#vanilla-api\}
+
+The controller is the store: it owns the mode, the per-scheme theme choice,
+persistence, and the `prefers-color-scheme` subscription (attached only while
+the mode is `system`). `connectThemeController` binds it to an element — apply
+now, re-apply on every change.
+
+```ts
+import {
+  connectThemeController,
+  createThemeController,
+  defaultCatalog,
+} from '@cynco/theming';
+
+const controller = createThemeController({
+  catalog: defaultCatalog,
+  storageKey: 'my-app-theme', // persists the selection in localStorage
+});
+
+// Applies --journals-theme-* / --accounts-theme-* variables plus a
+// color-scheme pin to the element, now and on every change.
+const disconnect = connectThemeController(
+  controller,
+  document.getElementById('app')!
+);
+
+controller.setMode('dark'); // 'light' | 'dark' | 'system'
+controller.setTheme('darkSoft'); // assigns to the slot the theme belongs to
+
+// The published state — frozen and reference-stable until the next change:
+const { mode, resolvedScheme, themeName, roles } = controller.getSnapshot();
+
+controller.subscribe(() => rerenderPicker(controller.getSnapshot()));
+controller.destroy(); // detaches the OS listener, drops subscribers
+```
+
+`setTheme` records the choice for that theme’s scheme slot — a light theme name
+and a dark theme name are kept independently — so switching modes, or an OS flip
+while in `system` mode, always lands on the right theme. Unknown names are a
+documented no-op: pickers often feed persisted or user strings, and crashing the
+host over a stale name would be worse than keeping the current theme.
+
+```ts
+import { applyThemeToElement } from '@cynco/theming';
+
+applyThemeToElement(element, controller.getSnapshot(), {
+  prefixes: ['journals', 'accounts'], // the default
+});
+```
+
+- Sets `--<prefix>-theme-<group>-<token>` inline custom properties for each
+  prefix (via `@cynco/theme`’s `themeToCSSVariables`) and pins the element’s
+  inline `color-scheme` to the resolved scheme — the pin lives in the outer
+  tree, so it beats the components’ shadow `:host` rule.
+- Tracks the properties it applied per element and removes stale ones on the
+  next apply, so switching themes never leaves old variables behind.
+- `connectThemeController`’s disconnect function only unsubscribes — the applied
+  variables are deliberately left in place, because stripping them would flash
+  unthemed UI on teardown.
+
+## React API \{#react-api\}
+
+`useThemeController` is a pure `useSyncExternalStore` wrapper with no state of
+its own — mode, persistence, and system tracking all live in the controller, so
+vanilla hosts share the exact same behavior. The snapshot is frozen and
+reference-stable between changes, which is precisely the contract
+`useSyncExternalStore` needs.
+
+```tsx
+import { createThemeController, defaultCatalog } from '@cynco/theming';
+import { useThemeController } from '@cynco/theming/react';
+
+const controller = createThemeController({ catalog: defaultCatalog });
+
+function ThemePicker() {
+  const { mode, themeName, resolvedScheme, catalog } =
+    useThemeController(controller);
+  return (
+    <select
+      value={themeName}
+      onChange={(event) => controller.setTheme(event.target.value)}
+    >
+      {catalog.list().map((entry) => (
+        <option key={entry.name} value={entry.name}>
+          {entry.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
+
+## Persistence \{#persistence\}
+
+Pass `storageKey` for the built-in adapter: one localStorage JSON entry holding
+only the selection names. Corrupt JSON, unknown theme names, or unavailable
+storage all degrade to the catalog defaults — nothing throws at runtime.
+Persistence is loaded exactly once, at creation; loaded values win over the
+`initialMode` / `initialTheme` options, and every field degrades independently.
+
+```ts
+// The persisted shape is names only — { mode, light, dark } — never
+// resolved role objects, so stored data can't go stale against a newer
+// catalog. A custom ThemePersistence adapter takes precedence over
+// storageKey:
+const controller = createThemeController({
+  catalog: defaultCatalog,
+  persistence: {
+    load: () => readSelectionFromCookie(), // ThemeSelection | null
+    save: (selection) => writeSelectionToCookie(selection),
+  },
+});
+```
+
+## Theme catalogs \{#catalogs\}
+
+`defaultCatalog` wraps every role set `@cynco/theme` ships — `light` / `dark`,
+the contrast-compressed `lightSoft` / `darkSoft`, and the accessible `lightCvd`
+/ `darkCvd` / `lightTritan` / `darkTritan` variants — with entry names matching
+the `@cynco/theme` export names. Build your own with `createThemeCatalog`:
+
+```ts
+import { createThemeCatalog } from '@cynco/theming';
+import { dark, light } from '@cynco/theme';
+
+const catalog = createThemeCatalog(
+  [
+    { name: 'day', label: 'Day', scheme: 'light', roles: light },
+    { name: 'night', label: 'Night', scheme: 'dark', roles: dark },
+  ],
+  { light: 'day', dark: 'night' }
+);
+
+catalog.get('day'); // ThemeCatalogEntry | null (graceful for input)
+catalog.list(); // readonly ThemeCatalogEntry[]
+catalog.defaultFor('dark'); // always resolves — validated at creation
+```
+
+Catalog construction is the one deliberate exception to graceful degradation:
+duplicate names, unknown default names, or a default pointing at the wrong
+scheme are programmer errors and throw with a clear message at creation time.
+
+## CVD-safe themes \{#cvd-accessibility\}
+
+The base themes map debit to green and credit to red — mirror diff semantics —
+and that is exactly the axis protanopia and deuteranopia collapse (together the
+large majority of color vision deficiency, roughly 8% of men). Measured with the
+Machado et al. (2009) severity-1.0 simulation and CIEDE2000: `light` debit vs
+credit is ΔE₀₀ 72.8 normally → **4.8** under deuteranopia; `dark` is 69.1 →
+**4.5**. ΔE₀₀ ≈ 2–3 is “just noticeable” — a deuteranope reading the base themes
+cannot reliably tell a debit from a credit.
+
+The four accessible sets fix that on the axes each deficiency preserves — blue ↔
+orange for `lightCvd` / `darkCvd`, teal ↔ vermillion for the tritan sets — while
+chrome (`bg`, `fg`, `border`, `accent`) stays identical to the base themes, so
+the variants still look like Cynco. A permanent test gate simulates every gated
+color at full dichromacy and asserts on the _simulated_ colors: ΔE₀₀(debit,
+credit) ≥ 20 (measured 47.4–54.5 for the CVD sets, 59.6–63.8 for the tritan
+sets) and simulated debit/credit contrast on the simulated background ≥ 3.0
+(WCAG SC 1.4.11, measured 4.16–10.91). See
+[ACCESSIBILITY.md](https://github.com/hazlijohar95/cynco-oss/blob/main/packages/theme/ACCESSIBILITY.md)
+for the full numbers.
+
+```ts
+// defaultCatalog already includes the accessible sets; assigning one is a
+// single setTheme call — no custom catalog required:
+controller.setTheme('lightCvd'); // protanopia/deuteranopia-safe light slot
+controller.setTheme('darkTritan'); // tritanopia-safe dark slot
+```
+
+The science behind the gate is exported from `@cynco/theme` as pure,
+dependency-free helpers:
+
+```ts
+import { contrastRatio, deltaE2000, parseHex, simulateCvd } from '@cynco/theme';
+
+const debit = parseHex('#199f43')!; // Rgb | null on malformed input
+const credit = parseHex('#d5393e')!;
+
+deltaE2000(debit, credit); // CIEDE2000 — ~2-3 is "just noticeable"
+deltaE2000(
+  simulateCvd(debit, 'deuteranopia'), // Machado et al. (2009), severity 1.0
+  simulateCvd(credit, 'deuteranopia')
+);
+contrastRatio(debit, parseHex('#ffffff')!); // WCAG 2.x ratio
+```
+
+## SSR \{#ssr\}
+
+The controller is SSR-safe: no `window`, `matchMedia`, or `localStorage` access
+happens at module scope, and every browser access is guarded. On the server (or
+any headless runtime) `system` mode resolves to `light` and persistence no-ops;
+the client re-resolves against the real OS preference and stored selection on
+hydration.
+
+```ts
+// Server: the controller resolves headlessly ('system' → 'light', no
+// persistence), and useThemeController's server snapshot is the same
+// getSnapshot. For server-rendered inline styles, serialize the roles:
+import { themeToCSSVariables } from '@cynco/theme';
+
+const snapshot = controller.getSnapshot();
+const style = themeToCSSVariables('journals', snapshot.roles);
+// { '--journals-theme-bg-editor': '#ffffff', ... }
+```

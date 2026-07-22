@@ -1,0 +1,226 @@
+# Importers
+
+`@cynco/importers` turns raw bank exports — CSV and OFX 1.x/2.x — into the
+statement lines and draft ledger entries the rest of the suite consumes. Pure
+data, zero dependencies, no DOM. Amounts are parsed straight from decimal
+strings to integer minor units, so no float ever touches money; a row the parser
+cannot trust is skipped with a reason, a file it cannot trust throws a typed
+error, and nothing is ever guessed, repaired, or silently dropped.
+
+## Installation \{#installation\}
+
+Install with the package manager of your choice. There are no runtime or peer
+dependencies — the package is plain data functions and runs anywhere TypeScript
+does.
+
+```bash
+pnpm add @cynco/importers
+```
+
+| Entry point        | What it exports                                                                                                                                                                                                                                     |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@cynco/importers` | The parsers (`parseCsvStatement`, `parseOfx`), the proof (`proveRunningBalance`), `toDraftEntries`, `ImportError`, the minor-unit utilities (`parseAmountToMinorUnits`, `parseDateToIso`, `getCurrencyDecimals`, `negateMinorUnits`), and the types |
+
+## CSV \{#csv\}
+
+`parseCsvStatement` reads a raw CSV export under an **explicit column mapping**
+— delimiter, date format, and decimal/group separators are declared, never
+sniffed. `01/02/2026` is ambiguous between DD/MM and MM/DD, and `1.234` is
+one-point-two-three-four in one locale and one thousand two hundred thirty-four
+in another; a wrong guess corrupts every line of an import identically, which is
+the worst kind of bug to spot, so the caller states what the bank exports.
+
+```ts
+import { parseCsvStatement } from '@cynco/importers';
+
+const { lines, skipped } = parseCsvStatement(csvText, {
+  delimiter: ';', // ',' (default) | ';' | '\t'
+  columns: {
+    date: 'Date', // header name, or a 0-based index
+    description: 'Description',
+    amount: { debit: 'Debit', credit: 'Credit' }, // or one signed column
+    balance: 'Balance', // optional — enables proveRunningBalance
+    reference: 'Cheque No', // optional — surfaced as line.reference
+  },
+  dateFormat: 'DD/MM/YYYY', // stated, never sniffed
+  amountFormat: { decimal: ',', group: '.' },
+  currency: 'MYR',
+});
+```
+
+- **The tokenizer is RFC 4180-shaped**: quoted fields may contain the delimiter,
+  escaped quotes (`""`), and embedded newlines; CRLF, LF, and bare CR all end a
+  record. An unterminated quote throws `CSV_STRUCTURE` — the file is broken, not
+  one row, and everything after a runaway quote would be garbage.
+- **Split debit/credit columns follow the account holder's perspective**: credit
+  is money in, so `amount = credit − debit` and deposits come out positive. A
+  row with both columns populated is skipped as ambiguous; a row with both empty
+  is skipped too.
+- **Line ids are deterministic**: `csv:<hash of the raw record>`, with an
+  occurrence suffix for byte-identical rows. The same file parsed twice yields
+  byte-identical ids, so hosts can re-run an import idempotently and dedupe
+  against earlier runs — while two genuinely identical transactions still get
+  distinct ids.
+- **Header handling is inferred honestly**: naming any column by header implies
+  a header row (names are unresolvable without one); an explicit `hasHeader`
+  always wins. A named column missing from the header throws `CSV_COLUMN` with
+  the header it searched.
+
+## OFX \{#ofx\}
+
+`parseOfx` reads OFX 1.x (SGML — leaf elements have no closing tags) and 2.x
+(XML) with one tolerant tag scanner instead of an XML dependency: a leaf's value
+is the text between its open tag and the next `<`, which holds in both dialects.
+Files carrying several statements — a BANKMSGSRS with multiple STMTRS, or bank
+plus credit card — come back as separate per-account groups.
+
+```ts
+import { parseOfx, toDraftEntries } from '@cynco/importers';
+
+const { statements, skipped } = parseOfx(ofxText, {
+  // Used when a statement carries no CURDEF. Without either, a statement
+  // that has transactions throws — money without a currency is
+  // meaningless and importers never guess.
+  defaultCurrency: 'MYR',
+});
+
+for (const { accountId, currency, lines } of statements) {
+  // lines are StatementLine-shaped: they feed @cynco/journals
+  // reconciliation as-is.
+}
+```
+
+Line ids are the bank's own FITID, so re-imports dedupe against the source of
+truth. Amount signs pass through untouched — OFX amounts are already signed from
+the account holder's perspective. `DTPOSTED` keeps only its `YYYYMMDD` prefix
+(bank posting timestamps are server-local noise) and re-validates through the
+calendar-aware date parser, so `20260231` fails. A transaction missing FITID,
+DTPOSTED, or TRNAMT is skipped with a reason keyed by its ordinal; a file with
+no `<OFX>` envelope throws `OFX_STRUCTURE`.
+
+## Running-balance proof \{#balance-proof\}
+
+When the source carries its own balance column, the import can prove itself:
+`opening + Σ amounts` must equal every line's claimed balance to the minor unit.
+This is the import-side analog of a trial balance tie — computed and
+**reported**, never repaired. A break means lines are missing, duplicated, or
+mis-parsed, and the caller gets every break with its exact location instead of a
+silently "fixed" import.
+
+```ts
+import { proveRunningBalance } from '@cynco/importers';
+
+const proof = proveRunningBalance(lines);
+// { ok: true }, or:
+// { ok: false, breaks: [{ index, expected, actual }, ...] }
+
+// With a known opening balance the first line is provable too; omitted,
+// the opening anchors off the source's own numbers
+// (first.balance − first.amount) and the proof catches any break from
+// the second line on.
+proveRunningBalance(lines, 5_000_000);
+```
+
+After a break the proof re-anchors on the claimed balance, so one missing line
+reports once instead of cascading into a break on every subsequent line. A line
+without a balance throws `BALANCE_MISSING` — proving against a column that is
+not there would be meaningless.
+
+## Draft entries \{#draft-entries\}
+
+`toDraftEntries` lifts single-sided statement lines into **balanced** draft
+ledger entries: the bank posting carries the line's signed amount and the
+counterposting goes to an explicit suspense account with the exact negation, so
+postings sum to zero per entry by construction — the data layer never emits an
+unbalanced entry, even a draft.
+
+```ts
+import { toDraftEntries } from '@cynco/importers';
+
+const drafts = toDraftEntries(lines, {
+  account: 'Assets:Current:Cash-Maybank',
+  suspenseAccount: 'Equity:Suspense',
+});
+// Each draft: flag 'pending', payee null, narration from the line's
+// description, and two postings that sum to exactly zero.
+```
+
+The suspense account is explicit because classification is a human/rules
+decision that happens _after_ import; the flag stays `pending` until someone
+reclassifies and clears. Entry ids are `<account>:<line id>` — the line id is
+already deterministic (FITID for OFX, content hash for CSV), so re-running the
+same import produces byte-identical entries and hosts can upsert instead of
+duplicate.
+
+## Fail loud \{#errors\}
+
+Row-level problems never throw — they land in the result's `skipped` list as
+`{ line, reason }` (1-based physical line for CSV, transaction ordinal for OFX),
+so one bad row cannot abort a whole import and nothing disappears without a
+trace. Structural breakage throws `ImportError`, the only error type importers
+use: bare strings are never thrown, because callers need `code` to branch and
+`line` to point the user at the offending input.
+
+```ts
+import { ImportError, parseCsvStatement } from '@cynco/importers';
+
+try {
+  parseCsvStatement(text, mapping);
+} catch (error) {
+  if (error instanceof ImportError) {
+    console.error(error.code, error.line, error.message);
+  }
+}
+```
+
+| Code                   | Thrown when                                                                                                                            |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `CSV_STRUCTURE`        | Unterminated quoted field — the file is broken, not one row.                                                                           |
+| `CSV_COLUMN`           | A mapped header name is missing, or names were used with no header row.                                                                |
+| `OFX_STRUCTURE`        | No `<OFX>` envelope found.                                                                                                             |
+| `OFX_CURRENCY_MISSING` | Transactions with no CURDEF and no `defaultCurrency` — skipping would silently drop every line.                                        |
+| `BALANCE_MISSING`      | `proveRunningBalance` met a line with no balance value.                                                                                |
+| `AMOUNT_INVALID`       | Not a plain signed decimal (row-scoped: a skip inside the parsers).                                                                    |
+| `AMOUNT_DECIMALS`      | More decimal places than the currency allows — sub-minor-unit money cannot be represented without rounding, and importers never round. |
+| `AMOUNT_OVERFLOW`      | The amount exceeds the safe integer range in minor units.                                                                              |
+
+Amount parsing never passes through a float: `"1,234.56"` becomes the integer
+`123456` by string slicing, exact at any magnitude a bank can export. The
+currency's ISO 4217 exponent bounds the fraction — fewer digits zero-pad (banks
+print `12.5` for 12.50), more digits throw.
+
+## Feeding reconciliation \{#reconciliation\}
+
+Parser output is `StatementLine`-shaped — the exact shape
+[`proposeMatches` and the Reconciliation UI](/docs/journals#reconciliation)
+consume — so an import flows into `@cynco/journals` with no adaptation:
+statement lines on one side, existing book postings on the other, and
+`toDraftEntries` for the lines that genuinely have no counterpart yet.
+
+```ts
+import { parseCsvStatement, toDraftEntries } from '@cynco/importers';
+import { proposeMatches, Reconciliation } from '@cynco/journals';
+
+const { lines } = parseCsvStatement(csvText, mapping);
+
+const reconciliation = new Reconciliation({
+  account: 'Assets:Current:Cash-Maybank',
+  statementLines: lines, // ImportedStatementLine extends StatementLine
+  postings, // BookPostingRef[] from your ledger store
+  matches: proposeMatches(lines, postings),
+  onCreateEntry(line) {
+    // The unmatched residue becomes balanced pending drafts:
+    const [draft] = toDraftEntries([line], {
+      account: 'Assets:Current:Cash-Maybank',
+      suspenseAccount: 'Equity:Suspense',
+    });
+    store.upsert(draft); // ids are deterministic — upsert, don't duplicate
+  },
+});
+reconciliation.render({ parentNode: document.querySelector('#host')! });
+```
+
+The shared shapes (`StatementLine`, `Posting`, `LedgerEntry`) are deliberately
+duplicated, not imported — importers carries no dependency on `@cynco/journals`
+— and a lockstep parity test fails the moment either side drifts, the same idiom
+the suite uses for the engine's currency table.

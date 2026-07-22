@@ -1,0 +1,725 @@
+import { JournalEntry } from '@cynco/journals/react';
+
+import { CodeTabs } from '@/components/docs/CodeTabs';
+import { PAYROLL_ENTRY } from '@/examples/entries';
+
+# Journals
+
+`@cynco/journals` renders journal entries and account registers. The core is
+framework-free TypeScript drawing into a `<journals-container>` custom element
+with an open shadow root; React wrappers only manage lifecycle. Amounts are
+integer minor units end to end — no floats ever touch money.
+
+<div className="demo-container">
+  <JournalEntry
+    entry={PAYROLL_ENTRY}
+    options={{ showLineNumbers: true }}
+    ssrHTML={props.heroEntryHTML}
+  />
+</div>
+
+## Installation \{#installation\}
+
+Install with the package manager of your choice. React and react-dom are
+optional peer dependencies — the vanilla API works without them.
+
+```bash
+pnpm add @cynco/journals
+```
+
+| Entry point             | What it exports                                                                                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@cynco/journals`       | Vanilla classes (`JournalEntry`, `Register`, `LedgerView`, `EntryDiff`), pure HTML renderers, and utilities like `formatMinorUnits` and `diffEntryVersions` |
+| `@cynco/journals/react` | Thin React components wrapping the vanilla classes, plus the hydration glue                                                                                 |
+| `@cynco/journals/ssr`   | `preloadJournalEntryHTML`, `preloadRegisterHTML`, `preloadLedgerViewHTML`, `preloadReconciliationHTML`, and `preloadEntryDiffHTML` for server prerendering  |
+
+## Core types \{#core-types\}
+
+The whole suite agrees on three shapes. Balanced entries sum to exactly zero per
+currency; the renderer displays unbalanced input but flags it — the data layer
+never silently repairs it.
+
+```ts
+/** Integer minor units (sen, cents). Never floats. */
+export type MinorUnits = number;
+
+export interface Posting {
+  /** Canonical colon-delimited path, e.g. `Assets:Current:Cash-Maybank`. */
+  account: string;
+  /** Signed integer minor units. Positive = debit, negative = credit. */
+  amount: MinorUnits;
+  /** ISO 4217 or commodity code, e.g. `MYR`, `USD`. */
+  currency: string;
+}
+
+export interface LedgerEntry {
+  id: string;
+  date: string; // ISO `YYYY-MM-DD`
+  flag: 'cleared' | 'pending' | 'flagged' | 'void';
+  payee: string | null;
+  narration: string;
+  tags: readonly string[];
+  links: readonly string[];
+  postings: readonly Posting[];
+}
+
+export interface RegisterRowData {
+  entry: LedgerEntry;
+  posting: Posting;
+  /** Running balance per currency after this posting, in minor units. */
+  runningBalance: ReadonlyMap<string, MinorUnits>;
+}
+```
+
+## Vanilla API \{#vanilla-api\}
+
+Each component is a plain class: construct with options, call `render` with data
+and a mount target, call `cleanUp` when done. Rendering commits whole windows of
+pure HTML strings with single `innerHTML` writes.
+
+### JournalEntry \{#journal-entry\}
+
+```ts
+import { JournalEntry } from '@cynco/journals';
+
+const card = new JournalEntry({ showLineNumbers: true });
+card.render({
+  entry, // a LedgerEntry
+  parentNode: document.querySelector('#host')!,
+});
+
+// Later: re-render with new data (no-op when the entry is unchanged) …
+card.render({ entry: nextEntry });
+// … and tear down.
+card.cleanUp();
+```
+
+### Register \{#register\}
+
+A virtualized single-account register (bank-statement style) with a sticky
+balance header. Give the host element a fixed height to turn the internal
+scroller into a window.
+
+```ts
+import { Register } from '@cynco/journals';
+
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  density: 'comfortable', // or 'compact' (one line per row)
+  onRowSelect(row, index) {
+    console.log(row.entry.id, index);
+  },
+});
+
+register.render({
+  rows, // readonly RegisterRowData[]
+  parentNode: document.querySelector('#host')!,
+});
+
+// Swap the data in place; the window re-renders, scroll stays put.
+register.setRows(nextRows);
+register.setSelectedRow(3);
+register.cleanUp();
+```
+
+### LedgerView \{#ledger-view\}
+
+```ts
+import { LedgerView } from '@cynco/journals';
+
+// Several account registers sharing one scroll container and one
+// Virtualizer — sections that are offscreen cost nothing.
+const view = new LedgerView({
+  density: 'comfortable',
+  onRowSelect(account, row, index) {
+    console.log(account, row.posting.amount, index);
+  },
+});
+
+view.render({
+  sections: [
+    { account: 'Assets:Current:Cash-Maybank', rows: cashRows },
+    { account: 'Income:Sales:Services-Consulting', rows: salesRows },
+  ],
+  parentNode: document.querySelector('#host')!,
+});
+```
+
+## Keyboard navigation & ARIA \{#keyboard-navigation\}
+
+The register is an ARIA grid: `role="grid"` with `aria-label` (the `label`
+option, defaulting to the account path), `aria-rowcount` counting model rows
+(interleaved group headers included), rows with `role="row"` + `aria-rowindex` +
+`aria-selected`, cells with `role="gridcell"`, and — in range mode —
+`aria-multiselectable`. Group header rows are real grid rows spanning every
+column via `aria-colspan`, but stay non-interactive. Focus is virtual: the grid
+is the single tab stop and `aria-activedescendant` points at the focused row, so
+navigation lives in entry-index space and group headers are skipped without any
+bookkeeping.
+
+| Key                                        | Action                                                                                                                                                                  |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <kbd>↓</kbd> / <kbd>↑</kbd>                | Move focus one entry row. At a section edge inside a `LedgerView`, focus hands off to the neighboring section (the `onFocusBoundary` hook); standalone registers clamp. |
+| <kbd>Home</kbd> / <kbd>End</kbd>           | First / last entry row.                                                                                                                                                 |
+| <kbd>PageDown</kbd> / <kbd>PageUp</kbd>    | One viewport’s worth of entry rows.                                                                                                                                     |
+| <kbd>Enter</kbd> / <kbd>Space</kbd>        | Select the focused row — exactly a plain click, one shared code path, so pointer and keyboard can never drift apart.                                                    |
+| <kbd>Shift</kbd>+<kbd>↓</kbd>/<kbd>↑</kbd> | Range mode: extend the selection from the anchor (a shift-click on the new row).                                                                                        |
+| <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>A</kbd>  | Range mode: select every entry row. Single mode leaves the browser’s select-all alone.                                                                                  |
+| <kbd>Escape</kbd>                          | Clear the selection (no-op when nothing is selected).                                                                                                                   |
+
+Keys consumed by an active IME composition (Enter confirming a candidate, Escape
+dismissing one) never drive navigation or selection. Keyboard navigation ships
+on by default — the breaking-ish part of this feature: the register becomes a
+tab stop on every page that embeds it. That is the right default (a pointer-only
+data grid is inaccessible), but hosts composing their own focus management get
+an escape hatch:
+
+```ts
+// Keyboard navigation ships ON: the register grid is a tab stop
+// (tabindex="0") and one delegated keydown handler owns the whole map.
+// Hosts composing their own focus management can opt out entirely:
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  disableKeyboardNavigation: true, // no keydown listener, no tabindex
+});
+
+// Focus is virtual — aria-activedescendant on the grid points at the
+// focused row's id; the row itself is patched with data-focused.
+register.focusRow(12); // programmatic counterpart (reveals + focuses)
+```
+
+## Range selection \{#range-selection\}
+
+`selectionMode: 'single'` (default) preserves the original one-row behavior
+exactly. `'range'` is contiguous line selection: click selects one row and sets
+the anchor, shift-click extends anchor→target contiguously, meta/ctrl-click
+toggles a row in or out. Keyboard mirrors pointer exactly. `onRowSelect` keeps
+firing for the primary (last-clicked) row for back-compat.
+
+```ts
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  selectionMode: 'range', // 'single' (default) | 'range'
+  onSelectionChange({ indexes, rows }) {
+    // Sorted entry indexes + their rows, fired on every user-driven
+    // change (pointer AND keyboard). Fires in both modes; single mode
+    // reports a 0/1-length selection.
+    console.log(indexes, rows.length);
+  },
+});
+
+// RegisterSelection: the shift-range anchor plus the selected entry
+// indexes (always entry-index space — group headers are never selectable).
+const { anchor, indexes } = register.getSelection();
+
+// Programmatic selection does NOT fire callbacks (original behavior):
+register.setSelectedRow(3);
+```
+
+## Period grouping \{#period-grouping\}
+
+`groupBy` interleaves period header rows — month, quarter, or year — into the
+virtual row space; `none` keeps the flat pure-arithmetic fast path. Each header
+shows the period label, distinct-entry count, and net change per currency.
+Selection, `data-row-index`, and every callback stay in entry-index space
+regardless of grouping.
+
+```ts
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  groupBy: 'month', // 'none' (default) | 'month' | 'quarter' | 'year'
+  stickyGroupLabels: true, // default whenever groupBy !== 'none'
+});
+
+// Each group header renders a RegisterGroupSummary:
+// { key: '2026-03', label: 'March 2026', entryCount: 14,
+//   netChange: Map { 'MYR' => 152_300 } } — integer minor units, built in
+// one O(n) pass per data update.
+```
+
+With grouping active, the current period’s label pins as a slim strip just below
+the register’s sticky header (`stickyGroupLabels` defaults to true). It is a
+mirror of the real group row — aria-hidden and pointer-inert, because
+`position: sticky` cannot work on rows a virtualized window evicts and recreates
+— updated from the prefix-sum row model in O(log n) per scroll frame, with DOM
+writes only when the period changes. In a `LedgerView` it pins below the owning
+section’s sticky header.
+
+## Register filter \{#register-filter\}
+
+`Register` takes a projection-level filter — the same philosophy as the accounts
+tree’s `hide-non-matches` search: canonical rows are never touched, only which
+rows are _visible_ changes. Matching is a case-insensitive substring test on
+`fields`, which defaults to `['description']` — the payee/narration pair the
+description cell renders, matched as separate lines so a query can never match
+across their boundary; `'date'` and `'flag'` opt in.
+
+```ts
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  filter: { query: 'coffee' }, // optional initial filter
+  onFilterResult({ matched, total }) {
+    readout.textContent = `${matched} of ${total}`;
+  },
+});
+
+// Per keystroke — the visible rows reshape in place:
+register.setFilter({ query: input.value });
+// Opt extra fields in; 'description' (payee + narration) is the default:
+register.setFilter({ query: '2026-03', fields: ['description', 'date'] });
+register.setFilter(null); // clear — back to the unfiltered fast path
+```
+
+- **Identity is full-data everywhere public**: selection, focus, callbacks,
+  `scrollToRow`, and row ids keep their original entry indexes. The filter never
+  mutates selection — filtered-out selected rows simply are not rendered, and
+  reappear (still selected) once the filter releases them. `aria-rowcount` /
+  `aria-rowindex` describe the presented (filtered) grid.
+- **Grouping stays honest**: period headers survive only for periods containing
+  matches, and their count / net-change summaries are recomputed over the
+  _matched_ rows — the summary describes what’s shown, not the period’s full
+  total.
+- **Highlighting**: matched substrings in text cells wrap in
+  `<mark data-filter-match>` (themed via the match/accent color family, or the
+  `--journals-bg-filter-match` override). Construction is escape-safe: match
+  positions are found on the raw string, then the before / match / after slices
+  are escaped separately and joined with the mark tags — no search ever runs
+  over escaped HTML, so a query like `amp` can never split an `&amp;` entity.
+- **Keyboard** navigation walks matched rows only; if the focused row gets
+  filtered out, focus clears and `aria-activedescendant` is removed.
+- **Parity**: the filter crosses the worker protocol and the SSR preload
+  (`preloadRegisterHTML(rows, { filter })`), so worker, sync, and server HTML
+  stay byte-identical.
+
+An empty query or `null` is “no filter” and keeps the unfiltered fast path — no
+corpus, no model allocation. The lazy lowercase corpus is built on the first
+application, reused across query changes, and dropped on `setRows`.
+`onFilterResult` fires after each application of an active filter (entry rows
+only, never group headers); clearing the filter fires nothing, so hosts reset
+their readout when they clear.
+
+## Scroll APIs \{#scroll-apis\}
+
+`scrollToRow`, `scrollToDate` (first row dated on or after, by binary search),
+and the LedgerView counterparts share one options shape. `align` defaults to
+`nearest` for rows (minimal movement; a no-op when the row is already visible)
+and `start` for sections, which accounts for the sticky header overlaying the
+viewport top. `behavior` defaults to `auto` (instant) — smooth is opt-in
+everywhere. Targets come from the same data-derived offsets the virtualizer
+uses, so no layout reads happen before a scroll; out-of-range rows, unknown
+accounts, and dates past the last row are graceful no-ops.
+
+```ts
+// Every scroll-to API takes the same options:
+// { align?: 'start' | 'center' | 'nearest'; behavior?: 'smooth' | 'auto' }
+register.scrollToRow(500, { align: 'center', behavior: 'smooth' });
+register.scrollToDate('2026-03-01'); // first row dated on/after (binary search)
+ledgerView.scrollToSection('Assets:Current:AR', { behavior: 'smooth' });
+ledgerView.scrollToRow('Assets:Current:AR', 12, { align: 'start' });
+
+// Spring tuning (Register and LedgerView options, or SmoothScroller
+// directly for your own containers):
+const settings: SmoothScrollSettings = {
+  omega: 0.015, // rad/ms; 99% settle ≈ 6.6 / omega (~440ms here)
+  epsilonPx: 0.5, // remaining distance below which it may settle
+  epsilonVelocity: 0.01, // velocity below which it may settle
+};
+new Register({ account, smoothScrollSettings: settings });
+```
+
+Smooth scrolling is a critically-damped spring — it approaches the target as
+fast as possible without ever overshooting, because scroll positions must never
+bounce past a row and come back. User input wins: wheel, touch, scrollbar drags,
+and scroll keys cancel an in-flight animation instantly (listeners exist only
+while animating), and `prefers-reduced-motion` turns every smooth scroll into an
+instant jump. Keyboard focus reveal stays instant so it never lags typing.
+
+## Reconciliation \{#reconciliation\}
+
+The accounting analog of a merge-conflict resolver: statement lines on the left,
+book postings on the right, proposed matches as tinted pairs with accept /
+reject in a center gutter. `proposeMatches` is deterministic and runs three
+passes — an _exact_ match shares amount, currency, and date; a _suggested_ match
+shares amount and currency within `dateWindowDays`; a _sum_ match covers one
+statement line with 2..`maxGroupSize` postings (bounded search, capped at 10,000
+combinations per line, so adversarial inputs stay cheap). Sum pairs render the
+group stacked in one book cell with a `Σ` total row. Unmatched lines keep a
+_create entry_ affordance and unmatched postings read as _outstanding_. The
+header difference (statement total − accepted book total) is integer minor-unit
+math and flips to jade only at exactly zero.
+
+```ts
+import { proposeMatches, Reconciliation } from '@cynco/journals';
+
+// Deterministic proposals, three passes: exact (amount + currency + date),
+// nearest-date within ±dateWindowDays, then sum matching — one statement
+// line covered by 2..maxGroupSize postings in the same currency and window
+// (kind 'sum', rendered as a stacked group with a Σ total row).
+const matches = proposeMatches(statementLines, postings, {
+  dateWindowDays: 3, // default
+  maxGroupSize: 3, // default; pass 1 to disable sum matching
+});
+
+const reconciliation = new Reconciliation({
+  account: 'Assets:Current:Cash-Maybank',
+  periodLabel: 'Jul 2026',
+  statementLines, // StatementLine[] — parsed bank lines, integer minor units
+  postings, // BookPostingRef[] — { entry, postingIndex }
+  matches, // optional; this is the default
+  onAccept(match) {
+    console.log('cleared', match.id);
+  },
+  onCreateEntry(line) {
+    // The component never writes entries — that is your data layer's job.
+    openEntryForm(line);
+  },
+});
+reconciliation.render({ parentNode: document.querySelector('#host')! });
+
+// Imperative controls mirror the gutter buttons. Match ids are
+// deterministic: m-<lineId>-<entryId>-<postingIndex>, '+'-joined for sums.
+reconciliation.acceptMatch('m-l1-e1-0');
+const { matches: current, difference } = reconciliation.getState();
+// Each match carries postings: readonly BookPostingRef[] (one entry for
+// exact/suggested, 2..maxGroupSize for sums).
+// difference: Map<currency, MinorUnits> — statement − accepted, exact.
+```
+
+- `acceptMatch / rejectMatch / undoMatch(id)` — the same transitions the gutter
+  buttons drive; each fires its callback with the transitioned match.
+- `getState()` — current matches plus the per-currency difference map.
+- `<Reconciliation options ssrHTML />` from `@cynco/journals/react` and
+  `preloadReconciliationHTML` from `@cynco/journals/ssr` follow the same
+  hydration contract as the other components.
+
+## EntryDiff \{#entry-diff\}
+
+The audit-trail view: the diff between two versions of a journal entry, rendered
+like a file diff. `diffEntryVersions` is pure data — scalar header fields (date,
+flag, payee, narration) classify as unchanged / changed / added / removed with
+word-level segments for changed text (adjacent changed runs separated by a
+single space merge, so highlights read as phrases, not confetti); tags and links
+diff as sets; postings pair by (account, currency), so both sides of an amount
+change share account and currency. `null` on either side models creation or
+deletion.
+
+<CodeTabs labels={['Vanilla', 'SSR']}>
+
+```ts
+import { diffEntryVersions, EntryDiff } from '@cynco/journals';
+
+// Pure data: the ledger analog of a file diff. Header fields get
+// word-level segments, tags/links diff as sets, postings align by
+// (account, currency) — amounts stay integer minor units end to end.
+const diff = diffEntryVersions(before, after);
+// diff.kind: 'created' | 'deleted' | 'modified' | 'unchanged'
+// diff.postings: [{ kind: 'amount-changed', account, currency,
+//                   beforeAmount, afterAmount }, ...]
+
+// The component follows the JournalEntry lifecycle exactly:
+const card = new EntryDiff();
+card.render({
+  before, // null models entry creation (everything added)
+  after, // null models deletion/void (everything removed)
+  parentNode: document.querySelector('#host')!,
+});
+card.cleanUp();
+```
+
+```tsx
+// Server component
+import { EntryDiff } from '@cynco/journals/react';
+import { preloadEntryDiffHTML } from '@cynco/journals/ssr';
+
+export default async function AuditTrail() {
+  const ssrHTML = await preloadEntryDiffHTML(before, after);
+  return <EntryDiff before={before} after={after} ssrHTML={ssrHTML} />;
+}
+```
+
+</CodeTabs>
+
+Client renders and SSR preloads share the same string builder, so hydration
+adopts the server DOM verbatim with zero writes. The diff card is a read-only
+audit artifact: posting annotation slots are deliberately not supported.
+
+## LedgerView v2 \{#ledger-view-v2\}
+
+`setSections` reconciles incrementally instead of rebuilding, and focus and
+selection are per-register state keyed by entry index, so they survive whenever
+their section survives:
+
+```ts
+// Incremental reconciliation, keyed by account path: unchanged sections
+// keep their Register instance and DOM, data-changed sections update in
+// place (structural row equality, so fresh-but-identical arrays from
+// immutable stores are "unchanged"), added sections mount, removed
+// sections clean up, and order changes reorder DOM nodes without
+// recreating anything.
+view.setSections([
+  { account: 'Assets:Current:Cash-Maybank', rows: cashRows },
+  { account: 'Assets:Current:AR', rows: arRows },
+]);
+```
+
+Across `setSections` the scroll position anchors to what the user sees: the
+topmost visible section + entry row is captured before the update and restored
+after, so sections growing, shrinking, appearing, or disappearing above it never
+shift the content in view. If the anchor section itself was removed, the nearest
+surviving neighbor takes its place (preceding first, then following), falling
+back to the raw scrollTop only when nothing survives.
+
+```ts
+import { preloadLedgerViewHTML } from '@cynco/journals/ssr';
+
+const ssrHTML = await preloadLedgerViewHTML(sections, { id: 'ledger' });
+
+// Client: pass the SAME id so ARIA row ids agree.
+const view = new LedgerView({ id: 'ledger' });
+view.hydrate({ sections, container }); // falls back to render when
+// the markup is missing
+```
+
+The preload emits the shared scroller, every section’s sticky header, and each
+section’s leading rows — capped per section (128) and across the view (512
+total, leading sections first) — with exactly sized spacers, so pre-hydration
+scrollbar geometry matches what the hydrated client computes.
+`<LedgerView sections options ssrHTML />` from `@cynco/journals/react` takes the
+preload just like `Register`.
+
+## EntryStream \{#entry-stream\}
+
+Renders journal entries live from a `ReadableStream<LedgerEntry>` (or any async
+iterable). Arrivals are buffered through the shared animation-frame queue:
+however many entries land within one frame, the DOM sees exactly one append —
+never more than one layout per frame. A sticky footer strip tracks the running
+count, and stick-to-bottom autoscroll releases the moment the user scrolls up
+(and re-engages when they return to the bottom). Also available as
+`<EntryStream options />` from `@cynco/journals/react`.
+
+```ts
+import { createEntryStreamFromArray, EntryStream } from '@cynco/journals';
+
+const stream = new EntryStream({
+  // ReadableStream<LedgerEntry> or any AsyncIterable<LedgerEntry>;
+  // consumed exactly once.
+  stream: entrySource,
+  total: 500, // optional: footer shows "n / 500"
+  autoScroll: true, // stick to bottom until the user scrolls up
+  onEntry(entry, index) {},
+  onDone(count) {},
+});
+stream.render({ parentNode: document.querySelector('#host')! });
+
+// Entries arriving within one frame commit as ONE DOM write; the sticky
+// footer tracks the running count. cleanUp() cancels the reader.
+stream.cleanUp();
+
+// Demo/test helper: array -> stream on a fixed cadence.
+const entrySource = createEntryStreamFromArray(entries, { delayMs: 40 });
+```
+
+## Live-region announcements \{#live-regions\}
+
+Dynamic surfaces announce state changes to screen readers through
+visually-hidden `aria-live="polite"` regions — one per component instance, kept
+_outside_ the re-rendered markup so re-renders never re-announce. Live regions
+are created empty on both render and hydrate, so SSR output never replays a
+stale announcement.
+
+```ts
+// Reconciliation: every accept / reject / undo announces the resulting
+// per-currency difference ("MYR difference 42.00", or "All currencies
+// reconciled" at exactly zero) — one announcement per discrete change.
+const reconciliation = new Reconciliation({
+  account,
+  statementLines,
+  postings,
+  disableAnnouncements: true, // opt out when the host narrates itself
+});
+
+// EntryStream announces exactly two moments: stream start
+// ("Streaming entries…") and completion ("N entries loaded"). The visual
+// footer count keeps ticking but is deliberately not a live region.
+```
+
+`disableAnnouncements` is a `Reconciliation` option: by default every accept /
+reject / undo announces the resulting per-currency difference, because the
+header’s difference figures would otherwise change silently. Hosts that narrate
+reconciliation state themselves flip it on so users never hear the same change
+twice. EntryStream’s two announcements (start and completion) are always on —
+intermediate per-flush counts stay visual-only, since announcing a streaming
+count would be an unusable firehose.
+
+## Worker pool \{#worker-pool\}
+
+`@cynco/journals/worker` moves the heavy pure computations — register window
+HTML and reconciliation proposals — off the main thread. The renderers are
+DOM-free string builders, so the worker runs the exact same code the sync path
+runs; results are deduped by key, LRU-cached, and committed on the next
+animation frame with spacer geometry already in place, so scroll position never
+jumps. If workers cannot start (or die mid-job) the pool transparently computes
+on the main thread instead — a failed pool is a performance regression, never a
+correctness one.
+
+```ts
+import { getOrCreateWorkerPoolSingleton } from '@cynco/journals/worker';
+// Vite: the fully-bundled portable worker entry.
+import JournalsWorker from '@cynco/journals/worker/worker-portable.js?worker';
+
+const pool = getOrCreateWorkerPoolSingleton({
+  workerFactory: () => new JournalsWorker(),
+  // poolSize: min(2, hardwareConcurrency); resultCacheSize: 200 (LRU)
+});
+
+// Components accept the pool as an option; without one (or after any
+// worker failure) they use the synchronous path — same renderer, same
+// output, so workers are purely a performance upgrade.
+new Register({ account, workerPool: pool });
+new Reconciliation({ account, statementLines, postings, workerPool: pool });
+
+// Direct API, resolved off-thread with dedupe + LRU caching:
+const html = await pool.renderRegisterWindow({ rows, range, selectedIndex });
+const matches = await pool.proposeMatches({ statementLines, postings });
+pool.subscribeToStatChanges((stats) => console.log(stats.busyWorkers));
+```
+
+- `@cynco/journals/worker/worker.js` — plain module worker entry for bundlers
+  that can follow package imports inside workers.
+- `@cynco/journals/worker/worker-portable.js` — fully-bundled variant (no
+  imports) for bundler worker plugins like Vite's `?worker`.
+- React: `WorkerPoolProvider` / `useWorkerPool()` from `@cynco/journals/react`
+  thread one pool through a subtree; components work without it.
+
+## React API \{#react-api\}
+
+The React components are deliberately thin: a ref callback owns exactly one
+vanilla instance, and a layout effect pushes prop changes into it after every
+committed render. All rendering logic stays in the vanilla classes.
+
+```tsx
+import { JournalEntry, LedgerView, Register } from '@cynco/journals/react';
+
+export function CashRegister({ rows }: { rows: RegisterRowData[] }) {
+  return (
+    <Register
+      rows={rows}
+      options={{
+        account: 'Assets:Current:Cash-Maybank',
+        density: 'compact',
+        onRowSelect: (row, index) => select(row, index),
+      }}
+      style={{ height: 480 }}
+    />
+  );
+}
+```
+
+- `<JournalEntry entry options ssrHTML />` — one entry card.
+- `<Register rows options ssrHTML />` — one virtualized account register.
+- `<LedgerView sections options ssrHTML />` — several registers in one scroll
+  container.
+- `<EntryDiff before after options ssrHTML />` — the audit-trail diff card.
+
+## SSR \{#ssr\}
+
+The preload functions run in Node (server components, route handlers) and return
+shadow-root HTML — component stylesheet inlined, markup produced by the same
+string builders the client uses. Pass the result to the matching React
+component's `ssrHTML` prop: the server emits a declarative shadow DOM template,
+the browser attaches a styled shadow root before any JS runs, and hydration
+adopts the parsed DOM without re-rendering.
+
+```tsx title="app/page.tsx"
+// A React Server Component
+import { JournalEntry } from '@cynco/journals/react';
+import {
+  preloadJournalEntryHTML,
+  preloadRegisterHTML,
+} from '@cynco/journals/ssr';
+
+export default async function Page() {
+  const ssrHTML = await preloadJournalEntryHTML(entry, {
+    showLineNumbers: true,
+  });
+  return (
+    <JournalEntry
+      entry={entry}
+      options={{ showLineNumbers: true }}
+      ssrHTML={ssrHTML}
+    />
+  );
+}
+```
+
+`preloadRegisterHTML(rows, options)` renders every row (the server cannot know
+the viewport), so prefer it for bounded registers and let large ones render
+client-side.
+
+## Theming \{#theming\}
+
+The stylesheet uses zero class selectors — data attributes only — and every
+color resolves through a three-step custom property chain, so one DOM serves
+both modes:
+
+```css
+/* Every color resolves override → theme → built-in default: */
+--journals-debit: var(
+  --journals-debit-override,
+  var(--journals-theme-ledger-debit, light-dark(#199f43, #5ecc71))
+);
+```
+
+```css
+/* One-off overrides: set the override hook on any ancestor. */
+journals-container {
+  --journals-font-family: var(--font-mono);
+  --journals-accent-override: #009fff;
+  --journals-debit-override: oklch(0.72 0.19 150);
+}
+```
+
+```ts
+import { journalsThemeVariables } from '@cynco/journals';
+import { dark } from '@cynco/theme';
+
+// Whole-palette theming: map @cynco/theme roles onto the
+// --journals-theme-* layer (sits between overrides and defaults).
+const variables = journalsThemeVariables(dark);
+for (const [name, value] of Object.entries(variables)) {
+  host.style.setProperty(name, value);
+}
+```
+
+Layout hooks follow the same pattern: `--journals-font-family`,
+`--journals-font-size` (default 13px), and `--journals-line-height` (default
+20px). Amounts always render with `tabular-nums`.
+
+Every demo on this site renders in
+[Paper Mono](https://github.com/paper-design/paper-mono) (SIL OFL 1.1) via
+`--journals-font-family`. The package bundles no font — download Paper Mono from
+its repo and set the hook to match this look, or point it at your own mono
+stack.
+
+## Virtualization \{#virtualization\}
+
+Fixed row heights make the window math pure arithmetic: the rendered range and
+spacer heights derive from the scroll position with no per-row measurement, so
+100k-row registers render the same handful of nodes as 100-row ones.
+
+```ts
+const register = new Register({
+  account: 'Assets:Current:Cash-Maybank',
+  // Pixel height of one text line. Must match the effective
+  // --journals-line-height (default 20px) or spacer heights drift.
+  lineHeight: 20,
+  // Sticky header height; must match the header CSS (default 44px).
+  headerHeight: 44,
+  // Extra rows rendered above and below the pixel window. Default 10.
+  overscanRows: 10,
+});
+```
+
+Standalone registers own their `Virtualizer`; `LedgerView` shares one across
+sections and supplies per-section offsets, so offscreen sections keep only their
+two spacers in the DOM.
