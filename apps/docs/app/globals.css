@@ -207,6 +207,53 @@
   }
 }
 
+/* Route changes within /docs cross-fade the content column only. The
+ * navigation is wrapped in document.startViewTransition by
+ * lib/view-transition.ts (feature-detected, reduced-motion gated); these
+ * rules scope what it animates. Naming the content column pulls it out of
+ * the root snapshot into its own group, the root's default cross-fade is
+ * disabled so the persistent header/sidebar swap with zero flash, and the
+ * named group gets a fast opacity-only fade — no slides, no morph: the
+ * default group geometry animation is switched off since the column's
+ * box is identical across docs routes. The whole block sits behind the
+ * motion media gate; with it closed the JS gate declines too and
+ * navigation is an ordinary instant swap. */
+@media (prefers-reduced-motion: no-preference) {
+  .docs-content-vt {
+    view-transition-name: docs-content;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-group(docs-content) {
+    animation: none;
+  }
+
+  /* The surface duration (200ms): a route swap is a surface change, same
+   * tier as popovers and menus in the motion system above. */
+  ::view-transition-old(docs-content) {
+    animation: docs-content-fade-out var(--motion-duration-surface)
+      var(--motion-ease) both;
+  }
+
+  ::view-transition-new(docs-content) {
+    animation: docs-content-fade-in var(--motion-duration-surface)
+      var(--motion-ease) both;
+  }
+}
+
+@keyframes docs-content-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes docs-content-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* The 6px pixel-checker ornament band from /data: a layer-2 fill masked by
  * a repeating 2x2-in-6x6 SVG square. Used under the hero headline and above
  * the footer bottom row. */

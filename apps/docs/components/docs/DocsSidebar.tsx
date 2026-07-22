@@ -7,7 +7,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { DocsTocEntry } from '@/lib/docs-toc';
 import { DOCS_LINKS } from '@/lib/site';
+import { springScrollToElement } from '@/lib/spring-scroll';
 import { cn } from '@/lib/utils';
+import { useDocsViewTransition } from '@/lib/view-transition';
 
 // useLayoutEffect fires before paint in the browser; during prerender React
 // warns on it, so the server side falls back to useEffect (the effect only
@@ -62,6 +64,7 @@ export function DocsSidebar({
   onSearchOpen,
 }: DocsSidebarProps) {
   const pathname = usePathname();
+  const handlePackageLinkClick = useDocsViewTransition();
   const navRef = useRef<HTMLElement>(null);
   // Absolute document offsets per heading, precomputed so the scroll
   // handler never reads layout. Refreshed when headings or viewport change.
@@ -163,6 +166,37 @@ export function DocsSidebar({
     }
   }, [activeHeading]);
 
+  // TOC clicks glide on the journals spring instead of the browser's
+  // instant jump (see lib/spring-scroll.ts — the docs scroll on the same
+  // physics the register ships). Native anchor navigation pushes a history
+  // entry, so pushState mirrors it: Back steps through visited sections and
+  // the address bar matches what a deep link would carry. Modified clicks
+  // (new tab, copy link) keep the browser default. The on-load hash scroll
+  // above stays instant on purpose — a page should open on its section,
+  // not travel to it.
+  const handleTocClick = (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    id: string
+  ) => {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    const element = document.getElementById(id);
+    if (element === null) {
+      return;
+    }
+    event.preventDefault();
+    history.pushState(null, '', `#${id}`);
+    springScrollToElement(element);
+  };
+
   return (
     <>
       {/* Always mounted so the declared fade actually runs both ways;
@@ -209,6 +243,10 @@ export function DocsSidebar({
             <Link
               key={href}
               href={href}
+              // Route changes within /docs cross-fade the content column
+              // (lib/view-transition.ts); the handler declines unsupported
+              // browsers and modified clicks, leaving Link's own navigation.
+              onClick={(event) => handlePackageLinkClick(event, href)}
               className={cn(
                 navLinkClass,
                 // The index route would prefix-match every docs page.
@@ -226,6 +264,7 @@ export function DocsSidebar({
           <a
             key={heading.id}
             href={`#${heading.id}`}
+            onClick={(event) => handleTocClick(event, heading.id)}
             className={cn(
               navLinkClass,
               // 2px of clearance between the hover pill and the scrollbar.

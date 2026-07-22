@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 import { DOCS_LINKS } from '@/lib/site';
 import { cn } from '@/lib/utils';
+import { useDocsViewTransition } from '@/lib/view-transition';
 
 const cardClass =
   'group border-border hover:bg-muted flex flex-col gap-1 rounded-md border px-4 py-3 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-[-2px]';
@@ -17,6 +18,11 @@ const cardClass =
 // from print (paper can't click).
 export function DocsPagination() {
   const pathname = usePathname();
+  // Prev/next navigation cross-fades the content column via the native
+  // View Transitions API (lib/view-transition.ts); the handler declines
+  // unsupported browsers, reduced motion, and modified clicks, in which
+  // case Link navigates as usual.
+  const handleLinkClick = useDocsViewTransition();
   const index = DOCS_LINKS.findIndex(({ href }) => href === pathname);
   if (index === -1) return null;
 
@@ -32,7 +38,11 @@ export function DocsPagination() {
       className="border-border mt-12 grid grid-cols-2 gap-3 border-t pt-4 font-mono"
     >
       {previous !== null && (
-        <Link href={previous.href} className={cn(cardClass, 'col-start-1')}>
+        <Link
+          href={previous.href}
+          onClick={(event) => handleLinkClick(event, previous.href)}
+          className={cn(cardClass, 'col-start-1')}
+        >
           <span className="text-text-weak text-[11px]">Previous</span>
           <span className="text-muted-foreground group-hover:text-foreground text-sm font-medium transition-colors duration-150">
             {previous.label}
@@ -42,6 +52,7 @@ export function DocsPagination() {
       {next !== null && (
         <Link
           href={next.href}
+          onClick={(event) => handleLinkClick(event, next.href)}
           className={cn(cardClass, 'col-start-2 items-end text-right')}
         >
           <span className="text-text-weak text-[11px]">Next</span>

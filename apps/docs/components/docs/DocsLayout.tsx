@@ -122,7 +122,11 @@ export function DocsLayout({ toc, children }: DocsLayoutProps) {
             onSearchOpen={openSearch}
           />
         </div>
-        <div className="min-w-0" data-pagefind-body>
+        {/* docs-content-vt names this column for the route cross-fade
+         * (globals.css): only the content participates in the view
+         * transition — the header and sidebar persist, snapshot under the
+         * root group, and the root's animation is disabled. */}
+        <div className="docs-content-vt min-w-0" data-pagefind-body>
           {children}
           <DocsPagination />
         </div>
